@@ -1,66 +1,105 @@
-// AGS Bar Style — Frozen Winter Theme
+// AGS Style — Frozen Winter Theme (Polished Edition v2)
+// Bar + Notifications + OSD + App Launcher + Session Menu
+
+// ━━━━━━━━━━━━━━━ GLOBAL ━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+$bg:          rgba(18, 20, 24, 0.82);
+$bg-solid:    rgba(18, 20, 24, 0.95);
+$bg-dark:     rgba(12, 14, 18, 0.98);
+$fg:          #e0dbd2;
+$fg-dim:      #8a8580;
+$fg-faint:    rgba(168, 153, 132, 0.4);
+$accent:      #00bfff;
+$accent-dim:  rgba(0, 191, 255, 0.25);
+$accent-glow: rgba(0, 191, 255, 0.12);
+$green:       #00cc99;
+$teal:        #82dccc;
+$magenta:     #c678dd;
+$yellow:      #e5c07b;
+$red:         #e06c75;
+$orange:      #d79921;
+$radius:      10px;
+$radius-lg:   18px;
+$radius-xl:   24px;
+$font:        "JetBrains Mono", "Symbols Nerd Font", monospace;
+$shadow:      0 8px 32px rgba(0, 0, 0, 0.4), 0 2px 8px rgba(0, 0, 0, 0.2);
+$shadow-lg:   0 12px 48px rgba(0, 0, 0, 0.5), 0 4px 16px rgba(0, 0, 0, 0.3);
 
 * {
-  font-family: "JetBrains Mono", "Symbols Nerd Font", monospace;
+  font-family: $font;
   font-size: 13px;
 }
 
+// ━━━━━━━━━━━━━━━ BAR ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 window {
   background: transparent;
-  color: #ebdbb2;
+  color: $fg;
 
   > centerbox {
-    background: rgba(29, 32, 33, 0.78);
-    border-bottom: 2px solid rgba(0, 191, 255, 0.35);
-    padding: 0 12px;
-    min-height: 36px;
+    background: rgba(18, 20, 24, 0.72);
+    border-bottom: 1px solid rgba(0, 191, 255, 0.15);
+    padding: 0 16px;
+    min-height: 38px;
   }
 }
 
 .workspaces {
-  padding: 0 4px;
+  padding: 0 6px;
 
   button {
-    padding: 2px 10px;
+    padding: 3px 12px;
     margin: 4px 2px;
-    border-radius: 8px;
-    color: #a89984;
-    background: rgba(24, 37, 69, 0.5);
+    border-radius: $radius;
+    color: $fg-dim;
+    background: rgba(255, 255, 255, 0.03);
     border: 1px solid transparent;
-    transition: all 200ms ease;
+    transition: all 250ms cubic-bezier(0.4, 0, 0.2, 1);
+    font-weight: 600;
+    font-size: 12px;
+    min-width: 28px;
 
     &:hover {
-      background: rgba(0, 191, 255, 0.20);
-      color: #82dccc;
+      background: rgba(0, 191, 255, 0.12);
+      color: $teal;
+      border-color: rgba(0, 191, 255, 0.2);
     }
 
     &.focused {
-      background: rgba(0, 191, 255, 0.30);
+      background: linear-gradient(135deg, rgba(0, 191, 255, 0.25), rgba(0, 191, 255, 0.15));
       color: white;
-      border: 1px solid rgba(0, 191, 255, 0.6);
+      border: 1px solid rgba(0, 191, 255, 0.5);
+      box-shadow: 0 0 12px rgba(0, 191, 255, 0.2), inset 0 1px 0 rgba(255, 255, 255, 0.1);
     }
   }
 }
 
 .active-window label {
-  color: #a89984;
-  padding: 0 12px;
+  color: $fg-dim;
+  padding: 0 14px;
   font-style: italic;
+  font-size: 12px;
 }
 
 .clock {
   menubutton button {
-    padding: 0 8px;
-    border-radius: 8px;
+    padding: 2px 10px;
+    border-radius: $radius;
+    transition: all 200ms ease;
+
+    &:hover {
+      background: rgba(0, 191, 255, 0.08);
+    }
   }
 
   .clock-time {
-    color: #82dccc;
+    color: $fg;
     font-weight: bold;
+    font-size: 14px;
+    letter-spacing: 0.5px;
   }
 
   .clock-date {
-    color: #a89984;
+    color: rgba(235, 219, 178, 0.55);
+    font-size: 12px;
   }
 }
 
@@ -72,78 +111,14 @@ window {
     margin: 0 2px;
 
     button {
-      padding: 2px 6px;
-      border-radius: 6px;
+      padding: 3px 7px;
+      border-radius: 8px;
+      transition: all 200ms ease;
 
       &:hover {
-        background: rgba(0, 191, 255, 0.20);
+        background: rgba(0, 191, 255, 0.12);
       }
     }
-  }
-}
-
-.volume {
-  menubutton button {
-    padding: 2px 8px;
-    border-radius: 6px;
-
-    &:hover {
-      background: rgba(0, 170, 132, 0.20);
-    }
-  }
-
-  image {
-    color: #00aa84;
-  }
-}
-
-.network {
-  menubutton button {
-    padding: 2px 8px;
-    border-radius: 6px;
-  }
-
-  image {
-    color: #01ccff;
-  }
-}
-
-.battery {
-  menubutton button {
-    padding: 2px 8px;
-    border-radius: 6px;
-  }
-
-  image {
-    color: #98971a;
-  }
-
-  label {
-    color: #a89984;
-    margin-left: 4px;
-  }
-}
-
-.media {
-  padding: 0 8px;
-
-  button {
-    padding: 2px 4px;
-    border-radius: 6px;
-    margin: 0 1px;
-
-    &:hover {
-      background: rgba(177, 98, 134, 0.20);
-    }
-  }
-
-  image {
-    color: #b16286;
-  }
-
-  label {
-    color: #b16286;
-    font-style: italic;
   }
 }
 
@@ -155,4 +130,877 @@ button {
 menubutton button {
   min-height: 0;
   min-width: 0;
+}
+
+// ━━━━━━━━━━━━━ VOLUME WIDGET ━━━━━━━━━━━━━━━━━━━━━━
+.volume {
+  menubutton button {
+    padding: 3px 10px;
+    border-radius: 8px;
+    transition: all 200ms ease;
+
+    &:hover {
+      background: rgba(0, 204, 153, 0.12);
+    }
+  }
+
+  image {
+    color: $green;
+  }
+
+  .volume-percent {
+    font-size: 11px;
+    color: $fg-dim;
+    font-weight: 600;
+  }
+}
+
+.volume-popup {
+  padding: 14px 16px;
+  min-width: 280px;
+
+  .volume-row {
+    padding: 4px 0;
+  }
+
+  .volume-mute-btn {
+    padding: 6px;
+    border-radius: 8px;
+    background: rgba(255, 255, 255, 0.04);
+    transition: all 200ms ease;
+
+    &:hover {
+      background: rgba(0, 204, 153, 0.15);
+    }
+
+    image {
+      color: $green;
+    }
+  }
+
+  .volume-slider {
+    margin: 0 4px;
+
+    trough {
+      background: rgba(255, 255, 255, 0.06);
+      border-radius: 4px;
+      min-height: 8px;
+    }
+
+    highlight {
+      background: linear-gradient(90deg, $green, $teal);
+      border-radius: 4px;
+      min-height: 8px;
+    }
+
+    slider {
+      background: white;
+      border-radius: 50%;
+      min-width: 16px;
+      min-height: 16px;
+      margin: -4px 0;
+      box-shadow: 0 1px 4px rgba(0, 0, 0, 0.3);
+    }
+  }
+
+  .volume-value {
+    font-size: 11px;
+    color: $fg-dim;
+    font-weight: 600;
+  }
+
+  .volume-separator {
+    min-height: 1px;
+    background: rgba(255, 255, 255, 0.06);
+    margin: 4px 0;
+  }
+}
+
+// ━━━━━━━━━━━━━ BRIGHTNESS WIDGET ━━━━━━━━━━━━━━━━━━
+.brightness {
+  menubutton button {
+    padding: 3px 10px;
+    border-radius: 8px;
+    transition: all 200ms ease;
+
+    &:hover {
+      background: rgba(229, 192, 123, 0.12);
+    }
+  }
+
+  image {
+    color: $yellow;
+  }
+}
+
+.brightness-popup {
+  padding: 14px 16px;
+  min-width: 260px;
+
+  .brightness-icon {
+    color: $yellow;
+  }
+
+  .brightness-slider {
+    margin: 0 4px;
+
+    trough {
+      background: rgba(255, 255, 255, 0.06);
+      border-radius: 4px;
+      min-height: 8px;
+    }
+
+    highlight {
+      background: linear-gradient(90deg, $orange, $yellow);
+      border-radius: 4px;
+      min-height: 8px;
+    }
+
+    slider {
+      background: white;
+      border-radius: 50%;
+      min-width: 16px;
+      min-height: 16px;
+      margin: -4px 0;
+      box-shadow: 0 1px 4px rgba(0, 0, 0, 0.3);
+    }
+  }
+
+  .brightness-value {
+    font-size: 11px;
+    color: $fg-dim;
+    font-weight: 600;
+  }
+}
+
+// ━━━━━━━━━━━━━ BATTERY WIDGET ━━━━━━━━━━━━━━━━━━━━━
+.battery {
+  menubutton button {
+    padding: 3px 10px;
+    border-radius: 8px;
+    transition: all 200ms ease;
+
+    &:hover {
+      background: rgba(229, 192, 123, 0.12);
+    }
+  }
+
+  image {
+    color: $yellow;
+  }
+
+  .battery-percent {
+    font-size: 11px;
+    color: $fg-dim;
+    font-weight: 600;
+    margin-left: 2px;
+  }
+}
+
+.battery-popup {
+  padding: 16px 18px;
+  min-width: 260px;
+
+  .battery-header {
+    padding-bottom: 10px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+    margin-bottom: 8px;
+  }
+
+  .battery-big-icon {
+    color: $yellow;
+  }
+
+  .battery-popup-percent {
+    font-size: 20px;
+    font-weight: bold;
+    color: $fg;
+  }
+
+  .battery-popup-status {
+    font-size: 12px;
+    color: $fg-dim;
+  }
+
+  .battery-info-row {
+    padding: 4px 0;
+  }
+
+  .battery-info-icon {
+    color: $fg-faint;
+  }
+
+  .battery-info-label {
+    font-size: 12px;
+    color: $fg-dim;
+  }
+
+  .battery-separator {
+    min-height: 1px;
+    background: rgba(255, 255, 255, 0.06);
+    margin: 8px 0;
+  }
+
+  .battery-section-title {
+    font-size: 11px;
+    font-weight: 600;
+    color: $fg-faint;
+    letter-spacing: 0.5px;
+    margin-bottom: 4px;
+  }
+
+  .battery-profile-btn {
+    padding: 8px 12px;
+    border-radius: 8px;
+    background: rgba(255, 255, 255, 0.03);
+    border: 1px solid transparent;
+    transition: all 200ms ease;
+    color: $fg-dim;
+
+    &:hover {
+      background: rgba(229, 192, 123, 0.08);
+      border-color: rgba(229, 192, 123, 0.15);
+    }
+
+    &.active {
+      background: rgba(229, 192, 123, 0.12);
+      border-color: rgba(229, 192, 123, 0.3);
+      color: $fg;
+    }
+
+    image {
+      color: $yellow;
+    }
+
+    .battery-check {
+      color: $green;
+    }
+  }
+}
+
+// ━━━━━━━━━━━━━ MEDIA WIDGET ━━━━━━━━━━━━━━━━━━━━━━━
+.media {
+  padding: 0 4px;
+}
+
+.media-toggle {
+  button {
+    padding: 3px 8px;
+    border-radius: 8px;
+    transition: all 200ms ease;
+
+    &:hover {
+      background: rgba(198, 120, 221, 0.12);
+    }
+  }
+
+  image {
+    color: $magenta;
+  }
+
+  .media-title-bar {
+    font-size: 12px;
+    color: $magenta;
+    font-style: italic;
+    max-width: 140px;
+  }
+}
+
+.media-inline-btn {
+  padding: 3px 5px;
+  border-radius: 8px;
+  margin: 0 1px;
+  transition: all 200ms ease;
+
+  &:hover {
+    background: rgba(198, 120, 221, 0.15);
+  }
+
+  image {
+    color: $magenta;
+  }
+}
+
+.media-popup {
+  padding: 16px 18px;
+  min-width: 280px;
+
+  .media-popup-title {
+    font-size: 14px;
+    font-weight: 700;
+    color: $fg;
+  }
+
+  .media-popup-artist {
+    font-size: 12px;
+    color: $fg-dim;
+    font-style: italic;
+  }
+
+  .media-progress {
+    margin: 4px 0;
+
+    trough {
+      background: rgba(255, 255, 255, 0.06);
+      border-radius: 3px;
+      min-height: 6px;
+    }
+
+    highlight {
+      background: linear-gradient(90deg, $magenta, rgba(198, 120, 221, 0.6));
+      border-radius: 3px;
+      min-height: 6px;
+    }
+
+    slider {
+      background: $magenta;
+      border-radius: 50%;
+      min-width: 14px;
+      min-height: 14px;
+      margin: -4px 0;
+      box-shadow: 0 1px 4px rgba(0, 0, 0, 0.3);
+    }
+  }
+
+  .media-time {
+    font-size: 10px;
+    color: $fg-faint;
+    font-weight: 600;
+  }
+
+  .media-controls {
+    padding: 6px 0;
+  }
+
+  .media-control-btn {
+    padding: 8px;
+    border-radius: 50%;
+    background: rgba(255, 255, 255, 0.04);
+    transition: all 200ms ease;
+
+    &:hover {
+      background: rgba(198, 120, 221, 0.15);
+    }
+
+    image {
+      color: $fg;
+    }
+  }
+
+  .media-play-btn {
+    padding: 10px;
+    border-radius: 50%;
+    background: rgba(198, 120, 221, 0.2);
+    border: 1px solid rgba(198, 120, 221, 0.3);
+    transition: all 200ms ease;
+
+    &:hover {
+      background: rgba(198, 120, 221, 0.35);
+      border-color: rgba(198, 120, 221, 0.5);
+    }
+
+    image {
+      color: white;
+    }
+  }
+
+  .media-player-name {
+    font-size: 10px;
+    color: $fg-faint;
+    font-weight: 600;
+    letter-spacing: 0.5px;
+    padding: 3px 10px;
+    border-radius: 8px;
+    background: rgba(255, 255, 255, 0.03);
+  }
+}
+
+// ━━━━━━━━━━━━━ NOTIFICATION BELL (bar) ━━━━━━━━━━━━━━
+.notification-bell {
+  button {
+    padding: 3px 10px;
+    border-radius: 8px;
+    transition: all 200ms ease;
+
+    &:hover {
+      background: rgba(0, 191, 255, 0.12);
+    }
+  }
+
+  image {
+    color: $accent;
+  }
+
+  .notification-count {
+    font-size: 10px;
+    font-weight: bold;
+    color: $bg-dark;
+    background: $accent;
+    border-radius: 50%;
+    min-width: 16px;
+    min-height: 16px;
+    padding: 0 4px;
+  }
+}
+
+// ━━━━━━━━━━━━━━━ NOTIFICATIONS ━━━━━━━━━━━━━━━━━━━━━
+.notification-popups {
+  padding: 8px 12px;
+}
+
+.notification {
+  background: rgba(18, 20, 24, 0.92);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-left: 3px solid $accent;
+  border-radius: $radius-lg;
+  padding: 14px 16px;
+  margin: 4px 8px;
+  min-width: 340px;
+  max-width: 440px;
+  box-shadow: $shadow;
+  transition: all 300ms ease;
+
+  &.urgency-critical {
+    border-left-color: $red;
+    background: rgba(224, 108, 117, 0.08);
+  }
+
+  &.urgency-low {
+    border-left-color: $fg-dim;
+  }
+
+  .notification-icon-box {
+    padding: 4px;
+    border-radius: $radius;
+    background: rgba(255, 255, 255, 0.04);
+  }
+
+  .notification-title {
+    font-weight: bold;
+    font-size: 13px;
+    color: $fg;
+  }
+
+  .notification-appname {
+    font-size: 10px;
+    color: $fg-faint;
+    padding: 2px 8px;
+    border-radius: 8px;
+    background: rgba(255, 255, 255, 0.04);
+  }
+
+  .notification-body {
+    color: $fg-dim;
+    font-size: 12px;
+    margin-top: 6px;
+  }
+
+  .notification-close {
+    padding: 3px;
+    border-radius: 50%;
+    background: transparent;
+    transition: all 200ms ease;
+
+    &:hover {
+      background: rgba(224, 108, 117, 0.25);
+    }
+
+    image {
+      color: $fg-dim;
+    }
+  }
+
+  .notification-actions {
+    margin-top: 10px;
+  }
+
+  .notification-action {
+    padding: 6px 14px;
+    border-radius: 8px;
+    background: rgba(0, 191, 255, 0.08);
+    color: $teal;
+    border: 1px solid rgba(0, 191, 255, 0.18);
+    font-weight: 600;
+    font-size: 12px;
+    transition: all 200ms ease;
+
+    &:hover {
+      background: rgba(0, 191, 255, 0.2);
+      border-color: rgba(0, 191, 255, 0.4);
+    }
+  }
+}
+
+// Notification Center (side panel)
+.notification-center {
+  background: rgba(18, 20, 24, 0.92);
+  border-left: 1px solid rgba(0, 191, 255, 0.12);
+  padding: 16px;
+  box-shadow: -8px 0 32px rgba(0, 0, 0, 0.3);
+
+  .notification-center-header {
+    padding: 8px 4px 16px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+    margin-bottom: 12px;
+  }
+
+  .notification-center-icon {
+    color: $accent;
+  }
+
+  .notification-center-title {
+    font-size: 16px;
+    font-weight: bold;
+    color: $fg;
+    letter-spacing: 0.3px;
+  }
+
+  .notification-dnd-toggle {
+    padding: 6px;
+    border-radius: 8px;
+    background: rgba(255, 255, 255, 0.04);
+    transition: all 200ms ease;
+
+    &:hover {
+      background: rgba(0, 191, 255, 0.15);
+    }
+
+    image {
+      color: $accent;
+    }
+  }
+
+  .notification-clear-all {
+    padding: 6px 14px;
+    border-radius: 8px;
+    background: rgba(224, 108, 117, 0.08);
+    color: $red;
+    border: 1px solid rgba(224, 108, 117, 0.2);
+    font-size: 12px;
+    transition: all 200ms ease;
+
+    &:hover {
+      background: rgba(224, 108, 117, 0.2);
+      border-color: rgba(224, 108, 117, 0.4);
+    }
+
+    image {
+      color: $red;
+    }
+  }
+
+  .notification-placeholder {
+    padding: 80px 0;
+  }
+
+  .placeholder-icon {
+    color: rgba(168, 153, 132, 0.2);
+  }
+
+  .dim-label {
+    color: rgba(168, 153, 132, 0.5);
+    font-size: 16px;
+    font-weight: 600;
+  }
+
+  .dim-sublabel {
+    color: rgba(168, 153, 132, 0.3);
+    font-size: 12px;
+    font-style: italic;
+  }
+}
+
+// ━━━━━━━━━━━━━━━ OSD (Volume / Brightness) ━━━━━━━━━━━━━━
+.osd {
+  background: rgba(18, 20, 24, 0.92);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: $radius-xl;
+  padding: 16px 24px;
+  margin-bottom: 48px;
+  min-width: 320px;
+  box-shadow: $shadow-lg;
+
+  .osd-icon {
+    color: $accent;
+  }
+
+  .osd-label {
+    font-size: 10px;
+    font-weight: 600;
+    color: $fg-faint;
+    letter-spacing: 0.5px;
+  }
+
+  levelbar {
+    min-height: 8px;
+    border-radius: 4px;
+
+    trough {
+      background: rgba(255, 255, 255, 0.06);
+      border-radius: 4px;
+      min-height: 8px;
+    }
+
+    block.filled {
+      background: linear-gradient(90deg, $accent, $teal);
+      border-radius: 4px;
+      min-height: 8px;
+      box-shadow: 0 0 10px rgba(0, 191, 255, 0.35);
+    }
+  }
+
+  .osd-percent {
+    color: $fg;
+    font-weight: bold;
+    font-size: 16px;
+    min-width: 52px;
+  }
+}
+
+// ━━━━━━━━━━━━━━━ APP LAUNCHER ━━━━━━━━━━━━━━━━━━━━━
+.applauncher-backdrop {
+  background: rgba(0, 0, 0, 0.35);
+  border: none;
+  border-radius: 0;
+
+  &:hover {
+    background: rgba(0, 0, 0, 0.35);
+  }
+}
+
+.applauncher {
+  background: rgba(18, 20, 24, 0.95);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: $radius-xl;
+  padding: 0;
+  margin-top: 100px;
+  min-width: 560px;
+  max-width: 560px;
+  box-shadow: $shadow-lg, 0 0 60px rgba(0, 191, 255, 0.06);
+
+  .applauncher-header {
+    padding: 14px 20px 10px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+  }
+
+  .applauncher-header-icon {
+    color: $accent;
+  }
+
+  .applauncher-header-title {
+    color: $fg-dim;
+    font-size: 12px;
+    font-weight: 600;
+    letter-spacing: 1px;
+  }
+
+  .applauncher-search {
+    padding: 10px 20px;
+    margin: 0;
+    background: transparent;
+    border: none;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+  }
+
+  .applauncher-search-icon {
+    color: $accent;
+  }
+
+  .applauncher-entry {
+    background: transparent;
+    border: none;
+    color: $fg;
+    font-size: 16px;
+    caret-color: $accent;
+    outline: none;
+    box-shadow: none;
+    padding: 4px 0;
+
+    &:focus {
+      outline: none;
+      box-shadow: none;
+    }
+  }
+
+  .applauncher-status {
+    padding: 6px 20px 2px;
+  }
+
+  .applauncher-count {
+    font-size: 10px;
+    color: $fg-faint;
+    letter-spacing: 0.5px;
+  }
+
+  .applauncher-scroll {
+    margin: 0;
+  }
+
+  .applauncher-list {
+    padding: 4px 8px;
+  }
+
+  .applauncher-item {
+    padding: 10px 14px;
+    border-radius: $radius;
+    background: transparent;
+    transition: all 200ms cubic-bezier(0.4, 0, 0.2, 1);
+    border: 1px solid transparent;
+
+    &:hover {
+      background: rgba(0, 191, 255, 0.06);
+    }
+
+    &.selected {
+      background: linear-gradient(135deg, rgba(0, 191, 255, 0.12), rgba(0, 191, 255, 0.06));
+      border-color: rgba(0, 191, 255, 0.25);
+      box-shadow: 0 0 12px rgba(0, 191, 255, 0.05);
+    }
+
+    &:focus {
+      background: rgba(0, 191, 255, 0.12);
+      outline: none;
+    }
+  }
+
+  .applauncher-icon-box {
+    padding: 6px;
+    border-radius: $radius;
+    background: rgba(255, 255, 255, 0.03);
+  }
+
+  .applauncher-name {
+    font-size: 14px;
+    font-weight: 600;
+    color: $fg;
+  }
+
+  .applauncher-desc {
+    font-size: 11px;
+    color: $fg-dim;
+    margin-top: 2px;
+  }
+
+  .applauncher-hint {
+    font-size: 10px;
+    color: $accent;
+    padding: 2px 8px;
+    border-radius: 6px;
+    background: rgba(0, 191, 255, 0.08);
+    font-weight: 600;
+  }
+
+  .applauncher-empty {
+    padding: 48px 0;
+
+    .applauncher-empty-icon {
+      color: rgba(168, 153, 132, 0.2);
+    }
+
+    .applauncher-empty-label {
+      color: $fg-faint;
+      font-size: 14px;
+    }
+  }
+
+  .applauncher-footer {
+    padding: 10px 20px;
+    border-top: 1px solid rgba(255, 255, 255, 0.04);
+  }
+
+  .applauncher-key {
+    font-size: 10px;
+    font-weight: bold;
+    color: $accent;
+    padding: 2px 6px;
+    border-radius: 4px;
+    background: rgba(0, 191, 255, 0.08);
+    border: 1px solid rgba(0, 191, 255, 0.15);
+  }
+
+  .applauncher-footer-text {
+    font-size: 11px;
+    color: $fg-faint;
+  }
+}
+
+// ━━━━━━━━━━━━━━━ SESSION / POWER MENU ━━━━━━━━━━━━━━
+.session-menu {
+  background: rgba(18, 20, 24, 0.95);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: $radius-xl;
+  padding: 40px 48px;
+  box-shadow: $shadow-lg;
+}
+
+.session-button {
+  padding: 24px 32px;
+  border-radius: $radius-lg;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  color: $fg-dim;
+  transition: all 250ms cubic-bezier(0.4, 0, 0.2, 1);
+
+  image {
+    color: $fg-dim;
+    transition: all 250ms ease;
+  }
+
+  label {
+    font-size: 12px;
+    margin-top: 6px;
+    font-weight: 600;
+    letter-spacing: 0.5px;
+  }
+
+  &:hover {
+    background: rgba(0, 191, 255, 0.1);
+    border-color: rgba(0, 191, 255, 0.3);
+    color: $fg;
+    box-shadow: 0 0 20px rgba(0, 191, 255, 0.1);
+
+    image {
+      color: $accent;
+    }
+  }
+
+  &.session-shutdown:hover {
+    background: rgba(224, 108, 117, 0.12);
+    border-color: rgba(224, 108, 117, 0.4);
+    box-shadow: 0 0 20px rgba(224, 108, 117, 0.1);
+
+    image {
+      color: $red;
+    }
+  }
+
+  &.session-reboot:hover {
+    background: rgba(215, 153, 33, 0.12);
+    border-color: rgba(215, 153, 33, 0.4);
+    box-shadow: 0 0 20px rgba(215, 153, 33, 0.1);
+
+    image {
+      color: $orange;
+    }
+  }
+
+  &.session-lock:hover {
+    background: rgba(0, 204, 153, 0.12);
+    border-color: rgba(0, 204, 153, 0.4);
+    box-shadow: 0 0 20px rgba(0, 204, 153, 0.1);
+
+    image {
+      color: $green;
+    }
+  }
+
+  &.session-suspend:hover {
+    background: rgba(198, 120, 221, 0.12);
+    border-color: rgba(198, 120, 221, 0.4);
+    box-shadow: 0 0 20px rgba(198, 120, 221, 0.1);
+
+    image {
+      color: $magenta;
+    }
+  }
 }

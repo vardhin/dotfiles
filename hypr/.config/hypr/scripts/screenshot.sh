@@ -175,8 +175,21 @@ case "$1" in
         ;;
         
     "interactive")
+        # Use fuzzel/rofi/wofi — whichever is available
+        DMENU=""
+        if command -v fuzzel >/dev/null 2>&1; then
+            DMENU="fuzzel --dmenu --prompt=Screenshot:"
+        elif command -v wofi >/dev/null 2>&1; then
+            DMENU="wofi --dmenu --prompt Screenshot: --height=300"
+        elif command -v rofi >/dev/null 2>&1; then
+            DMENU="rofi -dmenu -p Screenshot"
+        else
+            notify-send "Screenshot" "No dmenu-compatible launcher found" --icon="dialog-error"
+            exit 1
+        fi
+
         choice=$(echo -e "Fullscreen\nArea\nWindow\nMonitor\nEdit Area\nClipboard Only\nDelay 3s\nDelay 5s" | \
-                wofi --dmenu --prompt "Screenshot:" --height=300)
+                $DMENU)
         
         case "$choice" in
             "Fullscreen") exec "$0" fullscreen ;;
