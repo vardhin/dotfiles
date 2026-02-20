@@ -18,17 +18,24 @@ import { execAsync } from "ags/process"
 function Workspaces() {
   const hyprland = AstalHyprland.get_default()
   const focused = createBinding(hyprland, "focusedWorkspace")
+  const workspaces = createBinding(hyprland, "workspaces")
 
   return (
     <box class="workspaces">
-      {Array.from({ length: 10 }, (_, i) => i + 1).map((id) => (
-        <button
-          class={focused((ws) => ws?.id === id ? "focused" : "")}
-          onClicked={() => hyprland.dispatch("workspace", `${id}`)}
-        >
-          <label label={`${id}`} />
-        </button>
-      ))}
+      <For each={workspaces((wss) =>
+        wss
+          .filter((ws) => !(ws.id >= -99 && ws.id <= -2)) // filter out special workspaces
+          .sort((a, b) => a.id - b.id)
+      )}>
+        {(ws) => (
+          <button
+            class={focused((fw) => fw?.id === ws.id ? "focused" : "")}
+            onClicked={() => hyprland.dispatch("workspace", `${ws.id}`)}
+          >
+            <label label={`${ws.id}`} />
+          </button>
+        )}
+      </For>
     </box>
   )
 }
@@ -44,9 +51,10 @@ function ActiveWindow() {
         {(client) =>
           client && (
             <label
-              label={createBinding(client, "title")((t) =>
-                t.length > 45 ? t.substring(0, 42) + "..." : t
-              )}
+              label={createBinding(client, "title")((t) => {
+                const title = t || ""
+                return title.length > 45 ? title.substring(0, 42) + "..." : title
+              })}
             />
           )
         }
@@ -252,6 +260,156 @@ function Tray() {
           </menubutton>
         )}
       </For>
+    </box>
+  )
+}
+
+// ━━━━━━━━━━━━━━━━━━ BLUETOOTH ━━━━━━━━━━━━━━━━━━━━━━━━━
+function Bluetooth() {
+  const pollBluetooth = () => {
+    try {
+      const out = GLib.spawn_command_line_sync("bluetoothctl show")[1]
+      const text = new TextDecoder().decode(out)
+      const powered = /Powered:\s*yes/i.test(text)
+      return powered
+    } catch {
+      return false
+    }
+  }
+
+  const pollDevices = (): { address: string; name: string; connected: boolean }[] => {
+    try {
+      const pairedOut = GLib.spawn_command_line_sync("bluetoothctl devices Paired")[1]
+      const pairedText = new TextDecoder().decode(pairedOut).trim()
+      const lines = pairedText ? pairedText.split("\n") : []
+
+      const connOut = GLib.spawn_command_line_sync("bluetoothctl devices Connected")[1]
+      const connText = new TextDecoder().decode(connOut).trim()
+      const connLines = connText ? connText.split("\n") : []
+      const connAddrs = new Set(
+        connLines.map((l) => l.replace(/^Device\s+/, "").split(" ")[0])
+      )
+
+      return lines.map((line) => {
+        const rest = line.replace(/^Device\s+/, "")
+        const spaceIdx = rest.indexOf(" ")
+        const address = rest.substring(0, spaceIdx)
+        const name = rest.substring(spaceIdx + 1) || address
+        return { address, name, connected: connAddrs.has(address) }
+      })
+    } catch {
+      return []
+    }
+  }
+
+  const powered = createPoll(false, 3000, pollBluetooth)
+  const devices = createPoll([] as { address: string; name: string; connected: boolean }[], 5000, pollDevices)
+
+  const connectedCount = devices((devs) => devs.filter((d) => d.connected).length)
+
+  const icon = powered((on) =>
+    on ? "bluetooth-active-symbolic" : "bluetooth-disabled-symbolic"
+  )
+
+  return (
+    <box class="bluetooth">
+      <menubutton>
+        <box spacing={4}>
+          <image iconName={icon} />
+          <label
+            class="bluetooth-count"
+            visible={connectedCount((c) => c > 0)}
+            label={connectedCount((c) => `${c}`)}
+          />
+        </box>
+        <popover>
+          <box class="bluetooth-popup" orientation={Gtk.Orientation.VERTICAL} spacing={10}>
+            {/* Header with toggle */}
+            <box class="bluetooth-header" spacing={10}>
+              <image iconName="bluetooth-active-symbolic" pixelSize={20} class="bluetooth-header-icon" />
+              <label class="bluetooth-title" label="Bluetooth" hexpand xalign={0} />
+              <button
+                class={powered((on) => `bluetooth-toggle-btn ${on ? "active" : ""}`)}
+                onClicked={() => {
+                  const isOn = pollBluetooth()
+                  execAsync(["bluetoothctl", "power", isOn ? "off" : "on"])
+                }}
+                tooltipText={powered((on) => on ? "Turn off" : "Turn on")}
+              >
+                <label label={powered((on) => on ? "ON" : "OFF")} />
+              </button>
+            </box>
+
+            <box class="bluetooth-separator" />
+
+            {/* Scan button */}
+            <button
+              class="bluetooth-scan-btn"
+              onClicked={() => {
+                execAsync(["bash", "-c", "bluetoothctl --timeout 10 scan on &"])
+              }}
+              tooltipText="Scan for devices"
+              visible={powered}
+            >
+              <box spacing={6}>
+                <image iconName="view-refresh-symbolic" pixelSize={14} />
+                <label label="Scan for devices" />
+              </box>
+            </button>
+
+            {/* Device list */}
+            <box
+              orientation={Gtk.Orientation.VERTICAL}
+              spacing={4}
+              visible={powered((on) => on && pollDevices().length > 0)}
+            >
+              <label class="bluetooth-section-title" label="Devices" xalign={0} />
+              <For each={devices}>
+                {(dev) => (
+                  <button
+                    class={`bluetooth-device-btn ${dev.connected ? "connected" : ""}`}
+                    onClicked={() => {
+                      execAsync([
+                        "bluetoothctl",
+                        dev.connected ? "disconnect" : "connect",
+                        dev.address,
+                      ])
+                    }}
+                    tooltipText={dev.connected ? "Disconnect" : "Connect"}
+                  >
+                    <box spacing={8}>
+                      <image
+                        iconName={dev.connected
+                          ? "bluetooth-active-symbolic"
+                          : "bluetooth-disabled-symbolic"
+                        }
+                        pixelSize={14}
+                      />
+                      <label label={dev.name} hexpand xalign={0} />
+                      <label
+                        class="bluetooth-device-status"
+                        label={dev.connected ? "Connected" : "Paired"}
+                      />
+                    </box>
+                  </button>
+                )}
+              </For>
+            </box>
+
+            {/* Open settings */}
+            <button
+              class="bluetooth-settings-btn"
+              onClicked={() => execAsync(["blueman-manager"])}
+              tooltipText="Open Bluetooth Settings"
+            >
+              <box spacing={6}>
+                <image iconName="emblem-system-symbolic" pixelSize={14} />
+                <label label="Bluetooth Settings" />
+              </box>
+            </button>
+          </box>
+        </popover>
+      </menubutton>
     </box>
   )
 }
@@ -602,6 +760,7 @@ export default function Bar({ gdkmonitor }: { gdkmonitor: Gdk.Monitor }) {
         <box $type="end" spacing={4}>
           <Mpris />
           <Tray />
+          <Bluetooth />
           <Brightness />
           <AudioOutput />
           <Battery />

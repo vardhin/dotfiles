@@ -159,6 +159,28 @@ export function AppLauncher({ gdkmonitor }: { gdkmonitor: Gdk.Monitor }) {
             }
           }
         })
+        // Handle keyboard via GTK4 EventControllerKey
+        const keyCtrl = new Gtk.EventControllerKey()
+        keyCtrl.connect("key-pressed", (_ctrl, keyval) => {
+          if (keyval === Gdk.KEY_Escape) {
+            hide()
+          } else if (keyval === Gdk.KEY_Down || keyval === Gdk.KEY_Tab) {
+            if (currentResults.length > 0) {
+              selectedIndex = (selectedIndex + 1) % currentResults.length
+              highlightItem(selectedIndex)
+            }
+          } else if (keyval === Gdk.KEY_Up || keyval === Gdk.KEY_ISO_Left_Tab) {
+            if (currentResults.length > 0) {
+              selectedIndex = (selectedIndex - 1 + currentResults.length) % currentResults.length
+              highlightItem(selectedIndex)
+            }
+          } else if (keyval === Gdk.KEY_Return || keyval === Gdk.KEY_KP_Enter) {
+            if (currentResults.length > 0 && currentResults[selectedIndex]) {
+              launch(currentResults[selectedIndex])
+            }
+          }
+        })
+        self.add_controller(keyCtrl)
       }}
       visible={false}
       namespace="ags-applauncher"
@@ -168,25 +190,6 @@ export function AppLauncher({ gdkmonitor }: { gdkmonitor: Gdk.Monitor }) {
       keymode={Astal.Keymode.EXCLUSIVE}
       anchor={TOP | BOTTOM | LEFT | RIGHT}
       application={app}
-      onKeyPressed={(_self, keyval) => {
-        if (keyval === Gdk.KEY_Escape) {
-          hide()
-        } else if (keyval === Gdk.KEY_Down || keyval === Gdk.KEY_Tab) {
-          if (currentResults.length > 0) {
-            selectedIndex = (selectedIndex + 1) % currentResults.length
-            highlightItem(selectedIndex)
-          }
-        } else if (keyval === Gdk.KEY_Up || keyval === Gdk.KEY_ISO_Left_Tab) {
-          if (currentResults.length > 0) {
-            selectedIndex = (selectedIndex - 1 + currentResults.length) % currentResults.length
-            highlightItem(selectedIndex)
-          }
-        } else if (keyval === Gdk.KEY_Return || keyval === Gdk.KEY_KP_Enter) {
-          if (currentResults.length > 0 && currentResults[selectedIndex]) {
-            launch(currentResults[selectedIndex])
-          }
-        }
-      }}
     >
       {/* Clickable backdrop to close on click-outside */}
       <overlay>

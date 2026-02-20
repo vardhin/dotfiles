@@ -119,7 +119,15 @@ export function NotificationCenter({ gdkmonitor }: { gdkmonitor: Gdk.Monitor }) 
 
   return (
     <window
-      $={(self) => (win = self)}
+      $={(self) => {
+        win = self
+        // Handle Escape key via GTK4 EventControllerKey
+        const keyCtrl = new Gtk.EventControllerKey()
+        keyCtrl.connect("key-pressed", (_ctrl, keyval) => {
+          if (keyval === Gdk.KEY_Escape) hide()
+        })
+        self.add_controller(keyCtrl)
+      }}
       visible={false}
       namespace="ags-notification-center"
       name="notification-center"
@@ -128,9 +136,6 @@ export function NotificationCenter({ gdkmonitor }: { gdkmonitor: Gdk.Monitor }) 
       anchor={TOP | RIGHT | BOTTOM}
       keymode={Astal.Keymode.ON_DEMAND}
       application={app}
-      onKeyPressed={(_self, keyval) => {
-        if (keyval === Gdk.KEY_Escape) hide()
-      }}
     >
       <box orientation={Gtk.Orientation.VERTICAL} class="notification-center" widthRequest={420}>
         <box class="notification-center-header" spacing={8}>

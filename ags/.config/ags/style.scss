@@ -35,9 +35,11 @@ window {
   color: $fg;
 
   > centerbox {
-    background: rgba(18, 20, 24, 0.72);
+    background: rgba(18, 20, 24, 0.88);
     border-bottom: 1px solid rgba(0, 191, 255, 0.15);
+    border-radius: 0 0 $radius-lg $radius-lg;
     padding: 0 16px;
+    margin: 0 8px;
     min-height: 38px;
   }
 }
@@ -270,6 +272,167 @@ menubutton button {
     font-size: 11px;
     color: $fg-dim;
     font-weight: 600;
+  }
+}
+
+// ━━━━━━━━━━━━━ BLUETOOTH WIDGET ━━━━━━━━━━━━━━━━━━━
+$blue: #61afef;
+
+.bluetooth {
+  menubutton button {
+    padding: 3px 10px;
+    border-radius: 8px;
+    transition: all 200ms ease;
+
+    &:hover {
+      background: rgba(97, 175, 239, 0.12);
+    }
+  }
+
+  image {
+    color: $blue;
+  }
+
+  .bluetooth-count {
+    font-size: 10px;
+    font-weight: bold;
+    color: $bg-dark;
+    background: $blue;
+    border-radius: 50%;
+    min-width: 16px;
+    min-height: 16px;
+    padding: 0 4px;
+  }
+}
+
+.bluetooth-popup {
+  padding: 16px 18px;
+  min-width: 280px;
+
+  .bluetooth-header {
+    padding-bottom: 10px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+  }
+
+  .bluetooth-header-icon {
+    color: $blue;
+  }
+
+  .bluetooth-title {
+    font-size: 14px;
+    font-weight: bold;
+    color: $fg;
+  }
+
+  .bluetooth-toggle-btn {
+    padding: 4px 12px;
+    border-radius: 8px;
+    background: rgba(255, 255, 255, 0.04);
+    color: $fg-dim;
+    font-size: 11px;
+    font-weight: 600;
+    border: 1px solid transparent;
+    transition: all 200ms ease;
+
+    &:hover {
+      background: rgba(97, 175, 239, 0.12);
+      border-color: rgba(97, 175, 239, 0.2);
+    }
+
+    &.active {
+      background: rgba(97, 175, 239, 0.15);
+      border-color: rgba(97, 175, 239, 0.35);
+      color: $blue;
+    }
+  }
+
+  .bluetooth-separator {
+    min-height: 1px;
+    background: rgba(255, 255, 255, 0.06);
+    margin: 4px 0;
+  }
+
+  .bluetooth-scan-btn {
+    padding: 8px 12px;
+    border-radius: 8px;
+    background: rgba(255, 255, 255, 0.03);
+    color: $fg-dim;
+    font-size: 12px;
+    border: 1px solid transparent;
+    transition: all 200ms ease;
+
+    &:hover {
+      background: rgba(97, 175, 239, 0.08);
+      border-color: rgba(97, 175, 239, 0.15);
+      color: $fg;
+    }
+
+    image {
+      color: $blue;
+    }
+  }
+
+  .bluetooth-section-title {
+    font-size: 11px;
+    font-weight: 600;
+    color: $fg-faint;
+    letter-spacing: 0.5px;
+    margin-bottom: 4px;
+    margin-top: 4px;
+  }
+
+  .bluetooth-device-btn {
+    padding: 8px 12px;
+    border-radius: 8px;
+    background: rgba(255, 255, 255, 0.03);
+    border: 1px solid transparent;
+    transition: all 200ms ease;
+    color: $fg-dim;
+
+    &:hover {
+      background: rgba(97, 175, 239, 0.08);
+      border-color: rgba(97, 175, 239, 0.15);
+    }
+
+    &.connected {
+      background: rgba(97, 175, 239, 0.1);
+      border-color: rgba(97, 175, 239, 0.25);
+      color: $fg;
+    }
+
+    image {
+      color: $blue;
+    }
+
+    .bluetooth-device-status {
+      font-size: 10px;
+      color: $fg-faint;
+      font-weight: 600;
+      padding: 2px 8px;
+      border-radius: 6px;
+      background: rgba(255, 255, 255, 0.04);
+    }
+  }
+
+  .bluetooth-settings-btn {
+    padding: 8px 12px;
+    border-radius: 8px;
+    background: rgba(255, 255, 255, 0.03);
+    color: $fg-dim;
+    font-size: 12px;
+    border: 1px solid transparent;
+    transition: all 200ms ease;
+    margin-top: 4px;
+
+    &:hover {
+      background: rgba(97, 175, 239, 0.08);
+      border-color: rgba(97, 175, 239, 0.15);
+      color: $fg;
+    }
+
+    image {
+      color: $fg-dim;
+    }
   }
 }
 
@@ -759,12 +922,12 @@ menubutton button {
 
 // ━━━━━━━━━━━━━━━ APP LAUNCHER ━━━━━━━━━━━━━━━━━━━━━
 .applauncher-backdrop {
-  background: rgba(0, 0, 0, 0.35);
+  background: transparent;
   border: none;
   border-radius: 0;
 
   &:hover {
-    background: rgba(0, 0, 0, 0.35);
+    background: transparent;
   }
 }
 
@@ -1001,6 +1164,270 @@ menubutton button {
 
     image {
       color: $magenta;
+    }
+  }
+}
+
+// ━━━━━━━━━━━━━━━ DESKTOP WIDGETS ━━━━━━━━━━━━━━━━━━━━
+.desktop-widgets {
+  background: transparent;
+}
+
+.dw-container {
+  margin-right: 60px;
+  margin-bottom: 20px;
+}
+
+.dw-clock-card {
+  background: rgba(18, 20, 24, 0.55);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  border-radius: $radius-xl;
+  padding: 28px 40px 22px;
+  box-shadow: 0 8px 40px rgba(0, 0, 0, 0.3);
+
+  .dw-clock-row {
+    margin-bottom: 2px;
+  }
+
+  .dw-clock-time {
+    font-size: 72px;
+    font-weight: 200;
+    color: $fg;
+    letter-spacing: 2px;
+  }
+
+  .dw-clock-seconds {
+    font-size: 28px;
+    font-weight: 300;
+    color: $accent;
+    margin-top: 32px;
+    margin-left: 4px;
+  }
+
+  .dw-clock-date {
+    font-size: 15px;
+    font-weight: 500;
+    color: $fg-dim;
+    letter-spacing: 1px;
+    margin-top: 4px;
+  }
+
+  .dw-clock-year {
+    font-size: 12px;
+    font-weight: 400;
+    color: $fg-faint;
+    letter-spacing: 3px;
+  }
+}
+
+.dw-stats-card {
+  background: rgba(18, 20, 24, 0.55);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  border-radius: $radius-xl;
+  padding: 18px 24px;
+  box-shadow: 0 8px 40px rgba(0, 0, 0, 0.3);
+  min-width: 240px;
+
+  .dw-stats-header {
+    padding-bottom: 8px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+  }
+
+  .dw-stats-header-icon {
+    color: $accent;
+  }
+
+  .dw-stats-header-label {
+    font-size: 10px;
+    font-weight: 700;
+    color: $fg-dim;
+    letter-spacing: 2px;
+  }
+
+  .dw-stat-label {
+    font-size: 11px;
+    font-weight: 600;
+    color: $fg-dim;
+    letter-spacing: 1px;
+  }
+
+  .dw-stat-value {
+    font-size: 11px;
+    font-weight: 600;
+    color: $fg;
+  }
+
+  .dw-stat-bar {
+    min-height: 4px;
+    border-radius: 2px;
+
+    trough {
+      background: rgba(255, 255, 255, 0.06);
+      border-radius: 2px;
+      min-height: 4px;
+    }
+
+    // GTK4 LevelBar uses block elements inside trough
+    block {
+      min-height: 4px;
+      border-radius: 2px;
+    }
+
+    &.dw-stat-bar-cpu block.filled {
+      background: linear-gradient(90deg, $accent, $teal);
+    }
+    &.dw-stat-bar-mem block.filled {
+      background: linear-gradient(90deg, $magenta, rgba(198, 120, 221, 0.6));
+    }
+    &.dw-stat-bar-disk block.filled {
+      background: linear-gradient(90deg, $yellow, $orange);
+    }
+  }
+
+  .dw-uptime-row {
+    padding-top: 8px;
+    border-top: 1px solid rgba(255, 255, 255, 0.04);
+  }
+
+  .dw-uptime-icon {
+    color: $green;
+  }
+}
+
+// ━━━━━━━━━━━━━━━ WEATHER WIDGET ━━━━━━━━━━━━━━━━━━━━
+.dw-weather-card {
+  background: rgba(18, 20, 24, 0.55);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  border-radius: $radius-xl;
+  padding: 18px 24px;
+  box-shadow: 0 8px 40px rgba(0, 0, 0, 0.3);
+  min-width: 240px;
+
+  .dw-weather-icon {
+    color: $yellow;
+  }
+
+  .dw-weather-temp {
+    font-size: 28px;
+    font-weight: 300;
+    color: $fg;
+    letter-spacing: 1px;
+  }
+
+  .dw-weather-desc {
+    font-size: 12px;
+    font-weight: 500;
+    color: $fg-dim;
+  }
+
+  .dw-weather-details {
+    padding-top: 6px;
+    border-top: 1px solid rgba(255, 255, 255, 0.04);
+  }
+
+  .dw-weather-detail-icon {
+    color: $fg-faint;
+  }
+
+  .dw-weather-detail {
+    font-size: 11px;
+    font-weight: 600;
+    color: $fg-dim;
+  }
+
+  .dw-weather-city {
+    font-size: 10px;
+    font-weight: 600;
+    color: $fg-faint;
+    letter-spacing: 1.5px;
+  }
+}
+
+// ━━━━━━━━━━━━━━━ NOW PLAYING ━━━━━━━━━━━━━━━━━━━━━━━
+.dw-np-card {
+  background: rgba(18, 20, 24, 0.55);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  border-radius: $radius-xl;
+  padding: 18px 24px;
+  box-shadow: 0 8px 40px rgba(0, 0, 0, 0.3);
+  min-width: 240px;
+
+  .dw-np-inner {
+    padding: 0;
+  }
+
+  .dw-np-status-icon {
+    color: $green;
+  }
+
+  .dw-np-header-label {
+    font-size: 10px;
+    font-weight: 700;
+    color: $fg-dim;
+    letter-spacing: 2px;
+  }
+
+  .dw-np-title {
+    font-size: 14px;
+    font-weight: 600;
+    color: $fg;
+  }
+
+  .dw-np-artist {
+    font-size: 11px;
+    font-weight: 500;
+    color: $fg-dim;
+  }
+}
+
+// ━━━━━━━━━━━━━━━ AUDIO VISUALIZER ━━━━━━━━━━━━━━━━━━
+.dw-viz-card {
+  background: rgba(18, 20, 24, 0.55);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  border-radius: $radius-xl;
+  padding: 18px 24px 14px;
+  box-shadow: 0 8px 40px rgba(0, 0, 0, 0.3);
+  min-width: 240px;
+
+  .dw-viz-header {
+    padding-bottom: 8px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+  }
+
+  .dw-viz-header-icon {
+    color: $magenta;
+  }
+
+  .dw-viz-header-label {
+    font-size: 10px;
+    font-weight: 700;
+    color: $fg-dim;
+    letter-spacing: 2px;
+  }
+
+  .dw-viz-bars {
+    padding: 8px 0 4px;
+    min-height: 64px;
+  }
+
+  .dw-viz-bar {
+    min-width: 10px;
+    border-radius: 3px;
+    min-height: 64px;
+
+    trough {
+      background: rgba(255, 255, 255, 0.04);
+      border-radius: 3px;
+      min-width: 10px;
+    }
+
+    block {
+      border-radius: 3px;
+      min-width: 10px;
+    }
+
+    block.filled {
+      background: linear-gradient(0deg, $accent, $magenta);
     }
   }
 }

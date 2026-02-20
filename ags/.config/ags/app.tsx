@@ -6,6 +6,7 @@ import { NotificationPopups, NotificationCenter } from "./widget/Notifications"
 import { OSD } from "./widget/OSD"
 import { AppLauncher } from "./widget/AppLauncher"
 import { SessionMenu } from "./widget/Session"
+import { DesktopWidgets } from "./widget/DesktopWidgets"
 
 app.start({
   css: style,
@@ -19,6 +20,7 @@ app.start({
           const needsLauncher = !app.get_window("applauncher")
           const needsSession = !app.get_window("session")
           const needsNotifCenter = !app.get_window("notification-center")
+          const needsWidgets = !app.get_window("desktop-widgets")
 
           return (
             <This this={app}>
@@ -28,6 +30,7 @@ app.start({
               {needsLauncher && <AppLauncher gdkmonitor={monitor} />}
               {needsSession && <SessionMenu gdkmonitor={monitor} />}
               {needsNotifCenter && <NotificationCenter gdkmonitor={monitor} />}
+              {needsWidgets && <DesktopWidgets gdkmonitor={monitor} />}
             </This>
           )
         }}

@@ -61,7 +61,15 @@ export function SessionMenu({ gdkmonitor }: { gdkmonitor: Gdk.Monitor }) {
 
   return (
     <window
-      $={(self) => (win = self)}
+      $={(self) => {
+        win = self
+        // Handle Escape key via GTK4 EventControllerKey
+        const keyCtrl = new Gtk.EventControllerKey()
+        keyCtrl.connect("key-pressed", (_ctrl, keyval) => {
+          if (keyval === Gdk.KEY_Escape) hide()
+        })
+        self.add_controller(keyCtrl)
+      }}
       visible={false}
       namespace="ags-session"
       name="session"
@@ -70,9 +78,6 @@ export function SessionMenu({ gdkmonitor }: { gdkmonitor: Gdk.Monitor }) {
       keymode={Astal.Keymode.ON_DEMAND}
       anchor={TOP | BOTTOM | LEFT | RIGHT}
       application={app}
-      onKeyPressed={(_self, keyval) => {
-        if (keyval === Gdk.KEY_Escape) hide()
-      }}
     >
       <box
         class="session-menu"
