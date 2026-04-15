@@ -24,7 +24,7 @@ function Workspaces() {
     <box class="workspaces">
       <For each={workspaces((wss) =>
         wss
-          .filter((ws) => !(ws.id >= -99 && ws.id <= -2)) // filter out special workspaces
+          .filter((ws) => ws.id > 0) // filter out special and invalid workspaces
           .sort((a, b) => a.id - b.id)
       )}>
         {(ws) => (
@@ -200,36 +200,6 @@ function Mpris() {
                   </box>
                 </popover>
               </menubutton>
-
-              {/* Inline prev/play/next buttons */}
-              <button
-                class="media-inline-btn"
-                onClicked={() => player.previous()}
-                visible={canGoPrev}
-              >
-                <image iconName="media-skip-backward-symbolic" pixelSize={14} />
-              </button>
-              <button
-                class="media-inline-btn"
-                onClicked={() => player.play_pause()}
-                visible={canControl}
-              >
-                <image
-                  iconName={playbackStatus((s) =>
-                    s === AstalMpris.PlaybackStatus.PLAYING
-                      ? "media-playback-pause-symbolic"
-                      : "media-playback-start-symbolic"
-                  )}
-                  pixelSize={14}
-                />
-              </button>
-              <button
-                class="media-inline-btn"
-                onClicked={() => player.next()}
-                visible={canGoNext}
-              >
-                <image iconName="media-skip-forward-symbolic" pixelSize={14} />
-              </button>
             </box>
           )
         }}
@@ -415,8 +385,188 @@ function Bluetooth() {
 }
 
 // ━━━━━━━━━━━━━━━━━━ WIFI ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-// Network status is shown via the system tray (nm-applet or similar).
-// A dedicated Wireless widget was removed to avoid duplicate wifi icons.
+function WiFi() {
+  interface WifiNetwork {
+    ssid: string
+    signal: number
+    active: boolean
+    security: string
+  }
+
+  const pollWifi = (): { connected: boolean; ssid: string; signal: number; ip: string } => {
+    try {
+      // Use targeted nmcli commands for reliable wifi-only detection
+      const devOut = GLib.spawn_command_line_sync("nmcli -t -f TYPE,STATE,CONNECTION device")[1]
+      const devText = new TextDecoder().decode(devOut)
+      const wifiLine = devText.split("\n").find((l) => l.startsWith("wifi:"))
+      if (!wifiLine) return { connected: false, ssid: "", signal: 0, ip: "" }
+
+      const parts = wifiLine.split(":")
+      const connected = parts[1] === "connected"
+      const ssid = parts.slice(2).join(":") || ""  // SSID may contain colons
+
+      if (!connected || !ssid) return { connected: false, ssid: "", signal: 0, ip: "" }
+
+      // Get signal from active wifi
+      const sigOut = GLib.spawn_command_line_sync("nmcli -t -f active,signal dev wifi")[1]
+      const sigText = new TextDecoder().decode(sigOut)
+      const activeLine = sigText.split("\n").find((l) => l.startsWith("yes:"))
+      const signal = activeLine ? parseInt(activeLine.split(":")[1]) || 0 : 0
+
+      // Get IP
+      const ipOut = GLib.spawn_command_line_sync("nmcli -t -f IP4.ADDRESS dev show wlan0")[1]
+      const ipText = new TextDecoder().decode(ipOut)
+      const ipMatch = ipText.match(/IP4\.ADDRESS\[1\]:([^\n]+)/)
+      const ip = ipMatch ? ipMatch[1].trim() : ""
+
+      return { connected: true, ssid, signal, ip }
+    } catch {
+      return { connected: false, ssid: "", signal: 0, ip: "" }
+    }
+  }
+
+  const pollNetworks = (): WifiNetwork[] => {
+    try {
+      const out = GLib.spawn_command_line_sync("nmcli -t -f SSID,SIGNAL,ACTIVE,SECURITY device wifi list")[1]
+      const text = new TextDecoder().decode(out).trim()
+      if (!text) return []
+      const seen = new Set<string>()
+      return text.split("\n").map((line) => {
+        const parts = line.split(":")
+        return {
+          ssid: parts[0] || "",
+          signal: parseInt(parts[1]) || 0,
+          active: parts[2] === "yes",
+          security: parts[3] || "",
+        }
+      }).filter((n) => {
+        if (!n.ssid || seen.has(n.ssid)) return false
+        seen.add(n.ssid)
+        return true
+      }).sort((a, b) => b.signal - a.signal)
+    } catch {
+      return []
+    }
+  }
+
+  const wifiInfo = createPoll({ connected: false, ssid: "", signal: 0, ip: "" }, 5000, pollWifi)
+  const networks = createPoll([] as WifiNetwork[], 15000, pollNetworks)
+
+  const wifiIcon = wifiInfo((w) => {
+    if (!w.connected) return "network-wireless-offline-symbolic"
+    if (w.signal > 75) return "network-wireless-signal-excellent-symbolic"
+    if (w.signal > 50) return "network-wireless-signal-good-symbolic"
+    if (w.signal > 25) return "network-wireless-signal-ok-symbolic"
+    return "network-wireless-signal-weak-symbolic"
+  })
+
+  const signalIcon = (signal: number) => {
+    if (signal > 75) return "network-wireless-signal-excellent-symbolic"
+    if (signal > 50) return "network-wireless-signal-good-symbolic"
+    if (signal > 25) return "network-wireless-signal-ok-symbolic"
+    return "network-wireless-signal-weak-symbolic"
+  }
+
+  return (
+    <box class="wifi">
+      <menubutton>
+        <box spacing={4}>
+          <image iconName={wifiIcon} />
+        </box>
+        <popover>
+          <box class="wifi-popup" orientation={Gtk.Orientation.VERTICAL} spacing={10}>
+            {/* Header */}
+            <box class="wifi-header" spacing={10}>
+              <image iconName="network-wireless-symbolic" pixelSize={20} class="wifi-header-icon" />
+              <box orientation={Gtk.Orientation.VERTICAL} hexpand>
+                <label class="wifi-title" label="Wi-Fi" xalign={0} />
+                <label
+                  class="wifi-subtitle"
+                  label={wifiInfo((w) => w.connected ? `${w.ssid} · ${w.signal}%` : "Not connected")}
+                  xalign={0}
+                />
+              </box>
+            </box>
+
+            {/* Connection info when connected */}
+            <box
+              class="wifi-info-row"
+              spacing={6}
+              visible={wifiInfo((w) => w.connected && w.ip !== "")}
+            >
+              <image iconName="network-server-symbolic" pixelSize={12} class="wifi-info-icon" />
+              <label
+                class="wifi-info-label"
+                label={wifiInfo((w) => w.ip)}
+                hexpand xalign={0}
+              />
+            </box>
+
+            <box class="wifi-separator" />
+
+            {/* Rescan button */}
+            <button
+              class="wifi-scan-btn"
+              onClicked={() => {
+                execAsync(["nmcli", "device", "wifi", "rescan"]).catch(() => {})
+              }}
+              tooltipText="Rescan for networks"
+            >
+              <box spacing={6}>
+                <image iconName="view-refresh-symbolic" pixelSize={14} />
+                <label label="Rescan networks" />
+              </box>
+            </button>
+
+            {/* Network list */}
+            <box orientation={Gtk.Orientation.VERTICAL} spacing={4}>
+              <label class="wifi-section-title" label="Available Networks" xalign={0} />
+              <For each={networks((n) => n.slice(0, 8))}>
+                {(net) => (
+                  <button
+                    class={`wifi-network-btn ${net.active ? "active" : ""}`}
+                    onClicked={() => {
+                      if (net.active) {
+                        execAsync(["nmcli", "connection", "down", net.ssid])
+                      } else {
+                        execAsync(["nmcli", "device", "wifi", "connect", net.ssid])
+                      }
+                    }}
+                    tooltipText={net.active ? "Disconnect" : `Connect to ${net.ssid}`}
+                  >
+                    <box spacing={8}>
+                      <image iconName={signalIcon(net.signal)} pixelSize={14} />
+                      <label label={net.ssid} hexpand xalign={0} />
+                      {net.security && (
+                        <image iconName="channel-secure-symbolic" pixelSize={10} class="wifi-lock-icon" />
+                      )}
+                      <label
+                        class="wifi-signal-label"
+                        label={`${net.signal}%`}
+                      />
+                    </box>
+                  </button>
+                )}
+              </For>
+            </box>
+
+            {/* Open settings */}
+            <button
+              class="wifi-settings-btn"
+              onClicked={() => execAsync(["nm-connection-editor"])}
+              tooltipText="Open Network Settings"
+            >
+              <box spacing={6}>
+                <image iconName="emblem-system-symbolic" pixelSize={14} />
+                <label label="Network Settings" />
+              </box>
+            </button>
+          </box>
+        </popover>
+      </menubutton>
+    </box>
+  )
+}
 
 // ━━━━━━━━━━━━━━━━━ VOLUME ━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 function AudioOutput() {
@@ -747,6 +897,9 @@ export default function Bar({ gdkmonitor }: { gdkmonitor: Gdk.Monitor }) {
       gdkmonitor={gdkmonitor}
       exclusivity={Astal.Exclusivity.EXCLUSIVE}
       anchor={TOP | LEFT | RIGHT}
+      marginTop={4}
+      marginLeft={24}
+      marginRight={24}
       application={app}
     >
       <centerbox>
@@ -760,6 +913,7 @@ export default function Bar({ gdkmonitor }: { gdkmonitor: Gdk.Monitor }) {
         <box $type="end" spacing={4}>
           <Mpris />
           <Tray />
+          <WiFi />
           <Bluetooth />
           <Brightness />
           <AudioOutput />

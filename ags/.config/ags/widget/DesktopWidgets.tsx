@@ -312,9 +312,9 @@ function NowPlaying() {
 
 export function DesktopWidgets({ gdkmonitor }: { gdkmonitor: Gdk.Monitor }) {
   let win: Astal.Window
-  const { TOP, BOTTOM, RIGHT } = Astal.WindowAnchor
+  const { TOP, BOTTOM, RIGHT, LEFT } = Astal.WindowAnchor
 
-  // Clock — use real initial values so labels render immediately
+  // Clock
   const timeStr = createPoll(now("%H:%M"), 1000, () => now("%H:%M"))
   const secStr = createPoll(now("%S"), 1000, () => now("%S"))
   const dateStr = createPoll(now("%A, %B %e"), 60000, () => now("%A, %B %e"))
@@ -326,8 +326,7 @@ export function DesktopWidgets({ gdkmonitor }: { gdkmonitor: Gdk.Monitor }) {
   const disk = createPoll({ used: "0", total: "0", percent: 0 }, 30000, getDiskUsage)
   const uptime = createPoll("—", 60000, getUptime)
 
-  // Weather — poll every 15 min, async
-  let weatherData = { ...WEATHER_EMPTY }
+  // Weather
   let weatherLabel: Gtk.Label | null = null
   let weatherDesc: Gtk.Label | null = null
   let weatherIcon: Gtk.Image | null = null
@@ -336,7 +335,6 @@ export function DesktopWidgets({ gdkmonitor }: { gdkmonitor: Gdk.Monitor }) {
   let weatherWind: Gtk.Label | null = null
 
   const updateWeatherUI = (w: WeatherData) => {
-    weatherData = w
     if (weatherLabel) weatherLabel.label = w.temp
     if (weatherDesc) weatherDesc.label = w.desc
     if (weatherIcon) weatherIcon.iconName = w.icon
@@ -345,7 +343,6 @@ export function DesktopWidgets({ gdkmonitor }: { gdkmonitor: Gdk.Monitor }) {
     if (weatherWind) weatherWind.label = w.wind
   }
 
-  // Fetch weather on start and then every 15 min
   fetchWeather().then(updateWeatherUI)
   const weatherTimer = setInterval(() => {
     fetchWeather().then(updateWeatherUI)
@@ -368,14 +365,21 @@ export function DesktopWidgets({ gdkmonitor }: { gdkmonitor: Gdk.Monitor }) {
       name="desktop-widgets"
       gdkmonitor={gdkmonitor}
       exclusivity={Astal.Exclusivity.NONE}
-      keymode={Astal.Keymode.NONE}
-      anchor={TOP | BOTTOM | RIGHT}
+      keymode={Astal.Keymode.ON_DEMAND}
+      anchor={TOP | BOTTOM | LEFT | RIGHT}
       application={app}
     >
-      <box class="desktop-widgets" vexpand halign={Gtk.Align.END} valign={Gtk.Align.CENTER}>
-        <box orientation={Gtk.Orientation.VERTICAL} spacing={16} class="dw-container">
+      <box class="desktop-widgets" vexpand hexpand>
 
-          {/* ── Clock ── */}
+        {/* ═══ LEFT COLUMN ═══ */}
+        <box
+          orientation={Gtk.Orientation.VERTICAL}
+          spacing={16}
+          valign={Gtk.Align.CENTER}
+          halign={Gtk.Align.START}
+          class="dw-col-left"
+        >
+          {/* Clock */}
           <box orientation={Gtk.Orientation.VERTICAL} class="dw-clock-card" spacing={2}>
             <box halign={Gtk.Align.CENTER} spacing={4} class="dw-clock-row">
               <label class="dw-clock-time" label={timeStr} />
@@ -385,7 +389,7 @@ export function DesktopWidgets({ gdkmonitor }: { gdkmonitor: Gdk.Monitor }) {
             <label class="dw-clock-year" label={yearStr} halign={Gtk.Align.CENTER} />
           </box>
 
-          {/* ── Weather ── */}
+          {/* Weather */}
           <box orientation={Gtk.Orientation.VERTICAL} class="dw-weather-card" spacing={10}>
             <box spacing={10}>
               <image
@@ -395,53 +399,24 @@ export function DesktopWidgets({ gdkmonitor }: { gdkmonitor: Gdk.Monitor }) {
                 class="dw-weather-icon"
               />
               <box orientation={Gtk.Orientation.VERTICAL} spacing={2}>
-                <label
-                  $={(self) => { weatherLabel = self }}
-                  label="—"
-                  class="dw-weather-temp"
-                  xalign={0}
-                />
-                <label
-                  $={(self) => { weatherDesc = self }}
-                  label="Loading..."
-                  class="dw-weather-desc"
-                  xalign={0}
-                />
+                <label $={(self) => { weatherLabel = self }} label="—" class="dw-weather-temp" xalign={0} />
+                <label $={(self) => { weatherDesc = self }} label="Loading..." class="dw-weather-desc" xalign={0} />
               </box>
             </box>
             <box spacing={12} class="dw-weather-details">
               <box spacing={4}>
                 <image iconName="weather-fog-symbolic" pixelSize={12} class="dw-weather-detail-icon" />
-                <label
-                  $={(self) => { weatherHumidity = self }}
-                  label="—"
-                  class="dw-weather-detail"
-                />
+                <label $={(self) => { weatherHumidity = self }} label="—" class="dw-weather-detail" />
               </box>
               <box spacing={4}>
                 <image iconName="weather-windy-symbolic" pixelSize={12} class="dw-weather-detail-icon" />
-                <label
-                  $={(self) => { weatherWind = self }}
-                  label="—"
-                  class="dw-weather-detail"
-                />
+                <label $={(self) => { weatherWind = self }} label="—" class="dw-weather-detail" />
               </box>
             </box>
-            <label
-              $={(self) => { weatherCity = self }}
-              label=""
-              class="dw-weather-city"
-              xalign={0}
-            />
+            <label $={(self) => { weatherCity = self }} label="" class="dw-weather-city" xalign={0} />
           </box>
 
-          {/* ── Now Playing ── */}
-          <NowPlaying />
-
-          {/* ── Audio Visualizer ── */}
-          <MusicVisualizer />
-
-          {/* ── System Stats ── */}
+          {/* System Stats */}
           <box orientation={Gtk.Orientation.VERTICAL} class="dw-stats-card" spacing={12}>
             <box class="dw-stats-header" spacing={6}>
               <image iconName="utilities-system-monitor-symbolic" pixelSize={14} class="dw-stats-header-icon" />
@@ -474,8 +449,26 @@ export function DesktopWidgets({ gdkmonitor }: { gdkmonitor: Gdk.Monitor }) {
               <label class="dw-stat-value" label={uptime()} />
             </box>
           </box>
-
         </box>
+
+        {/* ═══ SPACER ═══ */}
+        <box hexpand />
+
+        {/* ═══ RIGHT COLUMN ═══ */}
+        <box
+          orientation={Gtk.Orientation.VERTICAL}
+          spacing={16}
+          valign={Gtk.Align.CENTER}
+          halign={Gtk.Align.END}
+          class="dw-col-right"
+        >
+          {/* Now Playing */}
+          <NowPlaying />
+
+          {/* Audio Visualizer */}
+          <MusicVisualizer />
+        </box>
+
       </box>
     </window>
   )
