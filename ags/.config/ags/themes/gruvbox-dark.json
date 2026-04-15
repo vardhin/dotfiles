@@ -1,0 +1,46 @@
+{
+  "name": "Gruvbox Dark",
+  "id": "gruvbox-dark",
+  "description": "Warm amber & orange on earthy dark brown",
+  "swatches": [
+    "#d79921",
+    "#fe8019",
+    "#282828",
+    "#ebdbb2"
+  ],
+  "colors": {
+    "bg": "rgba(40, 40, 40, 0.85)",
+    "bg_solid": "rgba(40, 40, 40, 0.96)",
+    "bg_dark": "rgba(29, 32, 33, 0.98)",
+    "fg": "#ebdbb2",
+    "fg_dim": "#928374",
+    "fg_faint": "rgba(146, 131, 116, 0.4)",
+    "accent": "#d79921",
+    "accent_dim": "rgba(215, 153, 33, 0.25)",
+    "accent_glow": "rgba(215, 153, 33, 0.12)",
+    "green": "#b8bb26",
+    "teal": "#8ec07c",
+    "magenta": "#d3869b",
+    "yellow": "#fabd2f",
+    "red": "#fb4934",
+    "orange": "#fe8019"
+  },
+  "hyprland": {
+    "active_border": "rgba(d79921ff) rgba(fe8019ff) rgba(fabd2fff) 45deg",
+    "inactive_border": "rgba(60504888) rgba(50484088) 90deg",
+    "border_size": 2,
+    "rounding": 10,
+    "shadow_color": "rgba(d7992160)",
+    "shadow_range": 45,
+    "shadow_render_power": 3,
+    "shadow_offset": "0 4",
+    "blur_size": 6,
+    "blur_passes": 2,
+    "blur_vibrancy": 0.1,
+    "dim_inactive": true,
+    "dim_strength": 0.18,
+    "gaps_in": 8,
+    "gaps_out": 14
+  },
+  "wallpaper": "/home/vardhin/wallpaper/gruvbox-dark/wallpaperflare.com_wallpaper.jpg"
+}

@@ -1,0 +1,44 @@
+{
+  "name": "Tokyo Night",
+  "id": "tokyo-night",
+  "description": "Soft blue & purple on deep dark navy",
+  "swatches": ["#7aa2f7", "#bb9af7", "#1a1b26", "#c0caf5"],
+
+  "colors": {
+    "bg":          "rgba(26, 27, 38, 0.82)",
+    "bg_solid":    "rgba(26, 27, 38, 0.95)",
+    "bg_dark":     "rgba(15, 15, 23, 0.98)",
+    "fg":          "#c0caf5",
+    "fg_dim":      "#565f89",
+    "fg_faint":    "rgba(86, 95, 137, 0.4)",
+    "accent":      "#7aa2f7",
+    "accent_dim":  "rgba(122, 162, 247, 0.25)",
+    "accent_glow": "rgba(122, 162, 247, 0.12)",
+    "green":       "#9ece6a",
+    "teal":        "#2ac3de",
+    "magenta":     "#bb9af7",
+    "yellow":      "#e0af68",
+    "red":         "#f7768e",
+    "orange":      "#ff9e64"
+  },
+
+  "hyprland": {
+    "active_border":   "rgba(7aa2f7ff) rgba(bb9af7ff) rgba(2ac3deff) 45deg",
+    "inactive_border": "rgba(292e42aa) rgba(1a1b26aa) 90deg",
+    "border_size":     2,
+    "rounding":        14,
+    "shadow_color":    "rgba(7aa2f760)",
+    "shadow_range":    55,
+    "shadow_render_power": 4,
+    "shadow_offset":   "0 4",
+    "blur_size":       9,
+    "blur_passes":     3,
+    "blur_vibrancy":   0.2,
+    "dim_inactive":    true,
+    "dim_strength":    0.12,
+    "gaps_in":         10,
+    "gaps_out":        16
+  },
+
+  "wallpaper": ""
+}

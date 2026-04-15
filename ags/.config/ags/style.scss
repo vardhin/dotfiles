@@ -1703,3 +1703,264 @@ $blue: #61afef;
     }
   }
 }
+
+// ━━━━━━━━━━━━━ THEME SWITCHER ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+// Invisible backdrop — no dim, wallpaper shows through cleanly
+.ts-backdrop {
+  background: transparent;
+  border: none;
+  border-radius: 0;
+  min-width: 0;
+  min-height: 0;
+}
+
+// Main floating panel — solid bg, no blur, crisp on wallpaper
+.ts-panel {
+  background: rgba(14, 15, 20, 0.97);
+  border: 1px solid rgba(255, 255, 255, 0.10);
+  border-radius: $radius-xl;
+  box-shadow: 0 24px 80px rgba(0, 0, 0, 0.7), 0 4px 24px rgba(0, 0, 0, 0.5);
+  min-width: 820px;
+  min-height: 520px;
+  max-height: 620px;
+}
+
+// Header
+.ts-header {
+  padding: 14px 18px 12px;
+
+  .ts-header-icon { color: $accent; }
+
+  .ts-title {
+    font-size: 14px;
+    font-weight: 700;
+    color: $fg;
+    letter-spacing: 0.3px;
+  }
+
+  .ts-close-btn {
+    background: rgba(255, 255, 255, 0.04);
+    border: 1px solid rgba(255, 255, 255, 0.07);
+    border-radius: 7px;
+    padding: 5px;
+    min-height: 0;
+    min-width: 0;
+    transition: all 180ms ease;
+
+    &:hover {
+      background: rgba(224, 108, 117, 0.15);
+      border-color: rgba(224, 108, 117, 0.3);
+      image { color: $red; }
+    }
+
+    image { color: $fg-dim; }
+  }
+}
+
+.ts-divider {
+  min-height: 1px;
+  background: rgba(255, 255, 255, 0.06);
+}
+
+// Body — left + right split
+.ts-body {
+  min-height: 420px;
+}
+
+// LEFT — theme list
+.ts-left {
+  min-width: 240px;
+  max-width: 240px;
+  background: rgba(0, 0, 0, 0.2);
+}
+
+.ts-theme-scroll {
+  padding: 10px;
+}
+
+.ts-theme-list {
+  padding: 2px;
+}
+
+// Vertical separator
+.ts-vsep {
+  min-width: 1px;
+  background: rgba(255, 255, 255, 0.06);
+}
+
+// Theme row (sidebar item)
+.theme-row {
+  background: rgba(255, 255, 255, 0.02);
+  border: 1px solid transparent;
+  border-radius: $radius;
+  padding: 0;
+  transition: all 180ms ease;
+  overflow: hidden;
+
+  &:hover {
+    background: rgba(255, 255, 255, 0.06);
+    border-color: rgba(255, 255, 255, 0.08);
+  }
+
+  &.theme-row-selected {
+    background: rgba(255, 255, 255, 0.06);
+    border-color: rgba(255, 255, 255, 0.12);
+  }
+
+  &.theme-row-active {
+    border-color: $accent;
+    box-shadow: inset 2px 0 0 $accent;
+  }
+
+  .theme-card-swatches {
+    min-height: 36px;
+
+    .theme-swatch {
+      min-height: 36px;
+    }
+  }
+
+  .theme-row-name {
+    font-size: 12px;
+    font-weight: 700;
+    color: $fg;
+    padding: 8px 10px 2px;
+  }
+
+  .theme-row-badge {
+    font-size: 9px;
+    font-weight: 700;
+    color: $accent;
+    background: $accent-dim;
+    border: 1px solid $accent;
+    border-radius: 4px;
+    padding: 1px 5px;
+    margin-right: 8px;
+    margin-top: 8px;
+  }
+
+  .theme-row-desc {
+    font-size: 10px;
+    color: $fg-dim;
+    padding: 0 10px 8px;
+  }
+}
+
+// Apply theme button
+.ts-apply-row {
+  padding: 8px 10px 10px;
+  background: rgba(0, 0, 0, 0.15);
+
+  .ts-apply-btn {
+    background: $accent-dim;
+    border: 1px solid rgba(0, 191, 255, 0.3);
+    border-radius: 8px;
+    padding: 8px;
+    min-height: 0;
+    transition: all 180ms ease;
+
+    label { color: $accent; font-size: 12px; font-weight: 600; }
+    image { color: $accent; }
+
+    &:hover {
+      background: rgba(0, 191, 255, 0.22);
+      border-color: $accent;
+    }
+  }
+}
+
+// RIGHT — wallpaper panel
+.ts-right {
+  padding: 12px 14px;
+  min-width: 0;
+}
+
+.ts-wp-header {
+  .ts-wp-icon { color: $fg-dim; }
+
+  .ts-wp-title {
+    font-size: 12px;
+    font-weight: 600;
+    color: $fg;
+  }
+
+  .ts-wp-dir {
+    font-size: 10px;
+    color: $fg-faint;
+    font-family: monospace;
+  }
+}
+
+// Empty state
+.ts-wp-empty {
+  .ts-wp-empty-icon { color: $fg-faint; opacity: 0.4; }
+
+  .ts-wp-empty-label {
+    font-size: 13px;
+    font-weight: 600;
+    color: $fg-dim;
+  }
+
+  .ts-wp-empty-hint {
+    font-size: 11px;
+    color: $fg-faint;
+    font-family: monospace;
+  }
+}
+
+.ts-wp-scroll {
+  border-radius: $radius;
+}
+
+// Wallpaper thumbnail grid
+.ts-wp-grid {
+  padding: 4px;
+}
+
+// Individual wallpaper thumb
+.wp-thumb {
+  background: transparent;
+  border: 2px solid transparent;
+  border-radius: $radius;
+  padding: 0;
+  min-width: 0;
+  overflow: hidden;
+  transition: all 180ms ease;
+
+  &:hover {
+    border-color: rgba(255, 255, 255, 0.25);
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
+  }
+
+  &.wp-thumb-active {
+    border-color: $accent;
+    box-shadow: 0 0 0 1px $accent, 0 4px 16px rgba(0, 191, 255, 0.25);
+  }
+
+  .wp-thumb-img {
+    border-radius: 6px;
+    min-width: 160px;
+    min-height: 100px;
+  }
+}
+
+// Footer
+.ts-footer {
+  padding: 8px 18px 12px;
+
+  .ts-key {
+    font-size: 10px;
+    font-weight: 600;
+    color: $fg-dim;
+    background: rgba(255, 255, 255, 0.06);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 4px;
+    padding: 1px 6px;
+  }
+
+  .ts-footer-text {
+    font-size: 10px;
+    color: $fg-faint;
+  }
+}

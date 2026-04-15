@@ -1,0 +1,46 @@
+{
+  "name": "Frozen Winter",
+  "id": "frozen-winter",
+  "description": "Icy cyan on deep dark — the original",
+  "swatches": [
+    "#00bfff",
+    "#0080ff",
+    "#121418",
+    "#e0dbd2"
+  ],
+  "colors": {
+    "bg": "rgba(18, 20, 24, 0.82)",
+    "bg_solid": "rgba(18, 20, 24, 0.95)",
+    "bg_dark": "rgba(12, 14, 18, 0.98)",
+    "fg": "#e0dbd2",
+    "fg_dim": "#8a8580",
+    "fg_faint": "rgba(168, 153, 132, 0.4)",
+    "accent": "#00bfff",
+    "accent_dim": "rgba(0, 191, 255, 0.25)",
+    "accent_glow": "rgba(0, 191, 255, 0.12)",
+    "green": "#00cc99",
+    "teal": "#82dccc",
+    "magenta": "#c678dd",
+    "yellow": "#e5c07b",
+    "red": "#e06c75",
+    "orange": "#d79921"
+  },
+  "hyprland": {
+    "active_border": "rgba(00bfffff) rgba(0080ffff) rgba(4da6ffff) rgba(80d4ffff) 45deg",
+    "inactive_border": "rgba(1a365daa) rgba(2c5282aa) rgba(3182ceaa) 90deg",
+    "border_size": 2,
+    "rounding": 16,
+    "shadow_color": "rgba(00bfff70)",
+    "shadow_range": 60,
+    "shadow_render_power": 4,
+    "shadow_offset": "0 4",
+    "blur_size": 8,
+    "blur_passes": 3,
+    "blur_vibrancy": 0.17,
+    "dim_inactive": true,
+    "dim_strength": 0.15,
+    "gaps_in": 10,
+    "gaps_out": 16
+  },
+  "wallpaper": "~/Wallpapers"
+}
