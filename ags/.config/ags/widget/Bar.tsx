@@ -391,66 +391,278 @@ function WiFi() {
     signal: number
     active: boolean
     security: string
+    savedUuid: string
   }
 
-  const pollWifi = (): { connected: boolean; ssid: string; signal: number; ip: string } => {
-    try {
-      // Use targeted nmcli commands for reliable wifi-only detection
-      const devOut = GLib.spawn_command_line_sync("nmcli -t -f TYPE,STATE,CONNECTION device")[1]
-      const devText = new TextDecoder().decode(devOut)
-      const wifiLine = devText.split("\n").find((l) => l.startsWith("wifi:"))
-      if (!wifiLine) return { connected: false, ssid: "", signal: 0, ip: "" }
+  interface WifiInfo {
+    available: boolean
+    connected: boolean
+    ssid: string
+    signal: number
+    ip: string
+    iface: string
+  }
 
-      const parts = wifiLine.split(":")
-      const connected = parts[1] === "connected"
-      const ssid = parts.slice(2).join(":") || ""  // SSID may contain colons
+  interface WifiUiState {
+    busy: boolean
+    message: string
+    tone: "info" | "ok" | "err"
+  }
 
-      if (!connected || !ssid) return { connected: false, ssid: "", signal: 0, ip: "" }
+  const decode = (buf: Uint8Array) => new TextDecoder().decode(buf)
+  const splitNmcliLine = (line: string) => line.includes("|") ? line.split("|") : line.split(":")
 
-      // Get signal from active wifi
-      const sigOut = GLib.spawn_command_line_sync("nmcli -t -f active,signal dev wifi")[1]
-      const sigText = new TextDecoder().decode(sigOut)
-      const activeLine = sigText.split("\n").find((l) => l.startsWith("yes:"))
-      const signal = activeLine ? parseInt(activeLine.split(":")[1]) || 0 : 0
+  let lastIface = ""
+  let uiState: WifiUiState = { busy: false, message: "", tone: "info" }
+  let clearStatusSource = 0
+  let statusToken = 0
 
-      // Get IP
-      const ipOut = GLib.spawn_command_line_sync("nmcli -t -f IP4.ADDRESS dev show wlan0")[1]
-      const ipText = new TextDecoder().decode(ipOut)
-      const ipMatch = ipText.match(/IP4\.ADDRESS\[1\]:([^\n]+)/)
-      const ip = ipMatch ? ipMatch[1].trim() : ""
+  const setUiState = (next: Partial<WifiUiState>, clearAfterMs = 0) => {
+    uiState = { ...uiState, ...next }
 
-      return { connected: true, ssid, signal, ip }
-    } catch {
-      return { connected: false, ssid: "", signal: 0, ip: "" }
+    if (clearStatusSource !== 0) {
+      GLib.source_remove(clearStatusSource)
+      clearStatusSource = 0
     }
+
+    if (clearAfterMs > 0) {
+      statusToken += 1
+      const token = statusToken
+      clearStatusSource = GLib.timeout_add(GLib.PRIORITY_DEFAULT, clearAfterMs, () => {
+        if (token !== statusToken) return GLib.SOURCE_REMOVE
+        uiState = { busy: false, message: "", tone: "info" }
+        clearStatusSource = 0
+        return GLib.SOURCE_REMOVE
+      })
+    }
+  }
+
+  const pollWifi = (): WifiInfo => {
+    try {
+      const devOut = GLib.spawn_command_line_sync(
+        "nmcli -t -f DEVICE,TYPE,STATE,CONNECTION device"
+      )[1]
+      const devText = decode(devOut).trim()
+      if (!devText) {
+        return { available: false, connected: false, ssid: "", signal: 0, ip: "", iface: "" }
+      }
+
+      const wifiLines = devText
+        .split("\n")
+        .map((l) => l.trim())
+        .filter(Boolean)
+        .map((line) => splitNmcliLine(line))
+        .filter((parts) => parts[1] === "wifi")
+
+      if (wifiLines.length === 0) {
+        return { available: false, connected: false, ssid: "", signal: 0, ip: "", iface: "" }
+      }
+
+      const connectedParts = wifiLines.find((parts) => parts[2] === "connected")
+      const selected = connectedParts || wifiLines[0]
+
+      const iface = selected[0] || ""
+      const state = selected[2] || ""
+      const ssid = selected.slice(3).join("|") || ""
+      const connected = state === "connected" && ssid.length > 0
+
+      lastIface = iface
+
+      if (!connected || !iface) {
+        return { available: true, connected: false, ssid: "", signal: 0, ip: "", iface }
+      }
+
+      const sigOut = GLib.spawn_command_line_sync(
+        `nmcli -t -f ACTIVE,SIGNAL device wifi list ifname ${iface} --rescan no`
+      )[1]
+      const sigText = decode(sigOut).trim()
+      const activeLine = sigText
+        .split("\n")
+        .map((l) => l.trim())
+        .find((l) => /^(yes|\*)(\||:)/.test(l))
+      const signal = activeLine ? parseInt(splitNmcliLine(activeLine)[1]) || 0 : 0
+
+      const ipOut = GLib.spawn_command_line_sync(`nmcli -t -f IP4.ADDRESS device show ${iface}`)[1]
+      const ipText = decode(ipOut)
+      const ipMatch = ipText.match(/IP4\.ADDRESS\[[0-9]+\]:([^\n]+)/)
+      const ip = ipMatch ? ipMatch[1].split("/")[0].trim() : ""
+
+      return { available: true, connected: true, ssid, signal, ip, iface }
+    } catch {
+      return { available: false, connected: false, ssid: "", signal: 0, ip: "", iface: "" }
+    }
+  }
+
+  const pollSavedConnections = (): Map<string, string> => {
+    const map = new Map<string, string>()
+    try {
+      const out = GLib.spawn_command_line_sync(
+        "nmcli -t -f NAME,UUID,TYPE connection show"
+      )[1]
+      const text = decode(out).trim()
+      if (!text) return map
+
+      for (const line of text.split("\n")) {
+        const [name, uuid, type] = splitNmcliLine(line)
+        if (!name || !uuid) continue
+        if (type === "802-11-wireless" || type === "wifi") {
+          map.set(name, uuid)
+        }
+      }
+    } catch {
+      return map
+    }
+    return map
   }
 
   const pollNetworks = (): WifiNetwork[] => {
     try {
-      const out = GLib.spawn_command_line_sync("nmcli -t -f SSID,SIGNAL,ACTIVE,SECURITY device wifi list")[1]
-      const text = new TextDecoder().decode(out).trim()
+      const savedConnections = pollSavedConnections()
+      const ifaceArg = lastIface ? ` ifname ${lastIface}` : ""
+      const out = GLib.spawn_command_line_sync(
+        `nmcli -t -f SSID,SIGNAL,ACTIVE,SECURITY device wifi list${ifaceArg} --rescan no`
+      )[1]
+      const text = decode(out).trim()
       if (!text) return []
-      const seen = new Set<string>()
-      return text.split("\n").map((line) => {
-        const parts = line.split(":")
-        return {
-          ssid: parts[0] || "",
-          signal: parseInt(parts[1]) || 0,
-          active: parts[2] === "yes",
-          security: parts[3] || "",
+
+      const merged = new Map<string, WifiNetwork>()
+      for (const line of text.split("\n")) {
+        const parts = splitNmcliLine(line)
+        const ssid = parts[0] || ""
+        const signal = parseInt(parts[1]) || 0
+        const active = parts[2] === "*" || parts[2] === "yes"
+        const security = parts[3] === "--" ? "" : (parts[3] || "")
+
+        if (!ssid) continue
+
+        const candidate: WifiNetwork = {
+          ssid,
+          signal,
+          active,
+          security,
+          savedUuid: savedConnections.get(ssid) || "",
         }
-      }).filter((n) => {
-        if (!n.ssid || seen.has(n.ssid)) return false
-        seen.add(n.ssid)
-        return true
-      }).sort((a, b) => b.signal - a.signal)
+
+        const existing = merged.get(ssid)
+        if (!existing) {
+          merged.set(ssid, candidate)
+          continue
+        }
+
+        if (candidate.active || candidate.signal > existing.signal) {
+          merged.set(ssid, candidate)
+        }
+      }
+
+      return Array.from(merged.values()).sort((a, b) => {
+        if (a.active && !b.active) return -1
+        if (!a.active && b.active) return 1
+        return b.signal - a.signal
+      })
     } catch {
       return []
     }
   }
 
-  const wifiInfo = createPoll({ connected: false, ssid: "", signal: 0, ip: "" }, 5000, pollWifi)
-  const networks = createPoll([] as WifiNetwork[], 15000, pollNetworks)
+  const runWifiAction = async (
+    startMessage: string,
+    command: string[],
+    successMessage: string,
+    errorMessage: string,
+  ) => {
+    setUiState({ busy: true, message: startMessage, tone: "info" })
+    try {
+      await execAsync(command)
+      setUiState({ busy: false, message: successMessage, tone: "ok" }, 2200)
+    } catch {
+      setUiState({ busy: false, message: errorMessage, tone: "err" }, 3200)
+    }
+  }
+
+  const handleRescan = () => {
+    const info = pollWifi()
+    const cmd = info.iface
+      ? ["nmcli", "device", "wifi", "rescan", "ifname", info.iface]
+      : ["nmcli", "device", "wifi", "rescan"]
+
+    runWifiAction(
+      "Rescanning networks...",
+      cmd,
+      "Scan finished",
+      "Scan failed",
+    )
+  }
+
+  const handleConnectToggle = (net: WifiNetwork) => {
+    const info = pollWifi()
+    const iface = info.iface || lastIface
+
+    if (net.active) {
+      if (iface) {
+        runWifiAction(
+          `Disconnecting from ${net.ssid}...`,
+          ["nmcli", "device", "disconnect", iface],
+          `Disconnected from ${net.ssid}`,
+          "Disconnect failed",
+        )
+      } else {
+        runWifiAction(
+          `Disconnecting from ${net.ssid}...`,
+          ["nmcli", "connection", "down", "id", net.ssid],
+          `Disconnected from ${net.ssid}`,
+          "Disconnect failed",
+        )
+      }
+      return
+    }
+
+    if (net.savedUuid) {
+      runWifiAction(
+        `Connecting to ${net.ssid}...`,
+        ["nmcli", "connection", "up", "uuid", net.savedUuid],
+        `Connected to ${net.ssid}`,
+        "Connect failed",
+      )
+      return
+    }
+
+    const connectCmd = ["nmcli", "device", "wifi", "connect", net.ssid]
+    if (iface) {
+      connectCmd.push("ifname", iface)
+    }
+
+    runWifiAction(
+      `Connecting to ${net.ssid}...`,
+      connectCmd,
+      `Connected to ${net.ssid}`,
+      net.security ? "Password needed or connection failed" : "Connect failed",
+    )
+  }
+
+  const handleForget = (net: WifiNetwork) => {
+    if (!net.savedUuid) return
+    runWifiAction(
+      `Forgetting ${net.ssid}...`,
+      ["nmcli", "connection", "delete", "uuid", net.savedUuid],
+      `Forgot ${net.ssid}`,
+      "Forget failed",
+    )
+  }
+
+  const wifiInfo = createPoll(
+    { available: false, connected: false, ssid: "", signal: 0, ip: "", iface: "" },
+    4000,
+    pollWifi,
+  )
+  const networks = createPoll([] as WifiNetwork[], 8000, pollNetworks)
+  const status = createPoll(uiState, 250, () => ({ ...uiState }))
+
+  onCleanup(() => {
+    if (clearStatusSource !== 0) {
+      GLib.source_remove(clearStatusSource)
+      clearStatusSource = 0
+    }
+  })
 
   const wifiIcon = wifiInfo((w) => {
     if (!w.connected) return "network-wireless-offline-symbolic"
@@ -482,10 +694,31 @@ function WiFi() {
                 <label class="wifi-title" label="Wi-Fi" xalign={0} />
                 <label
                   class="wifi-subtitle"
-                  label={wifiInfo((w) => w.connected ? `${w.ssid} · ${w.signal}%` : "Not connected")}
+                  label={wifiInfo((w) => {
+                    if (!w.available) return "No Wi-Fi adapter"
+                    if (!w.connected) return "Not connected"
+                    return `${w.ssid} - ${w.signal}%`
+                  })}
                   xalign={0}
                 />
               </box>
+            </box>
+
+            <box
+              class={status((s) => `wifi-status-row ${s.tone}`)}
+              spacing={6}
+              visible={status((s) => s.message.length > 0)}
+            >
+              <image
+                class="wifi-status-icon"
+                iconName={status((s) => {
+                  if (s.tone === "ok") return "emblem-ok-symbolic"
+                  if (s.tone === "err") return "dialog-error-symbolic"
+                  return "view-refresh-symbolic"
+                })}
+                pixelSize={12}
+              />
+              <label class="wifi-status-label" label={status((s) => s.message)} hexpand xalign={0} />
             </box>
 
             {/* Connection info when connected */}
@@ -506,15 +739,14 @@ function WiFi() {
 
             {/* Rescan button */}
             <button
-              class="wifi-scan-btn"
-              onClicked={() => {
-                execAsync(["nmcli", "device", "wifi", "rescan"]).catch(() => {})
-              }}
+              class={status((s) => `wifi-scan-btn ${s.busy ? "busy" : ""}`)}
+              onClicked={handleRescan}
               tooltipText="Rescan for networks"
+              sensitive={status((s) => !s.busy)}
             >
               <box spacing={6}>
                 <image iconName="view-refresh-symbolic" pixelSize={14} />
-                <label label="Rescan networks" />
+                <label label={status((s) => s.busy ? "Rescanning..." : "Rescan networks")} />
               </box>
             </button>
 
@@ -523,31 +755,59 @@ function WiFi() {
               <label class="wifi-section-title" label="Available Networks" xalign={0} />
               <For each={networks((n) => n.slice(0, 8))}>
                 {(net) => (
-                  <button
-                    class={`wifi-network-btn ${net.active ? "active" : ""}`}
-                    onClicked={() => {
-                      if (net.active) {
-                        execAsync(["nmcli", "connection", "down", net.ssid])
-                      } else {
-                        execAsync(["nmcli", "device", "wifi", "connect", net.ssid])
-                      }
-                    }}
-                    tooltipText={net.active ? "Disconnect" : `Connect to ${net.ssid}`}
-                  >
-                    <box spacing={8}>
-                      <image iconName={signalIcon(net.signal)} pixelSize={14} />
-                      <label label={net.ssid} hexpand xalign={0} />
-                      {net.security && (
-                        <image iconName="channel-secure-symbolic" pixelSize={10} class="wifi-lock-icon" />
-                      )}
-                      <label
-                        class="wifi-signal-label"
-                        label={`${net.signal}%`}
-                      />
-                    </box>
-                  </button>
+                  <box class={`wifi-network-row ${net.active ? "active" : ""}`} spacing={6}>
+                    <button
+                      class={`wifi-network-btn ${net.active ? "active" : ""}`}
+                      hexpand
+                      onClicked={() => handleConnectToggle(net)}
+                      tooltipText={net.active ? "Disconnect" : `Connect to ${net.ssid}`}
+                    >
+                      <box spacing={8}>
+                        <image iconName={signalIcon(net.signal)} pixelSize={14} />
+                        <label label={net.ssid} hexpand xalign={0} />
+                        {net.security && (
+                          <image iconName="channel-secure-symbolic" pixelSize={10} class="wifi-lock-icon" />
+                        )}
+                        <label
+                          class="wifi-network-state"
+                          label={
+                            net.active
+                              ? "Connected"
+                              : (net.savedUuid ? "Saved" : (net.security ? "Secured" : "Open"))
+                          }
+                        />
+                        <label
+                          class="wifi-signal-label"
+                          label={`${net.signal}%`}
+                        />
+                      </box>
+                    </button>
+                    <button
+                      class={`wifi-action-btn ${net.active ? "disconnect" : "connect"}`}
+                      onClicked={() => handleConnectToggle(net)}
+                      sensitive={status((s) => !s.busy)}
+                      tooltipText={net.active ? `Disconnect from ${net.ssid}` : `Connect to ${net.ssid}`}
+                    >
+                      <label label={net.active ? "Disconnect" : "Connect"} />
+                    </button>
+                    <button
+                      class="wifi-action-btn forget"
+                      visible={Boolean(net.savedUuid)}
+                      onClicked={() => handleForget(net)}
+                      sensitive={status((s) => !s.busy)}
+                      tooltipText={`Forget ${net.ssid}`}
+                    >
+                      <label label="Forget" />
+                    </button>
+                  </box>
                 )}
               </For>
+              <label
+                class="wifi-empty-label"
+                visible={networks((n) => n.length === 0)}
+                label="No networks found"
+                xalign={0}
+              />
             </box>
 
             {/* Open settings */}

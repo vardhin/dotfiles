@@ -20,65 +20,81 @@ if [[ ! -f "$THEME_FILE" ]]; then
   exit 1
 fi
 
-# ── helpers ────────────────────────────────────────────────────────────────────
-
-jq_get() { jq -r "$1" "$THEME_FILE"; }
-
 # ── 1. Read theme values ───────────────────────────────────────────────────────
 
-ACTIVE_BORDER=$(jq_get '.hyprland.active_border')
-INACTIVE_BORDER=$(jq_get '.hyprland.inactive_border')
-BORDER_SIZE=$(jq_get '.hyprland.border_size')
-ROUNDING=$(jq_get '.hyprland.rounding')
-SHADOW_COLOR=$(jq_get '.hyprland.shadow_color')
-SHADOW_RANGE=$(jq_get '.hyprland.shadow_range')
-SHADOW_POWER=$(jq_get '.hyprland.shadow_render_power')
-SHADOW_OFFSET=$(jq_get '.hyprland.shadow_offset')
-BLUR_SIZE=$(jq_get '.hyprland.blur_size')
-BLUR_PASSES=$(jq_get '.hyprland.blur_passes')
-BLUR_VIBRANCY=$(jq_get '.hyprland.blur_vibrancy')
-DIM_INACTIVE=$(jq_get '.hyprland.dim_inactive')
-DIM_STRENGTH=$(jq_get '.hyprland.dim_strength')
-GAPS_IN=$(jq_get '.hyprland.gaps_in')
-GAPS_OUT=$(jq_get '.hyprland.gaps_out')
-WALLPAPER=$(jq_get '.wallpaper')
+mapfile -t THEME_VALUES < <(
+  jq -r '
+    .hyprland.active_border,
+    .hyprland.inactive_border,
+    .hyprland.border_size,
+    .hyprland.rounding,
+    .hyprland.shadow_color,
+    .hyprland.shadow_range,
+    .hyprland.shadow_render_power,
+    .hyprland.shadow_offset,
+    .hyprland.blur_size,
+    .hyprland.blur_passes,
+    .hyprland.blur_vibrancy,
+    .hyprland.dim_inactive,
+    .hyprland.dim_strength,
+    .hyprland.gaps_in,
+    .hyprland.gaps_out,
+    .wallpaper
+  ' "$THEME_FILE"
+)
+
+ACTIVE_BORDER="${THEME_VALUES[0]:-rgba(33aaffee)}"
+INACTIVE_BORDER="${THEME_VALUES[1]:-rgba(777777aa)}"
+BORDER_SIZE="${THEME_VALUES[2]:-2}"
+ROUNDING="${THEME_VALUES[3]:-10}"
+SHADOW_COLOR="${THEME_VALUES[4]:-rgba(00000066)}"
+SHADOW_RANGE="${THEME_VALUES[5]:-20}"
+SHADOW_POWER="${THEME_VALUES[6]:-3}"
+SHADOW_OFFSET="${THEME_VALUES[7]:-0 4}"
+BLUR_SIZE="${THEME_VALUES[8]:-6}"
+BLUR_PASSES="${THEME_VALUES[9]:-2}"
+BLUR_VIBRANCY="${THEME_VALUES[10]:-0.2}"
+DIM_INACTIVE="${THEME_VALUES[11]:-true}"
+DIM_STRENGTH="${THEME_VALUES[12]:-0.1}"
+GAPS_IN="${THEME_VALUES[13]:-4}"
+GAPS_OUT="${THEME_VALUES[14]:-8}"
+WALLPAPER="${THEME_VALUES[15]:-}"
 
 # ── 2. Apply hyprland decoration values live ──────────────────────────────────
 
-hyprctl keyword general:border_size "$BORDER_SIZE"
-hyprctl keyword general:gaps_in "$GAPS_IN"
-hyprctl keyword general:gaps_out "$GAPS_OUT"
-hyprctl keyword general:col.active_border "$ACTIVE_BORDER"
-hyprctl keyword general:col.inactive_border "$INACTIVE_BORDER"
+HYPR_BATCH=$(cat <<EOF
+keyword general:border_size ${BORDER_SIZE};
+keyword general:gaps_in ${GAPS_IN};
+keyword general:gaps_out ${GAPS_OUT};
+keyword general:col.active_border ${ACTIVE_BORDER};
+keyword general:col.inactive_border ${INACTIVE_BORDER};
+keyword decoration:rounding ${ROUNDING};
+keyword decoration:dim_inactive ${DIM_INACTIVE};
+keyword decoration:dim_strength ${DIM_STRENGTH};
+keyword decoration:blur:size ${BLUR_SIZE};
+keyword decoration:blur:passes ${BLUR_PASSES};
+keyword decoration:blur:vibrancy ${BLUR_VIBRANCY};
+keyword decoration:shadow:color ${SHADOW_COLOR};
+keyword decoration:shadow:range ${SHADOW_RANGE};
+keyword decoration:shadow:render_power ${SHADOW_POWER};
+keyword decoration:shadow:offset ${SHADOW_OFFSET}
+EOF
+)
 
-hyprctl keyword decoration:rounding "$ROUNDING"
-hyprctl keyword decoration:dim_inactive "$DIM_INACTIVE"
-hyprctl keyword decoration:dim_strength "$DIM_STRENGTH"
+hyprctl --batch "$HYPR_BATCH"
 
-hyprctl keyword decoration:blur:size "$BLUR_SIZE"
-hyprctl keyword decoration:blur:passes "$BLUR_PASSES"
-hyprctl keyword decoration:blur:vibrancy "$BLUR_VIBRANCY"
+# ── 3. Save current theme pointer + tell AGS to reload CSS early ─────────────
 
-hyprctl keyword decoration:shadow:color "$SHADOW_COLOR"
-hyprctl keyword decoration:shadow:range "$SHADOW_RANGE"
-hyprctl keyword decoration:shadow:render_power "$SHADOW_POWER"
-hyprctl keyword decoration:shadow:offset "$SHADOW_OFFSET"
+cp "$THEME_FILE" "$CURRENT_THEME_FILE"
+ags request "apply-theme:${THEME_ID}"
 
-# ── 3. Wallpaper ───────────────────────────────────────────────────────────────
+# ── 4. Wallpaper ───────────────────────────────────────────────────────────────
 
 if [[ -n "$WALLPAPER" && -f "$WALLPAPER" ]]; then
   swww img "$WALLPAPER" \
     --transition-type wipe \
     --transition-angle 30 \
-    --transition-duration 1.2
+    --transition-duration 0.8
 fi
-
-# ── 4. Save current theme pointer ─────────────────────────────────────────────
-
-cp "$THEME_FILE" "$CURRENT_THEME_FILE"
-
-# ── 5. Tell AGS to reload CSS with new theme ─────────────────────────────────
-
-ags request "apply-theme:${THEME_ID}"
 
 echo "Theme applied: $THEME_ID"

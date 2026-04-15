@@ -6,7 +6,13 @@ import Gdk from "gi://Gdk?version=4.0"
 import AstalMpris from "gi://AstalMpris"
 import { onCleanup, createBinding, For } from "ags"
 import { createPoll } from "ags/time"
-import { execAsync } from "ags/process"
+
+interface CpuSample {
+  total: number
+  idle: number
+}
+
+let lastCpuSample: CpuSample | null = null
 
 // ━━━━━━━━━━━━━━━ HELPERS ━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
@@ -29,9 +35,21 @@ function getCpuUsage(): number {
     if (!ok || !contents) return 0
     const line = new TextDecoder().decode(contents).split("\n")[0]
     const parts = line.split(/\s+/).slice(1).map(Number)
-    const idle = parts[3]
+    const idle = (parts[3] || 0) + (parts[4] || 0)
     const total = parts.reduce((a, b) => a + b, 0)
-    return total > 0 ? Math.round(((total - idle) / total) * 100) : 0
+
+    const sample: CpuSample = { total, idle }
+    if (!lastCpuSample) {
+      lastCpuSample = sample
+      return 0
+    }
+
+    const totalDelta = total - lastCpuSample.total
+    const idleDelta = idle - lastCpuSample.idle
+    lastCpuSample = sample
+
+    if (totalDelta <= 0) return 0
+    return Math.max(0, Math.min(100, Math.round(((totalDelta - idleDelta) / totalDelta) * 100)))
   } catch {
     return 0
   }
@@ -59,12 +77,17 @@ function getMemUsage(): { used: number; total: number; percent: number } {
 
 function getDiskUsage(): { used: string; total: string; percent: number } {
   try {
-    const [ok, out] = GLib.spawn_command_line_sync("df -h /")
-    if (!ok || !out[1]) return { used: "0", total: "0", percent: 0 }
-    const lines = new TextDecoder().decode(out[1]).trim().split("\n")
+    const [ok, stdout] = GLib.spawn_command_line_sync("df -h /")
+    if (!ok || !stdout) return { used: "0", total: "0", percent: 0 }
+    const lines = new TextDecoder().decode(stdout).trim().split("\n")
     if (lines.length < 2) return { used: "0", total: "0", percent: 0 }
-    const parts = lines[1].split(/\s+/)
-    return { total: parts[1] || "0", used: parts[2] || "0", percent: parseInt(parts[4]) || 0 }
+    const parts = lines[lines.length - 1].trim().split(/\s+/)
+    const percent = Number((parts[4] || "0").replace("%", ""))
+    return {
+      total: parts[1] || "0",
+      used: parts[2] || "0",
+      percent: Number.isFinite(percent) ? Math.max(0, Math.min(100, percent)) : 0,
+    }
   } catch {
     return { used: "0", total: "0", percent: 0 }
   }
@@ -82,81 +105,6 @@ function getUptime(): string {
     return `${m}m`
   } catch {
     return "—"
-  }
-}
-
-interface WeatherData {
-  temp: string
-  desc: string
-  icon: string
-  city: string
-  humidity: string
-  wind: string
-}
-
-const WEATHER_EMPTY: WeatherData = {
-  temp: "—",
-  desc: "Loading...",
-  icon: "weather-clear-symbolic",
-  city: "",
-  humidity: "—",
-  wind: "—",
-}
-
-function weatherIconName(code: number): string {
-  if (code === 0) return "weather-clear-symbolic"
-  if (code <= 3) return "weather-few-clouds-symbolic"
-  if (code <= 48) return "weather-fog-symbolic"
-  if (code <= 57) return "weather-showers-scattered-symbolic"
-  if (code <= 67) return "weather-showers-symbolic"
-  if (code <= 77) return "weather-snow-symbolic"
-  if (code <= 82) return "weather-showers-symbolic"
-  if (code <= 86) return "weather-snow-symbolic"
-  if (code <= 99) return "weather-storm-symbolic"
-  return "weather-clear-symbolic"
-}
-
-function weatherDescription(code: number): string {
-  const map: Record<number, string> = {
-    0: "Clear sky",
-    1: "Mainly clear", 2: "Partly cloudy", 3: "Overcast",
-    45: "Foggy", 48: "Icy fog",
-    51: "Light drizzle", 53: "Drizzle", 55: "Heavy drizzle",
-    61: "Light rain", 63: "Rain", 65: "Heavy rain",
-    71: "Light snow", 73: "Snow", 75: "Heavy snow",
-    77: "Snow grains",
-    80: "Light showers", 81: "Showers", 82: "Heavy showers",
-    85: "Light snow showers", 86: "Snow showers",
-    95: "Thunderstorm", 96: "Thunderstorm + hail", 99: "Heavy thunderstorm",
-  }
-  return map[code] || "Unknown"
-}
-
-async function fetchWeather(): Promise<WeatherData> {
-  try {
-    // Get location via IP geolocation
-    const geoRaw = await execAsync(["curl", "-sf", "--max-time", "5",
-      "https://ipinfo.io/json"])
-    const geo = JSON.parse(geoRaw)
-    const [lat, lon] = (geo.loc || "0,0").split(",")
-    const city = geo.city || ""
-
-    // Fetch weather from Open-Meteo (free, no API key)
-    const url = `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&current=temperature_2m,weather_code,relative_humidity_2m,wind_speed_10m&temperature_unit=celsius`
-    const raw = await execAsync(["curl", "-sf", "--max-time", "5", url])
-    const data = JSON.parse(raw)
-    const cur = data.current
-
-    return {
-      temp: `${Math.round(cur.temperature_2m)}°C`,
-      desc: weatherDescription(cur.weather_code),
-      icon: weatherIconName(cur.weather_code),
-      city,
-      humidity: `${cur.relative_humidity_2m}%`,
-      wind: `${Math.round(cur.wind_speed_10m)} km/h`,
-    }
-  } catch {
-    return WEATHER_EMPTY
   }
 }
 
@@ -326,30 +274,7 @@ export function DesktopWidgets({ gdkmonitor }: { gdkmonitor: Gdk.Monitor }) {
   const disk = createPoll({ used: "0", total: "0", percent: 0 }, 30000, getDiskUsage)
   const uptime = createPoll("—", 60000, getUptime)
 
-  // Weather
-  let weatherLabel: Gtk.Label | null = null
-  let weatherDesc: Gtk.Label | null = null
-  let weatherIcon: Gtk.Image | null = null
-  let weatherCity: Gtk.Label | null = null
-  let weatherHumidity: Gtk.Label | null = null
-  let weatherWind: Gtk.Label | null = null
-
-  const updateWeatherUI = (w: WeatherData) => {
-    if (weatherLabel) weatherLabel.label = w.temp
-    if (weatherDesc) weatherDesc.label = w.desc
-    if (weatherIcon) weatherIcon.iconName = w.icon
-    if (weatherCity) weatherCity.label = w.city
-    if (weatherHumidity) weatherHumidity.label = w.humidity
-    if (weatherWind) weatherWind.label = w.wind
-  }
-
-  fetchWeather().then(updateWeatherUI)
-  const weatherTimer = setInterval(() => {
-    fetchWeather().then(updateWeatherUI)
-  }, 900000)
-
   onCleanup(() => {
-    clearInterval(weatherTimer)
     win.destroy()
   })
 
@@ -389,33 +314,6 @@ export function DesktopWidgets({ gdkmonitor }: { gdkmonitor: Gdk.Monitor }) {
             <label class="dw-clock-year" label={yearStr} halign={Gtk.Align.CENTER} />
           </box>
 
-          {/* Weather */}
-          <box orientation={Gtk.Orientation.VERTICAL} class="dw-weather-card" spacing={10}>
-            <box spacing={10}>
-              <image
-                $={(self) => { weatherIcon = self }}
-                iconName="weather-clear-symbolic"
-                pixelSize={36}
-                class="dw-weather-icon"
-              />
-              <box orientation={Gtk.Orientation.VERTICAL} spacing={2}>
-                <label $={(self) => { weatherLabel = self }} label="—" class="dw-weather-temp" xalign={0} />
-                <label $={(self) => { weatherDesc = self }} label="Loading..." class="dw-weather-desc" xalign={0} />
-              </box>
-            </box>
-            <box spacing={12} class="dw-weather-details">
-              <box spacing={4}>
-                <image iconName="weather-fog-symbolic" pixelSize={12} class="dw-weather-detail-icon" />
-                <label $={(self) => { weatherHumidity = self }} label="—" class="dw-weather-detail" />
-              </box>
-              <box spacing={4}>
-                <image iconName="weather-windy-symbolic" pixelSize={12} class="dw-weather-detail-icon" />
-                <label $={(self) => { weatherWind = self }} label="—" class="dw-weather-detail" />
-              </box>
-            </box>
-            <label $={(self) => { weatherCity = self }} label="" class="dw-weather-city" xalign={0} />
-          </box>
-
           {/* System Stats */}
           <box orientation={Gtk.Orientation.VERTICAL} class="dw-stats-card" spacing={12}>
             <box class="dw-stats-header" spacing={6}>
@@ -446,7 +344,7 @@ export function DesktopWidgets({ gdkmonitor }: { gdkmonitor: Gdk.Monitor }) {
             <box class="dw-uptime-row" spacing={6}>
               <image iconName="preferences-system-time-symbolic" pixelSize={12} class="dw-uptime-icon" />
               <label class="dw-stat-label" label="UP" hexpand xalign={0} />
-              <label class="dw-stat-value" label={uptime()} />
+              <label class="dw-stat-value" label={uptime} />
             </box>
           </box>
         </box>

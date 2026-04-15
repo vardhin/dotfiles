@@ -55,6 +55,7 @@ const THEME_IDS = [
 ]
 
 const IMAGE_EXTS = new Set([".jpg", ".jpeg", ".png", ".webp", ".gif", ".bmp"])
+const WALLPAPER_CHUNK_SIZE = 12
 
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 // HELPERS
@@ -223,6 +224,8 @@ function WallpaperThumb(
   onClick: () => void,
 ): Gtk.Button {
   const btn = new Gtk.Button()
+  const withPath = btn as Gtk.Button & { _wallpaperPath?: string }
+  withPath._wallpaperPath = path
   btn.add_css_class("wp-thumb")
   if (isActive) btn.add_css_class("wp-thumb-active")
 
@@ -251,15 +254,52 @@ export function ThemeSwitcher({ gdkmonitor }: { gdkmonitor: Gdk.Monitor }) {
   let activeThemeId = getCurrentThemeId()
   let selectedThemeId = activeThemeId   // which theme is open in wallpaper panel
   let activeWallpaper = ""              // currently applied wallpaper path
+  let wallpaperBuildSource = 0
+  let wallpaperBuildToken = 0
 
   // DOM refs
   let themeListBox: Gtk.Box
   let wallpaperGrid: Gtk.FlowBox
   let wpThemeLabel: Gtk.Label
-  let wpEmptyLabel: Gtk.Label
+  let wpEmptyLabel: Gtk.Box
   let wpScrolled: Gtk.ScrolledWindow
 
   const hide = () => { win.visible = false }
+
+  const findTheme = (id: string) => themes.find((t) => t.id === id)
+
+  const stopWallpaperBuild = () => {
+    if (wallpaperBuildSource !== 0) {
+      GLib.source_remove(wallpaperBuildSource)
+      wallpaperBuildSource = 0
+    }
+  }
+
+  const refreshWallpaperActiveState = () => {
+    let child = wallpaperGrid?.get_first_child()
+    while (child) {
+      const next = child.get_next_sibling()
+      const flowChild = child as Gtk.FlowBoxChild
+      const button = flowChild.get_child() as Gtk.Button & { _wallpaperPath?: string }
+      if (button && button._wallpaperPath === activeWallpaper) {
+        button.add_css_class("wp-thumb-active")
+      } else if (button) {
+        button.remove_css_class("wp-thumb-active")
+      }
+      child = next
+    }
+  }
+
+  const applyThemeCssImmediately = (id: string) => {
+    const preset = findTheme(id)
+    if (!preset) return
+    app.apply_css(generateThemeCSS(preset), false)
+  }
+
+  const syncActiveTheme = (id: string) => {
+    activeThemeId = id
+    activeWallpaper = findTheme(id)?.wallpaper ?? ""
+  }
 
   // ── Rebuild left theme list ──────────────────────────────
   const rebuildThemeList = () => {
@@ -286,6 +326,10 @@ export function ThemeSwitcher({ gdkmonitor }: { gdkmonitor: Gdk.Monitor }) {
 
   // ── Rebuild right wallpaper grid ─────────────────────────
   const rebuildWallpaperGrid = () => {
+    stopWallpaperBuild()
+    wallpaperBuildToken += 1
+    const buildToken = wallpaperBuildToken
+
     wallpaperGrid?.remove_all()
     if (wpThemeLabel) {
       const preset = themes.find((t) => t.id === selectedThemeId)
@@ -297,34 +341,67 @@ export function ThemeSwitcher({ gdkmonitor }: { gdkmonitor: Gdk.Monitor }) {
     if (wpEmptyLabel) wpEmptyLabel.visible = walls.length === 0
     if (wpScrolled) wpScrolled.visible = walls.length > 0
 
-    for (const path of walls) {
-      const isActive = path === activeWallpaper
-      const thumb = WallpaperThumb(path, isActive, () => {
-        activeWallpaper = path
-        setWallpaper(path)
-        saveCurrentWallpaper(selectedThemeId, path)
-        // Also apply the theme if not already active
-        if (selectedThemeId !== activeThemeId) {
-          activeThemeId = selectedThemeId
-          applyTheme(selectedThemeId)
-        }
-        rebuildThemeList()
-        rebuildWallpaperGrid()
-      })
-      const item = new Gtk.FlowBoxChild()
-      item.set_child(thumb)
-      wallpaperGrid?.insert(item, -1)
+    if (walls.length === 0) return
+
+    let index = 0
+    const buildChunk = () => {
+      if (buildToken !== wallpaperBuildToken) {
+        wallpaperBuildSource = 0
+        return false
+      }
+
+      const end = Math.min(index + WALLPAPER_CHUNK_SIZE, walls.length)
+      while (index < end) {
+        const path = walls[index]
+        const isActive = path === activeWallpaper
+        const thumb = WallpaperThumb(path, isActive, () => {
+          activeWallpaper = path
+          const themeChanged = selectedThemeId !== activeThemeId
+
+          setWallpaper(path)
+          saveCurrentWallpaper(selectedThemeId, path)
+
+          // Also apply the theme if not already active.
+          if (themeChanged) {
+            syncActiveTheme(selectedThemeId)
+            activeWallpaper = path
+            applyThemeCssImmediately(selectedThemeId)
+            applyTheme(selectedThemeId)
+            rebuildThemeList()
+          }
+
+          refreshWallpaperActiveState()
+        })
+        const item = new Gtk.FlowBoxChild()
+        item.set_child(thumb)
+        wallpaperGrid?.insert(item, -1)
+        index += 1
+      }
+
+      if (index >= walls.length) {
+        wallpaperBuildSource = 0
+        return false
+      }
+
+      return true
     }
+
+    wallpaperBuildSource = GLib.idle_add(GLib.PRIORITY_DEFAULT_IDLE, buildChunk)
   }
 
   // ── Apply theme button ───────────────────────────────────
   const applySelectedTheme = () => {
-    activeThemeId = selectedThemeId
+    syncActiveTheme(selectedThemeId)
+    applyThemeCssImmediately(selectedThemeId)
     applyTheme(selectedThemeId)
     rebuildThemeList()
+    refreshWallpaperActiveState()
   }
 
-  onCleanup(() => { win.destroy() })
+  onCleanup(() => {
+    stopWallpaperBuild()
+    win.destroy()
+  })
 
   return (
     <window
@@ -333,10 +410,17 @@ export function ThemeSwitcher({ gdkmonitor }: { gdkmonitor: Gdk.Monitor }) {
         self.connect("notify::visible", () => {
           if (self.visible) {
             themes = loadThemes()
-            activeThemeId = getCurrentThemeId()
+            syncActiveTheme(getCurrentThemeId())
             selectedThemeId = activeThemeId
             rebuildThemeList()
-            rebuildWallpaperGrid()
+            // Build wallpaper thumbnails in idle chunks so the panel appears instantly.
+            GLib.idle_add(GLib.PRIORITY_DEFAULT_IDLE, () => {
+              if (!self.visible) return false
+              rebuildWallpaperGrid()
+              return false
+            })
+          } else {
+            stopWallpaperBuild()
           }
         })
         const keyCtrl = new Gtk.EventControllerKey()
@@ -445,7 +529,7 @@ export function ThemeSwitcher({ gdkmonitor }: { gdkmonitor: Gdk.Monitor }) {
 
               {/* Empty state */}
               <box
-                $={(self) => { wpEmptyLabel = self as unknown as Gtk.Label }}
+                $={(self) => { wpEmptyLabel = self }}
                 class="ts-wp-empty"
                 orientation={Gtk.Orientation.VERTICAL}
                 spacing={8}

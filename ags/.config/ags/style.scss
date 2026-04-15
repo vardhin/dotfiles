@@ -17,6 +17,14 @@ $magenta:     #c678dd;
 $yellow:      #e5c07b;
 $red:         #e06c75;
 $orange:      #d79921;
+$surface-bar: rgba(18, 20, 24, 0.62);
+$surface-card: rgba(18, 20, 24, 0.74);
+$surface-solid: rgba(18, 20, 24, 0.9);
+$surface-soft: rgba(255, 255, 255, 0.03);
+$surface-border: rgba(255, 255, 255, 0.08);
+$surface-border-soft: rgba(255, 255, 255, 0.06);
+$widget-card-bg: $surface-card;
+$widget-card-border: $surface-border;
 $radius:      10px;
 $radius-lg:   18px;
 $radius-xl:   24px;
@@ -35,12 +43,21 @@ window {
   color: $fg;
 
   > centerbox {
-    background: rgba(18, 20, 24, 0.55);
-    border: 1px solid rgba(255, 255, 255, 0.06);
+    background: $surface-bar;
+    border: 1px solid $surface-border-soft;
     border-radius: 12px;
     padding: 0 12px;
     min-height: 32px;
-    box-shadow: 0 8px 40px rgba(0, 0, 0, 0.3);
+    box-shadow: none;
+  }
+}
+
+popover {
+  > contents {
+    background: $surface-solid;
+    border: 1px solid $surface-border;
+    border-radius: $radius-lg;
+    padding: 0;
   }
 }
 
@@ -87,7 +104,7 @@ window {
       background: rgba(0, 191, 255, 0.18);
       color: white;
       border-color: rgba(0, 191, 255, 0.35);
-      box-shadow: 0 0 8px rgba(0, 191, 255, 0.15);
+      box-shadow: none;
     }
   }
 }
@@ -218,7 +235,7 @@ menubutton button {
       min-width: 16px;
       min-height: 16px;
       margin: -4px 0;
-      box-shadow: 0 1px 4px rgba(0, 0, 0, 0.3);
+      box-shadow: none;
     }
   }
 
@@ -275,7 +292,7 @@ menubutton button {
       min-width: 16px;
       min-height: 16px;
       margin: -4px 0;
-      box-shadow: 0 1px 4px rgba(0, 0, 0, 0.3);
+      box-shadow: none;
     }
   }
 
@@ -299,11 +316,11 @@ menubutton button {
 
 .wifi-popup {
   padding: 16px 18px;
-  min-width: 280px;
+  min-width: 380px;
 
   .wifi-header {
     padding-bottom: 10px;
-    border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+    border-bottom: 1px solid $surface-border-soft;
   }
 
   .wifi-header-icon {
@@ -319,6 +336,48 @@ menubutton button {
   .wifi-subtitle {
     font-size: 11px;
     color: $fg-dim;
+  }
+
+  .wifi-status-row {
+    padding: 4px 10px;
+    border-radius: 8px;
+    border: 1px solid $surface-border-soft;
+    background: rgba(255, 255, 255, 0.03);
+
+    &.ok {
+      border-color: rgba(0, 204, 153, 0.35);
+      background: rgba(0, 204, 153, 0.14);
+
+      .wifi-status-icon,
+      .wifi-status-label {
+        color: $green;
+      }
+    }
+
+    &.err {
+      border-color: rgba(224, 108, 117, 0.35);
+      background: rgba(224, 108, 117, 0.14);
+
+      .wifi-status-icon,
+      .wifi-status-label {
+        color: $red;
+      }
+    }
+
+    &.info {
+      border-color: rgba(0, 191, 255, 0.28);
+      background: rgba(0, 191, 255, 0.12);
+
+      .wifi-status-icon,
+      .wifi-status-label {
+        color: $accent;
+      }
+    }
+  }
+
+  .wifi-status-label {
+    font-size: 11px;
+    font-weight: 600;
   }
 
   .wifi-info-row {
@@ -337,7 +396,7 @@ menubutton button {
 
   .wifi-separator {
     min-height: 1px;
-    background: rgba(255, 255, 255, 0.06);
+    background: $surface-border-soft;
     margin: 4px 0;
   }
 
@@ -345,7 +404,7 @@ menubutton button {
     padding: 8px 12px;
     border-radius: 8px;
     background: rgba(0, 191, 255, 0.06);
-    color: $fg-dim;
+    color: $fg;
     font-size: 12px;
     border: 1px solid rgba(0, 191, 255, 0.12);
     transition: all 200ms ease;
@@ -354,6 +413,16 @@ menubutton button {
       background: rgba(0, 191, 255, 0.12);
       border-color: rgba(0, 191, 255, 0.25);
       color: $fg;
+    }
+
+    &:active {
+      background: rgba(0, 191, 255, 0.2);
+      border-color: rgba(0, 191, 255, 0.4);
+    }
+
+    &.busy {
+      background: rgba(0, 191, 255, 0.15);
+      border-color: rgba(0, 191, 255, 0.35);
     }
 
     image {
@@ -370,10 +439,20 @@ menubutton button {
     margin-top: 4px;
   }
 
+  .wifi-network-row {
+    transition: all 180ms ease;
+
+    &.active {
+      .wifi-network-btn {
+        border-color: rgba(0, 191, 255, 0.25);
+      }
+    }
+  }
+
   .wifi-network-btn {
     padding: 8px 12px;
     border-radius: 8px;
-    background: rgba(255, 255, 255, 0.03);
+    background: $surface-soft;
     border: 1px solid transparent;
     transition: all 200ms ease;
     color: $fg-dim;
@@ -381,6 +460,11 @@ menubutton button {
     &:hover {
       background: rgba(0, 191, 255, 0.06);
       border-color: rgba(0, 191, 255, 0.12);
+    }
+
+    &:active {
+      background: rgba(0, 191, 255, 0.12);
+      border-color: rgba(0, 191, 255, 0.3);
     }
 
     &.active {
@@ -397,6 +481,15 @@ menubutton button {
       color: $fg-faint;
     }
 
+    .wifi-network-state {
+      font-size: 10px;
+      color: $fg-faint;
+      font-weight: 600;
+      padding: 2px 7px;
+      border-radius: 6px;
+      background: rgba(255, 255, 255, 0.04);
+    }
+
     .wifi-signal-label {
       font-size: 10px;
       color: $fg-faint;
@@ -404,10 +497,66 @@ menubutton button {
     }
   }
 
+  .wifi-action-btn {
+    padding: 8px 10px;
+    border-radius: 8px;
+    border: 1px solid transparent;
+    min-width: 72px;
+    transition: all 180ms ease;
+    font-size: 11px;
+    font-weight: 700;
+
+    &.connect {
+      background: rgba(0, 191, 255, 0.1);
+      border-color: rgba(0, 191, 255, 0.24);
+      color: $accent;
+
+      &:hover {
+        background: rgba(0, 191, 255, 0.2);
+        border-color: rgba(0, 191, 255, 0.4);
+      }
+    }
+
+    &.disconnect {
+      background: rgba(224, 108, 117, 0.1);
+      border-color: rgba(224, 108, 117, 0.24);
+      color: $red;
+
+      &:hover {
+        background: rgba(224, 108, 117, 0.2);
+        border-color: rgba(224, 108, 117, 0.38);
+      }
+    }
+
+    &.forget {
+      min-width: 62px;
+      background: rgba(255, 255, 255, 0.04);
+      border-color: $surface-border-soft;
+      color: $fg-dim;
+
+      &:hover {
+        background: rgba(224, 108, 117, 0.14);
+        border-color: rgba(224, 108, 117, 0.3);
+        color: $red;
+      }
+    }
+
+    &:active {
+      transform: translateY(1px);
+    }
+  }
+
+  .wifi-empty-label {
+    font-size: 11px;
+    color: $fg-faint;
+    padding: 8px 2px 4px;
+    font-style: italic;
+  }
+
   .wifi-settings-btn {
     padding: 8px 12px;
     border-radius: 8px;
-    background: rgba(255, 255, 255, 0.03);
+    background: $surface-soft;
     color: $fg-dim;
     font-size: 12px;
     border: 1px solid transparent;
@@ -754,7 +903,7 @@ $blue: #61afef;
       min-width: 14px;
       min-height: 14px;
       margin: -4px 0;
-      box-shadow: 0 1px 4px rgba(0, 0, 0, 0.3);
+      box-shadow: none;
     }
   }
 
@@ -839,24 +988,23 @@ $blue: #61afef;
 }
 
 .notification {
-  background: rgba(18, 20, 24, 0.92);
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  border-left: 3px solid $accent;
+  background: $surface-soft;
+  border: 1px solid $surface-border-soft;
   border-radius: $radius-lg;
-  padding: 14px 16px;
-  margin: 4px 8px;
+  padding: 12px 14px;
+  margin: 3px 4px;
   min-width: 340px;
   max-width: 440px;
-  box-shadow: $shadow;
+  box-shadow: none;
   transition: all 300ms ease;
 
   &.urgency-critical {
-    border-left-color: $red;
-    background: rgba(224, 108, 117, 0.08);
+    border-color: rgba(224, 108, 117, 0.35);
+    background: rgba(224, 108, 117, 0.1);
   }
 
   &.urgency-low {
-    border-left-color: $fg-dim;
+    border-color: rgba(255, 255, 255, 0.1);
   }
 
   .notification-icon-box {
@@ -919,19 +1067,44 @@ $blue: #61afef;
       border-color: rgba(0, 191, 255, 0.4);
     }
   }
+
+  &.notification-history {
+    margin: 0;
+
+    .notification-history-meta {
+      margin-top: 2px;
+      padding-top: 6px;
+      border-top: 1px solid rgba(255, 255, 255, 0.04);
+    }
+
+    .notification-history-time {
+      font-size: 10px;
+      color: $fg-faint;
+      font-family: monospace;
+    }
+
+    .notification-history-urgency {
+      font-size: 10px;
+      color: $fg-faint;
+      font-weight: 700;
+      letter-spacing: 0.7px;
+    }
+  }
 }
 
 // Notification Center (side panel)
 .notification-center {
-  background: rgba(18, 20, 24, 0.92);
-  border-left: 1px solid rgba(0, 191, 255, 0.12);
-  padding: 16px;
-  box-shadow: -8px 0 32px rgba(0, 0, 0, 0.3);
+  background: $widget-card-bg;
+  border: 1px solid $widget-card-border;
+  border-radius: $radius-xl;
+  padding: 14px 14px 10px;
+  margin: 14px 12px;
+  box-shadow: none;
 
   .notification-center-header {
-    padding: 8px 4px 16px;
-    border-bottom: 1px solid rgba(255, 255, 255, 0.06);
-    margin-bottom: 12px;
+    padding: 6px 4px 12px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+    margin-bottom: 8px;
   }
 
   .notification-center-icon {
@@ -979,8 +1152,64 @@ $blue: #61afef;
     }
   }
 
+  .notification-clear-history {
+    padding: 6px 12px;
+    border-radius: 8px;
+    background: rgba(255, 255, 255, 0.04);
+    color: $fg-dim;
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    font-size: 12px;
+    transition: all 200ms ease;
+
+    &:hover {
+      background: rgba(0, 191, 255, 0.12);
+      border-color: rgba(0, 191, 255, 0.26);
+      color: $fg;
+    }
+
+    image {
+      color: $fg-dim;
+    }
+  }
+
+  .notification-center-list {
+    padding: 2px 2px 10px;
+  }
+
+  .notification-center-section-header {
+    margin: 8px 4px 4px;
+  }
+
+  .notification-center-section-title {
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 1.2px;
+    color: $fg-faint;
+  }
+
+  .notification-center-section-count {
+    font-size: 10px;
+    font-weight: 700;
+    color: $accent;
+    background: rgba(0, 191, 255, 0.08);
+    border: 1px solid rgba(0, 191, 255, 0.18);
+    border-radius: 6px;
+    min-width: 18px;
+    padding: 1px 6px;
+  }
+
+  .notification-center-history-separator {
+    min-height: 1px;
+    margin: 10px 4px 2px;
+    background: rgba(255, 255, 255, 0.04);
+  }
+
   .notification-placeholder {
-    padding: 80px 0;
+    padding: 36px 0;
+  }
+
+  .notification-history-empty {
+    padding: 18px 0 10px;
   }
 
   .placeholder-icon {
@@ -1008,7 +1237,7 @@ $blue: #61afef;
   padding: 16px 24px;
   margin-bottom: 48px;
   min-width: 320px;
-  box-shadow: $shadow-lg;
+  box-shadow: none;
 
   .osd-icon {
     color: $accent;
@@ -1035,7 +1264,7 @@ $blue: #61afef;
       background: linear-gradient(90deg, $accent, $teal);
       border-radius: 4px;
       min-height: 8px;
-      box-shadow: 0 0 10px rgba(0, 191, 255, 0.35);
+      box-shadow: none;
     }
   }
 
@@ -1066,7 +1295,7 @@ $blue: #61afef;
   margin-top: 100px;
   min-width: 560px;
   max-width: 560px;
-  box-shadow: $shadow-lg, 0 0 60px rgba(0, 191, 255, 0.06);
+  box-shadow: none;
 
   .applauncher-header {
     padding: 14px 20px 10px;
@@ -1144,7 +1373,7 @@ $blue: #61afef;
     &.selected {
       background: linear-gradient(135deg, rgba(0, 191, 255, 0.12), rgba(0, 191, 255, 0.06));
       border-color: rgba(0, 191, 255, 0.25);
-      box-shadow: 0 0 12px rgba(0, 191, 255, 0.05);
+      box-shadow: none;
     }
 
     &:focus {
@@ -1216,11 +1445,11 @@ $blue: #61afef;
 
 // ━━━━━━━━━━━━━━━ SESSION / POWER MENU ━━━━━━━━━━━━━━
 .session-menu {
-  background: rgba(18, 20, 24, 0.95);
-  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: $surface-solid;
+  border: 1px solid $surface-border;
   border-radius: $radius-xl;
   padding: 40px 48px;
-  box-shadow: $shadow-lg;
+  box-shadow: none;
 }
 
 .session-button {
@@ -1247,7 +1476,7 @@ $blue: #61afef;
     background: rgba(0, 191, 255, 0.1);
     border-color: rgba(0, 191, 255, 0.3);
     color: $fg;
-    box-shadow: 0 0 20px rgba(0, 191, 255, 0.1);
+    box-shadow: none;
 
     image {
       color: $accent;
@@ -1257,7 +1486,7 @@ $blue: #61afef;
   &.session-shutdown:hover {
     background: rgba(224, 108, 117, 0.12);
     border-color: rgba(224, 108, 117, 0.4);
-    box-shadow: 0 0 20px rgba(224, 108, 117, 0.1);
+    box-shadow: none;
 
     image {
       color: $red;
@@ -1267,7 +1496,7 @@ $blue: #61afef;
   &.session-reboot:hover {
     background: rgba(215, 153, 33, 0.12);
     border-color: rgba(215, 153, 33, 0.4);
-    box-shadow: 0 0 20px rgba(215, 153, 33, 0.1);
+    box-shadow: none;
 
     image {
       color: $orange;
@@ -1277,7 +1506,7 @@ $blue: #61afef;
   &.session-lock:hover {
     background: rgba(0, 204, 153, 0.12);
     border-color: rgba(0, 204, 153, 0.4);
-    box-shadow: 0 0 20px rgba(0, 204, 153, 0.1);
+    box-shadow: none;
 
     image {
       color: $green;
@@ -1287,7 +1516,7 @@ $blue: #61afef;
   &.session-suspend:hover {
     background: rgba(198, 120, 221, 0.12);
     border-color: rgba(198, 120, 221, 0.4);
-    box-shadow: 0 0 20px rgba(198, 120, 221, 0.1);
+    box-shadow: none;
 
     image {
       color: $magenta;
@@ -1296,8 +1525,13 @@ $blue: #61afef;
 }
 
 // ━━━━━━━━━━━━━━━ DESKTOP WIDGETS ━━━━━━━━━━━━━━━━━━━━
+$dw-card-bg: $widget-card-bg;
+$dw-card-border: $widget-card-border;
+$dw-card-shadow: 0 12px 28px rgba(0, 0, 0, 0.34), 0 3px 8px rgba(0, 0, 0, 0.2);
+
 .desktop-widgets {
   background: transparent;
+  padding: 28px 42px;
 }
 
 .dw-col-left {
@@ -1309,11 +1543,11 @@ $blue: #61afef;
 }
 
 .dw-clock-card {
-  background: rgba(18, 20, 24, 0.55);
-  border: 1px solid rgba(255, 255, 255, 0.06);
+  background: $dw-card-bg;
+  border: 1px solid $dw-card-border;
   border-radius: $radius-xl;
   padding: 28px 40px 22px;
-  box-shadow: 0 8px 40px rgba(0, 0, 0, 0.3);
+  box-shadow: none;
 
   .dw-clock-row {
     margin-bottom: 2px;
@@ -1351,11 +1585,11 @@ $blue: #61afef;
 }
 
 .dw-stats-card {
-  background: rgba(18, 20, 24, 0.55);
-  border: 1px solid rgba(255, 255, 255, 0.06);
+  background: $dw-card-bg;
+  border: 1px solid $dw-card-border;
   border-radius: $radius-xl;
   padding: 18px 24px;
-  box-shadow: 0 8px 40px rgba(0, 0, 0, 0.3);
+  box-shadow: none;
   min-width: 240px;
 
   .dw-stats-header {
@@ -1424,62 +1658,13 @@ $blue: #61afef;
   }
 }
 
-// ━━━━━━━━━━━━━━━ WEATHER WIDGET ━━━━━━━━━━━━━━━━━━━━
-.dw-weather-card {
-  background: rgba(18, 20, 24, 0.55);
-  border: 1px solid rgba(255, 255, 255, 0.06);
-  border-radius: $radius-xl;
-  padding: 18px 24px;
-  box-shadow: 0 8px 40px rgba(0, 0, 0, 0.3);
-  min-width: 240px;
-
-  .dw-weather-icon {
-    color: $yellow;
-  }
-
-  .dw-weather-temp {
-    font-size: 28px;
-    font-weight: 300;
-    color: $fg;
-    letter-spacing: 1px;
-  }
-
-  .dw-weather-desc {
-    font-size: 12px;
-    font-weight: 500;
-    color: $fg-dim;
-  }
-
-  .dw-weather-details {
-    padding-top: 6px;
-    border-top: 1px solid rgba(255, 255, 255, 0.04);
-  }
-
-  .dw-weather-detail-icon {
-    color: $fg-faint;
-  }
-
-  .dw-weather-detail {
-    font-size: 11px;
-    font-weight: 600;
-    color: $fg-dim;
-  }
-
-  .dw-weather-city {
-    font-size: 10px;
-    font-weight: 600;
-    color: $fg-faint;
-    letter-spacing: 1.5px;
-  }
-}
-
 // ━━━━━━━━━━━━━━━ NOW PLAYING ━━━━━━━━━━━━━━━━━━━━━━━
 .dw-np-card {
-  background: rgba(18, 20, 24, 0.55);
-  border: 1px solid rgba(255, 255, 255, 0.06);
+  background: $dw-card-bg;
+  border: 1px solid $dw-card-border;
   border-radius: $radius-xl;
   padding: 18px 24px;
-  box-shadow: 0 8px 40px rgba(0, 0, 0, 0.3);
+  box-shadow: none;
   min-width: 240px;
 
   .dw-np-inner {
@@ -1512,11 +1697,11 @@ $blue: #61afef;
 
 // ━━━━━━━━━━━━━━━ AUDIO VISUALIZER ━━━━━━━━━━━━━━━━━━
 .dw-viz-card {
-  background: rgba(18, 20, 24, 0.55);
-  border: 1px solid rgba(255, 255, 255, 0.06);
+  background: $dw-card-bg;
+  border: 1px solid $dw-card-border;
   border-radius: $radius-xl;
   padding: 18px 24px 14px;
-  box-shadow: 0 8px 40px rgba(0, 0, 0, 0.3);
+  box-shadow: none;
   min-width: 240px;
 
   .dw-viz-header {
@@ -1564,11 +1749,11 @@ $blue: #61afef;
 
 // ━━━━━━━━━━━━━━━ TODO WIDGET ━━━━━━━━━━━━━━━━━━━━━━━
 .dw-todo-card {
-  background: rgba(18, 20, 24, 0.55);
-  border: 1px solid rgba(255, 255, 255, 0.06);
+  background: $dw-card-bg;
+  border: 1px solid $dw-card-border;
   border-radius: $radius-xl;
   padding: 18px 24px;
-  box-shadow: 0 8px 40px rgba(0, 0, 0, 0.3);
+  box-shadow: none;
   min-width: 240px;
 
   .dw-todo-header {
@@ -1720,7 +1905,7 @@ $blue: #61afef;
   background: rgba(14, 15, 20, 0.97);
   border: 1px solid rgba(255, 255, 255, 0.10);
   border-radius: $radius-xl;
-  box-shadow: 0 24px 80px rgba(0, 0, 0, 0.7), 0 4px 24px rgba(0, 0, 0, 0.5);
+  box-shadow: none;
   min-width: 820px;
   min-height: 520px;
   max-height: 620px;
@@ -1810,7 +1995,7 @@ $blue: #61afef;
 
   &.theme-row-active {
     border-color: $accent;
-    box-shadow: inset 2px 0 0 $accent;
+    box-shadow: none;
   }
 
   .theme-card-swatches {
@@ -1930,12 +2115,12 @@ $blue: #61afef;
 
   &:hover {
     border-color: rgba(255, 255, 255, 0.25);
-    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
+    box-shadow: none;
   }
 
   &.wp-thumb-active {
     border-color: $accent;
-    box-shadow: 0 0 0 1px $accent, 0 4px 16px rgba(0, 191, 255, 0.25);
+    box-shadow: none;
   }
 
   .wp-thumb-img {
@@ -1963,4 +2148,11 @@ $blue: #61afef;
     font-size: 10px;
     color: $fg-faint;
   }
+}
+
+// ━━━━━━━━━━━━━━━ SHADOWLESS MODE ━━━━━━━━━━━━━━━━━━━
+// Force-disable shadows for all AGS widgets.
+window,
+window * {
+  box-shadow: none;
 }
