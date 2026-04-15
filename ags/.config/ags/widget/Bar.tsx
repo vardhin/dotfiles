@@ -14,6 +14,33 @@ import { For, With, createBinding, onCleanup } from "ags"
 import { createPoll } from "ags/time"
 import { execAsync } from "ags/process"
 
+function svgIcon(name: string): string {
+  return `ags-${name}-symbolic`
+}
+
+function wifiGlyph(signal: number, connected: boolean): string {
+  if (!connected) return svgIcon("wifi-off")
+  if (signal > 75) return svgIcon("wifi-high")
+  if (signal > 40) return svgIcon("wifi-medium")
+  return svgIcon("wifi-low")
+}
+
+function brightnessGlyph(level: number): string {
+  if (level < 0.33) return svgIcon("sun-low")
+  if (level < 0.66) return svgIcon("sun-medium")
+  return svgIcon("sun")
+}
+
+function volumeGlyph(level: number, muted: boolean): string {
+  if (muted || level <= 0.01) return svgIcon("volume-muted")
+  return svgIcon("volume")
+}
+
+function micGlyph(level: number, muted: boolean): string {
+  if (muted || level <= 0.01) return svgIcon("mic-muted")
+  return svgIcon("mic")
+}
+
 // ━━━━━━━━━━━━━━ HYPRLAND WORKSPACES ━━━━━━━━━━━━━━━━━━
 function Workspaces() {
   const hyprland = AstalHyprland.get_default()
@@ -46,17 +73,18 @@ function ActiveWindow() {
   const focused = createBinding(hyprland, "focusedClient")
 
   return (
-    <box class="active-window">
+    <box class="active-window" hexpand>
+      <image class="active-window-icon" iconName={svgIcon("radio")} />
       <With value={focused}>
         {(client) =>
-          client && (
             <label
-              label={createBinding(client, "title")((t) => {
-                const title = t || ""
-                return title.length > 45 ? title.substring(0, 42) + "..." : title
-              })}
+              label={client
+                ? createBinding(client, "title")((t) => {
+                    const title = t || ""
+                    return title.length > 52 ? title.substring(0, 49) + "..." : title
+                  })
+                : "Desktop"}
             />
-          )
         }
       </With>
     </box>
@@ -81,6 +109,12 @@ function Mpris() {
           const position = createBinding(player, "position")
           const length = createBinding(player, "length")
 
+          const mediaIcon = playbackStatus((s) =>
+            s === AstalMpris.PlaybackStatus.PLAYING
+              ? svgIcon("pause")
+              : svgIcon("play")
+          )
+
           const formatTime = (seconds: number) => {
             if (!seconds || seconds < 0) return "0:00"
             const m = Math.floor(seconds / 60)
@@ -92,13 +126,7 @@ function Mpris() {
             <box class="media-player" spacing={0}>
               <menubutton class="media-toggle">
                 <box spacing={6}>
-                  <image
-                    iconName={playbackStatus((s) =>
-                      s === AstalMpris.PlaybackStatus.PLAYING
-                        ? "media-playback-start-symbolic"
-                        : "media-playback-pause-symbolic"
-                    )}
-                  />
+                  <image iconName={mediaIcon} />
                   <label
                     class="media-title-bar"
                     label={title((t) =>
@@ -277,9 +305,7 @@ function Bluetooth() {
 
   const connectedCount = devices((devs) => devs.filter((d) => d.connected).length)
 
-  const icon = powered((on) =>
-    on ? "bluetooth-active-symbolic" : "bluetooth-disabled-symbolic"
-  )
+  const icon = powered(() => svgIcon("bluetooth"))
 
   return (
     <box class="bluetooth">
@@ -296,7 +322,7 @@ function Bluetooth() {
           <box class="bluetooth-popup" orientation={Gtk.Orientation.VERTICAL} spacing={10}>
             {/* Header with toggle */}
             <box class="bluetooth-header" spacing={10}>
-              <image iconName="bluetooth-active-symbolic" pixelSize={20} class="bluetooth-header-icon" />
+              <image iconName={svgIcon("bluetooth")} pixelSize={20} class="bluetooth-header-icon" />
               <label class="bluetooth-title" label="Bluetooth" hexpand xalign={0} />
               <button
                 class={powered((on) => `bluetooth-toggle-btn ${on ? "active" : ""}`)}
@@ -664,20 +690,9 @@ function WiFi() {
     }
   })
 
-  const wifiIcon = wifiInfo((w) => {
-    if (!w.connected) return "network-wireless-offline-symbolic"
-    if (w.signal > 75) return "network-wireless-signal-excellent-symbolic"
-    if (w.signal > 50) return "network-wireless-signal-good-symbolic"
-    if (w.signal > 25) return "network-wireless-signal-ok-symbolic"
-    return "network-wireless-signal-weak-symbolic"
-  })
+  const wifiIcon = wifiInfo((w) => wifiGlyph(w.signal, w.connected))
 
-  const signalIcon = (signal: number) => {
-    if (signal > 75) return "network-wireless-signal-excellent-symbolic"
-    if (signal > 50) return "network-wireless-signal-good-symbolic"
-    if (signal > 25) return "network-wireless-signal-ok-symbolic"
-    return "network-wireless-signal-weak-symbolic"
-  }
+  const signalIcon = (signal: number) => wifiGlyph(signal, true)
 
   return (
     <box class="wifi">
@@ -689,7 +704,7 @@ function WiFi() {
           <box class="wifi-popup" orientation={Gtk.Orientation.VERTICAL} spacing={10}>
             {/* Header */}
             <box class="wifi-header" spacing={10}>
-              <image iconName="network-wireless-symbolic" pixelSize={20} class="wifi-header-icon" />
+              <image iconName={svgIcon("wifi-high")} pixelSize={20} class="wifi-header-icon" />
               <box orientation={Gtk.Orientation.VERTICAL} hexpand>
                 <label class="wifi-title" label="Wi-Fi" xalign={0} />
                 <label
@@ -835,17 +850,19 @@ function AudioOutput() {
   const mic = wp.defaultMicrophone
 
   const speakerVol = createBinding(speaker, "volume")
-  const speakerIcon = createBinding(speaker, "volumeIcon")
-  const speakerMute = createBinding(speaker, "mute")
   const micVol = createBinding(mic, "volume")
-  const micIcon = createBinding(mic, "volumeIcon")
-  const micMute = createBinding(mic, "mute")
+  const speakerGlyphIcon = createPoll(svgIcon("volume"), 300, () =>
+    volumeGlyph(speaker.volume, speaker.mute)
+  )
+  const micGlyphIcon = createPoll(svgIcon("mic"), 300, () =>
+    micGlyph(mic.volume, mic.mute)
+  )
 
   return (
     <box class="volume">
       <menubutton>
         <box spacing={4}>
-          <image iconName={speakerIcon} />
+          <image iconName={speakerGlyphIcon} />
           <label
             class="volume-percent"
             label={speakerVol((v) => `${Math.round(v * 100)}%`)}
@@ -860,7 +877,7 @@ function AudioOutput() {
                 onClicked={() => { speaker.mute = !speaker.mute }}
                 tooltipText="Mute speaker"
               >
-                <image iconName={speakerIcon} pixelSize={18} />
+                <image iconName={speakerGlyphIcon} pixelSize={18} />
               </button>
               <slider
                 class="volume-slider"
@@ -884,7 +901,7 @@ function AudioOutput() {
                 onClicked={() => { mic.mute = !mic.mute }}
                 tooltipText="Mute microphone"
               >
-                <image iconName={micIcon} pixelSize={18} />
+                <image iconName={micGlyphIcon} pixelSize={18} />
               </button>
               <slider
                 class="volume-slider"
@@ -927,9 +944,7 @@ function Brightness() {
   const brightnessValue = createPoll(1, 2000, readBrightness)
 
   const brightnessIcon = brightnessValue((v) => {
-    if (v < 0.33) return "display-brightness-low-symbolic"
-    if (v < 0.66) return "display-brightness-medium-symbolic"
-    return "display-brightness-symbolic"
+    return brightnessGlyph(v)
   })
 
   return (
@@ -940,7 +955,7 @@ function Brightness() {
         </box>
         <popover>
           <box class="brightness-popup" spacing={8}>
-            <image iconName="display-brightness-symbolic" pixelSize={18} class="brightness-icon" />
+            <image iconName={brightnessIcon} pixelSize={18} class="brightness-icon" />
             <slider
               class="brightness-slider"
               hexpand
@@ -970,11 +985,13 @@ function Battery() {
 
   const percentage = createBinding(battery, "percentage")
   const charging = createBinding(battery, "charging")
-  const iconName = createBinding(battery, "iconName")
   const isPresent = createBinding(battery, "isPresent")
   const timeToEmpty = createBinding(battery, "timeToEmpty")
   const timeToFull = createBinding(battery, "timeToFull")
   const activeProfile = createBinding(powerprofiles, "activeProfile")
+  const batteryGlyphIcon = createPoll(svgIcon("battery"), 1200, () =>
+    battery.charging ? svgIcon("battery-charging") : svgIcon("battery")
+  )
 
   const formatTime = (seconds: number) => {
     if (!seconds || seconds <= 0) return ""
@@ -988,18 +1005,18 @@ function Battery() {
 
   const profileIcon = (profile: string) => {
     switch (profile) {
-      case "power-saver": return "battery-profile-powersave-symbolic"
-      case "balanced": return "battery-profile-balanced-symbolic"
-      case "performance": return "battery-profile-performance-symbolic"
-      default: return "speedometer-symbolic"
+      case "power-saver": return svgIcon("leaf")
+      case "balanced": return svgIcon("gauge")
+      case "performance": return svgIcon("bolt")
+      default: return svgIcon("gauge")
     }
   }
 
   const profileLabel = (profile: string) => {
     switch (profile) {
-      case "power-saver": return "🔋 Power Saver"
-      case "balanced": return "⚖️ Balanced"
-      case "performance": return "🚀 Performance"
+      case "power-saver": return "Power Saver"
+      case "balanced": return "Balanced"
+      case "performance": return "Performance"
       default: return profile
     }
   }
@@ -1008,14 +1025,14 @@ function Battery() {
     <box class="battery">
       <menubutton visible={isPresent}>
         <box spacing={4}>
-          <image iconName={iconName} />
+          <image iconName={batteryGlyphIcon} />
           <label class="battery-percent" label={percentText} />
         </box>
         <popover>
           <box class="battery-popup" orientation={Gtk.Orientation.VERTICAL} spacing={10}>
             {/* Battery status header */}
             <box class="battery-header" spacing={10}>
-              <image iconName={iconName} pixelSize={32} class="battery-big-icon" />
+              <image iconName={batteryGlyphIcon} pixelSize={32} class="battery-big-icon" />
               <box orientation={Gtk.Orientation.VERTICAL} hexpand>
                 <label
                   class="battery-popup-percent"
@@ -1032,7 +1049,7 @@ function Battery() {
 
             {/* Time remaining */}
             <box class="battery-info-row" spacing={6}>
-              <image iconName="hourglass-symbolic" pixelSize={14} class="battery-info-icon" />
+              <image iconName={svgIcon("hourglass")} pixelSize={14} class="battery-info-icon" />
               <label
                 class="battery-info-label"
                 label={charging((isCharging) => {
@@ -1064,7 +1081,7 @@ function Battery() {
                     <image iconName={profileIcon(profile)} pixelSize={16} />
                     <label label={profileLabel(profile)} hexpand xalign={0} />
                     <image
-                      iconName="object-select-symbolic"
+                      iconName={svgIcon("check")}
                       pixelSize={14}
                       visible={activeProfile((ap) => ap === profile)}
                       class="battery-check"
@@ -1109,6 +1126,9 @@ function NotificationButton() {
   const notifd = AstalNotifd.get_default()
   const notifications = createBinding(notifd, "notifications")
   const dndEnabled = createBinding(notifd, "dontDisturb")
+  const notificationIcon = dndEnabled((dnd) =>
+    dnd ? svgIcon("bell-off") : svgIcon("bell")
+  )
 
   return (
     <box class="notification-bell">
@@ -1123,16 +1143,34 @@ function NotificationButton() {
         tooltipText={notifications((n) => `${n.length} notification${n.length !== 1 ? "s" : ""}`)}
       >
         <box spacing={4}>
-          <image
-            iconName={dndEnabled((dnd) =>
-              dnd ? "notifications-disabled-symbolic" : "preferences-system-notifications-symbolic"
-            )}
-          />
+          <image iconName={notificationIcon} />
           <label
             class="notification-count"
             visible={notifications((n) => n.length > 0)}
             label={notifications((n) => `${n.length}`)}
           />
+        </box>
+      </button>
+    </box>
+  )
+}
+
+// ━━━━━━━━━━━━━━━ THEME SWITCHER BUTTON ━━━━━━━━━━━━━━━━━━
+function ThemeButton() {
+  return (
+    <box class="theme-launcher">
+      <button
+        onClicked={() => {
+          const win = app.get_window("theme-switcher")
+          if (win) {
+            win.visible = !win.visible
+          }
+        }}
+        tooltipText="Theme and wallpaper menu"
+      >
+        <box spacing={4}>
+          <image iconName={svgIcon("palette")} />
+          <label class="theme-launcher-label" label="Theme" />
         </box>
       </button>
     </box>
@@ -1158,29 +1196,39 @@ export default function Bar({ gdkmonitor }: { gdkmonitor: Gdk.Monitor }) {
       exclusivity={Astal.Exclusivity.EXCLUSIVE}
       anchor={TOP | LEFT | RIGHT}
       marginTop={4}
-      marginLeft={24}
-      marginRight={24}
+      marginLeft={10}
+      marginRight={10}
       application={app}
     >
-      <centerbox>
-        <box $type="start" spacing={8}>
+      <box class="bar-shell" spacing={8}>
+        <box class="bar-lane bar-lane-left" spacing={8}>
           <Workspaces />
-          <ActiveWindow />
-        </box>
-        <box $type="center" spacing={8}>
           <Clock />
         </box>
-        <box $type="end" spacing={4}>
+
+        <box class="bar-lane bar-lane-middle" hexpand spacing={8}>
+          <ActiveWindow />
           <Mpris />
-          <Tray />
-          <WiFi />
-          <Bluetooth />
-          <Brightness />
-          <AudioOutput />
-          <Battery />
-          <NotificationButton />
         </box>
-      </centerbox>
+
+        <box class="bar-lane bar-lane-right" spacing={6} halign={Gtk.Align.END}>
+          <box class="bar-cluster bar-cluster-tray" spacing={4}>
+            <Tray />
+            <ThemeButton />
+            <NotificationButton />
+          </box>
+
+          <box class="bar-divider" />
+
+          <box class="bar-cluster bar-cluster-status" spacing={2}>
+            <AudioOutput />
+            <Brightness />
+            <WiFi />
+            <Bluetooth />
+            <Battery />
+          </box>
+        </box>
+      </box>
     </window>
   )
 }

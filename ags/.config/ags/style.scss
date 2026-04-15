@@ -5,9 +5,9 @@
 $bg:          rgba(18, 20, 24, 0.82);
 $bg-solid:    rgba(18, 20, 24, 0.95);
 $bg-dark:     rgba(12, 14, 18, 0.98);
-$fg:          #e0dbd2;
-$fg-dim:      #8a8580;
-$fg-faint:    rgba(168, 153, 132, 0.4);
+$fg:          #f4f0e8;
+$fg-dim:      #c7c2b9;
+$fg-faint:    rgba(230, 223, 210, 0.7);
 $accent:      #00bfff;
 $accent-dim:  rgba(0, 191, 255, 0.25);
 $accent-glow: rgba(0, 191, 255, 0.12);
@@ -17,7 +17,7 @@ $magenta:     #c678dd;
 $yellow:      #e5c07b;
 $red:         #e06c75;
 $orange:      #d79921;
-$surface-bar: rgba(18, 20, 24, 0.62);
+$surface-bar: rgba(16, 18, 24, 0.86);
 $surface-card: rgba(18, 20, 24, 0.74);
 $surface-solid: rgba(18, 20, 24, 0.9);
 $surface-soft: rgba(255, 255, 255, 0.03);
@@ -41,14 +41,63 @@ $shadow-lg:   0 12px 48px rgba(0, 0, 0, 0.5), 0 4px 16px rgba(0, 0, 0, 0.3);
 window {
   background: transparent;
   color: $fg;
+}
 
-  > centerbox {
-    background: $surface-bar;
-    border: 1px solid $surface-border-soft;
-    border-radius: 12px;
-    padding: 0 12px;
-    min-height: 32px;
-    box-shadow: none;
+window > box.bar-shell {
+  background: linear-gradient(
+    165deg,
+    rgb(30, 35, 48) 0%,
+    rgb(15, 18, 27) 58%,
+    rgb(12, 14, 20) 100%
+  );
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  border-radius: 20px;
+  padding: 2px 12px;
+  min-height: 38px;
+  box-shadow: none;
+}
+
+.bar-shell {
+  .bar-lane {
+    margin: 1px 0;
+  }
+
+  .bar-lane-left {
+    margin-right: 4px;
+  }
+
+  .bar-lane-middle {
+    margin: 0 6px;
+  }
+
+  .bar-lane-right {
+    margin-left: 4px;
+  }
+
+  .bar-cluster {
+    background: rgb(32, 36, 44);
+    border: 1px solid rgba(255, 255, 255, 0.17);
+    border-radius: 14px;
+    padding: 1px 4px;
+  }
+
+  .bar-cluster-tray {
+    padding-right: 6px;
+  }
+
+  .bar-cluster-status {
+    background: rgb(12, 15, 22);
+    border-color: rgba(255, 255, 255, 0.2);
+    padding-left: 4px;
+    padding-right: 4px;
+  }
+
+  .bar-divider {
+    min-width: 1px;
+    min-height: 22px;
+    margin: 0 4px;
+    background: rgba(255, 255, 255, 0.24);
+    border-radius: 10px;
   }
 }
 
@@ -62,103 +111,143 @@ popover {
 }
 
 @mixin bar-pill {
-  background: rgba(255, 255, 255, 0.04);
-  border: 1px solid rgba(255, 255, 255, 0.04);
-  border-radius: 8px;
-  padding: 0 2px;
-  margin: 4px 3px;
+  background: rgba(255, 255, 255, 0.1);
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  border-radius: 13px;
+  padding: 1px 3px;
+  margin: 2px 2px;
 }
 
 @mixin bar-btn-hover {
-  padding: 2px 6px;
-  border-radius: 8px;
-  transition: all 200ms ease;
+  padding: 4px 7px;
+  border-radius: 10px;
+  transition: all 170ms ease;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(255, 255, 255, 0.02);
 
   &:hover {
-    background: rgba(255, 255, 255, 0.08);
+    background: rgba(255, 255, 255, 0.12);
+    border-color: rgba(255, 255, 255, 0.2);
+  }
+}
+
+.bar-lane-right {
+  > * > menubutton > button,
+  > * > button {
+    min-height: 24px;
+  }
+
+  > * > menubutton > button image,
+  > * > button image,
+  > * > menubutton > button label,
+  > * > button label {
+    color: $fg;
+  }
+
+  > * > menubutton > button:hover image,
+  > * > button:hover image,
+  > * > menubutton > button:hover label,
+  > * > button:hover label {
+    color: $fg;
   }
 }
 
 .workspaces {
   @include bar-pill;
-  padding: 0 1px;
+  padding: 0 4px;
 
   button {
-    padding: 1px 7px;
+    padding: 2px 8px;
     margin: 2px 1px;
-    border-radius: 6px;
-    color: $fg-dim;
+    border-radius: 8px;
+    color: $fg;
     background: transparent;
-    border: 1px solid transparent;
+    border: 1px solid rgba(255, 255, 255, 0.06);
     transition: all 250ms cubic-bezier(0.4, 0, 0.2, 1);
     font-weight: 700;
     font-size: 11px;
     min-width: 22px;
 
     &:hover {
-      background: rgba(0, 191, 255, 0.1);
-      color: $accent;
+      background: rgba(255, 255, 255, 0.16);
+      color: $fg;
     }
 
     &.focused {
-      background: rgba(0, 191, 255, 0.18);
-      color: white;
-      border-color: rgba(0, 191, 255, 0.35);
-      box-shadow: none;
+      background: rgba(0, 191, 255, 0.22);
+      color: $fg;
+      border-color: rgba(0, 191, 255, 0.52);
     }
   }
 }
 
 .active-window {
-  padding: 0 6px;
+  @include bar-pill;
+  padding: 0 10px;
+  margin-left: 3px;
+  min-width: 200px;
+
+  .active-window-icon {
+    margin-right: 6px;
+    color: $fg;
+  }
 
   label {
-    color: $fg-dim;
-    font-style: italic;
+    color: $fg;
+    font-style: normal;
     font-size: 11px;
-    letter-spacing: 0.3px;
+    letter-spacing: 0.35px;
+    font-weight: 600;
   }
 }
 
 .clock {
+  @include bar-pill;
+  padding: 0 5px;
+
   menubutton button {
-    padding: 1px 8px;
-    border-radius: 8px;
+    padding: 2px 10px;
+    border-radius: 10px;
     transition: all 200ms ease;
+    border: 1px solid rgba(255, 255, 255, 0.08);
 
     &:hover {
-      background: rgba(255, 255, 255, 0.06);
+      background: rgba(255, 255, 255, 0.14);
+      border-color: rgba(255, 255, 255, 0.2);
     }
   }
 
   .clock-time {
     color: $fg;
-    font-weight: 700;
+    font-weight: 800;
     font-size: 13px;
-    letter-spacing: 0.8px;
+    letter-spacing: 1px;
   }
 
   .clock-date {
-    color: $fg-dim;
+    color: $fg;
     font-size: 11px;
     font-weight: 500;
+    letter-spacing: 0.4px;
   }
 }
 
 .systray {
-  padding: 0 1px;
+  padding: 0 2px;
 
   menubutton {
     padding: 0;
-    margin: 0 1px;
+    margin: 0 2px;
 
     button {
-      padding: 2px 4px;
-      border-radius: 6px;
+      padding: 3px 5px;
+      border-radius: 8px;
       transition: all 200ms ease;
+      border: 1px solid rgba(255, 255, 255, 0.08);
 
       &:hover {
-        background: rgba(255, 255, 255, 0.08);
+        background: rgba(255, 255, 255, 0.14);
+        border-color: rgba(255, 255, 255, 0.2);
       }
     }
   }
@@ -180,13 +269,13 @@ menubutton button {
     @include bar-btn-hover;
   }
 
-  image {
-    color: $green;
+  > menubutton > button image {
+    color: $fg;
   }
 
   .volume-percent {
-    font-size: 11px;
-    color: $fg-dim;
+    font-size: 10px;
+    color: $fg;
     font-weight: 600;
   }
 }
@@ -258,8 +347,8 @@ menubutton button {
     @include bar-btn-hover;
   }
 
-  image {
-    color: $yellow;
+  > menubutton > button image {
+    color: $fg;
   }
 }
 
@@ -309,8 +398,8 @@ menubutton button {
     @include bar-btn-hover;
   }
 
-  image {
-    color: $accent;
+  > menubutton > button image {
+    color: $fg;
   }
 }
 
@@ -583,8 +672,8 @@ $blue: #61afef;
     @include bar-btn-hover;
   }
 
-  image {
-    color: $blue;
+  > menubutton > button image {
+    color: $fg;
   }
 
   .bluetooth-count {
@@ -736,13 +825,13 @@ $blue: #61afef;
     @include bar-btn-hover;
   }
 
-  image {
-    color: $yellow;
+  > menubutton > button image {
+    color: $fg;
   }
 
   .battery-percent {
     font-size: 11px;
-    color: $fg-dim;
+    color: $fg;
     font-weight: 600;
     margin-left: 2px;
   }
@@ -831,7 +920,7 @@ $blue: #61afef;
 
 // ━━━━━━━━━━━━━ MEDIA WIDGET ━━━━━━━━━━━━━━━━━━━━━━━
 .media {
-  padding: 0 4px;
+  padding: 0 1px;
 }
 
 .media-toggle {
@@ -839,15 +928,17 @@ $blue: #61afef;
     @include bar-btn-hover;
   }
 
-  image {
-    color: $magenta;
+  > button image {
+    color: $fg;
   }
 
   .media-title-bar {
-    font-size: 12px;
-    color: $magenta;
-    font-style: italic;
-    max-width: 140px;
+    font-size: 10px;
+    color: $fg;
+    font-style: normal;
+    font-weight: 600;
+    letter-spacing: 0.35px;
+    max-width: 110px;
   }
 }
 
@@ -961,13 +1052,31 @@ $blue: #61afef;
 }
 
 // ━━━━━━━━━━━━━ NOTIFICATION BELL (bar) ━━━━━━━━━━━━━━
+.theme-launcher {
+  button {
+    @include bar-btn-hover;
+  }
+
+  > button image,
+  > button label {
+    color: $fg;
+  }
+
+  .theme-launcher-label {
+    font-size: 10px;
+    font-weight: 650;
+    letter-spacing: 0.35px;
+    margin-left: 1px;
+  }
+}
+
 .notification-bell {
   button {
     @include bar-btn-hover;
   }
 
-  image {
-    color: $accent;
+  > button image {
+    color: $fg;
   }
 
   .notification-count {

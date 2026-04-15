@@ -83,12 +83,15 @@ EOF
 
 hyprctl --batch "$HYPR_BATCH"
 
-# ── 3. Save current theme pointer + tell AGS to reload CSS early ─────────────
+# ── 3. Save current theme pointer ─────────────────────────────────────────────
 
 cp "$THEME_FILE" "$CURRENT_THEME_FILE"
-ags request "apply-theme:${THEME_ID}"
 
 # ── 4. Wallpaper ───────────────────────────────────────────────────────────────
+
+if [[ "$WALLPAPER" == ~/* ]]; then
+  WALLPAPER="$HOME/${WALLPAPER#~/}"
+fi
 
 if [[ -n "$WALLPAPER" && -f "$WALLPAPER" ]]; then
   swww img "$WALLPAPER" \

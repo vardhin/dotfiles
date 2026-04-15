@@ -7,21 +7,22 @@ import { OSD } from "./widget/OSD"
 import { AppLauncher } from "./widget/AppLauncher"
 import { SessionMenu } from "./widget/Session"
 import { DesktopWidgets } from "./widget/DesktopWidgets"
-import { ThemeSwitcher, generateThemeCSS } from "./widget/ThemeSwitcher"
+import { ThemeSwitcher, applyGeneratedThemeCSS } from "./widget/ThemeSwitcher"
 import GLib from "gi://GLib"
+import Gtk from "gi://Gtk?version=4.0"
+import Gdk from "gi://Gdk?version=4.0"
 
 const THEMES_DIR = `${GLib.get_home_dir()}/.config/ags/themes`
 
 // Load and apply the saved theme CSS on startup
-function loadSavedThemeCSS(): string {
+function loadSavedThemePreset(): unknown | null {
   try {
     const currentFile = `${THEMES_DIR}/current.json`
     const [ok, bytes] = GLib.file_get_contents(currentFile)
-    if (!ok) return ""
-    const preset = JSON.parse(new TextDecoder().decode(bytes))
-    return generateThemeCSS(preset)
+    if (!ok) return null
+    return JSON.parse(new TextDecoder().decode(bytes))
   } catch {
-    return ""
+    return null
   }
 }
 
@@ -29,12 +30,46 @@ app.start({
   css: style,
   main() {
     const monitors = createBinding(app, "monitors")
+    const currentThemeFile = `${THEMES_DIR}/current.json`
+    let lastThemeSignature = ""
+
+    const display = Gdk.Display.get_default()
+    if (display) {
+      const iconTheme = Gtk.IconTheme.get_for_display(display)
+      iconTheme.add_search_path(`${GLib.get_home_dir()}/.config/ags/assets/icons`)
+    }
 
     // Apply saved theme override CSS on top of base stylesheet
-    const savedCSS = loadSavedThemeCSS()
-    if (savedCSS) {
-      app.apply_css(savedCSS, false)
+    const savedPreset = loadSavedThemePreset()
+    if (savedPreset) {
+      applyGeneratedThemeCSS(savedPreset as any)
+      try {
+        const preset = savedPreset as { id?: string; wallpaper?: string }
+        lastThemeSignature = `${preset.id ?? ""}|${preset.wallpaper ?? ""}`
+      } catch {
+        lastThemeSignature = ""
+      }
     }
+
+    // Keep AGS colors in sync with current.json even if a UI callback path fails.
+    GLib.timeout_add_seconds(GLib.PRIORITY_DEFAULT, 1, () => {
+      try {
+        const [ok, bytes] = GLib.file_get_contents(currentThemeFile)
+        if (!ok) return GLib.SOURCE_CONTINUE
+        const preset = JSON.parse(new TextDecoder().decode(bytes)) as {
+          id?: string
+          wallpaper?: string
+        }
+        const signature = `${preset.id ?? ""}|${preset.wallpaper ?? ""}`
+        if (signature !== lastThemeSignature) {
+          lastThemeSignature = signature
+          applyGeneratedThemeCSS(preset as any)
+        }
+      } catch {
+        // ignore parse/read errors and continue polling
+      }
+      return GLib.SOURCE_CONTINUE
+    })
 
     return (
       <For each={monitors}>
@@ -83,18 +118,22 @@ app.start({
     // apply-theme:<id> — reload CSS after shell script has applied hyprland changes
     if (request.startsWith("apply-theme:")) {
       const themeId = request.slice("apply-theme:".length).trim()
-      try {
-        const themeFile = `${THEMES_DIR}/${themeId}.json`
-        const [ok, bytes] = GLib.file_get_contents(themeFile)
-        if (ok) {
-          const preset = JSON.parse(new TextDecoder().decode(bytes))
-          const css = generateThemeCSS(preset)
-          app.apply_css(css, false)
-        }
-      } catch (e) {
-        console.error("apply-theme: failed to reload CSS:", e)
-      }
       respond("ok")
+
+      GLib.idle_add(GLib.PRIORITY_DEFAULT_IDLE, () => {
+        try {
+          const themeFile = `${THEMES_DIR}/${themeId}.json`
+          const [ok, bytes] = GLib.file_get_contents(themeFile)
+          if (ok) {
+            const preset = JSON.parse(new TextDecoder().decode(bytes))
+            applyGeneratedThemeCSS(preset)
+          }
+        } catch (e) {
+          console.error("apply-theme: failed to reload CSS:", e)
+        }
+        return GLib.SOURCE_REMOVE
+      })
+
       return
     }
     respond("unknown command")

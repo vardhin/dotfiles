@@ -2,43 +2,45 @@
   "name": "Catppuccin Mocha",
   "id": "catppuccin-mocha",
   "description": "Lavender & mauve on deep purple-grey",
-  "swatches": ["#cba6f7", "#89b4fa", "#1e1e2e", "#cdd6f4"],
-
+  "swatches": [
+    "#cba6f7",
+    "#89b4fa",
+    "#1e1e2e",
+    "#cdd6f4"
+  ],
   "colors": {
-    "bg":          "rgba(30, 30, 46, 0.82)",
-    "bg_solid":    "rgba(30, 30, 46, 0.95)",
-    "bg_dark":     "rgba(17, 17, 27, 0.98)",
-    "fg":          "#cdd6f4",
-    "fg_dim":      "#6c7086",
-    "fg_faint":    "rgba(108, 112, 134, 0.4)",
-    "accent":      "#cba6f7",
-    "accent_dim":  "rgba(203, 166, 247, 0.25)",
+    "bg": "rgba(30, 30, 46, 0.82)",
+    "bg_solid": "rgba(30, 30, 46, 0.95)",
+    "bg_dark": "rgba(17, 17, 27, 0.98)",
+    "fg": "#cdd6f4",
+    "fg_dim": "#6c7086",
+    "fg_faint": "rgba(108, 112, 134, 0.4)",
+    "accent": "#cba6f7",
+    "accent_dim": "rgba(203, 166, 247, 0.25)",
     "accent_glow": "rgba(203, 166, 247, 0.12)",
-    "green":       "#a6e3a1",
-    "teal":        "#94e2d5",
-    "magenta":     "#f5c2e7",
-    "yellow":      "#f9e2af",
-    "red":         "#f38ba8",
-    "orange":      "#fab387"
+    "green": "#a6e3a1",
+    "teal": "#94e2d5",
+    "magenta": "#f5c2e7",
+    "yellow": "#f9e2af",
+    "red": "#f38ba8",
+    "orange": "#fab387"
   },
-
   "hyprland": {
-    "active_border":   "rgba(cba6f7ff) rgba(89b4faff) rgba(f5c2e7ff) 45deg",
+    "active_border": "rgba(cba6f7ff) rgba(89b4faff) rgba(f5c2e7ff) 45deg",
     "inactive_border": "rgba(45475aaa) rgba(313244aa) 90deg",
-    "border_size":     2,
-    "rounding":        16,
-    "shadow_color":    "rgba(cba6f760)",
-    "shadow_range":    50,
+    "border_size": 2,
+    "rounding": 16,
+    "shadow_color": "rgba(cba6f760)",
+    "shadow_range": 50,
     "shadow_render_power": 4,
-    "shadow_offset":   "0 4",
-    "blur_size":       8,
-    "blur_passes":     3,
-    "blur_vibrancy":   0.15,
-    "dim_inactive":    true,
-    "dim_strength":    0.12,
-    "gaps_in":         10,
-    "gaps_out":        16
+    "shadow_offset": "0 4",
+    "blur_size": 8,
+    "blur_passes": 3,
+    "blur_vibrancy": 0.15,
+    "dim_inactive": true,
+    "dim_strength": 0.12,
+    "gaps_in": 10,
+    "gaps_out": 16
   },
-
-  "wallpaper": ""
+  "wallpaper": "/home/vardhin/wallpaper/catppuccin-mocha/262547.jpg"
 }

@@ -1,6 +1,8 @@
 import app from "ags/gtk4/app"
+import baseStyle from "../style.scss"
 import GLib from "gi://GLib"
 import Gio from "gi://Gio"
+import GdkPixbuf from "gi://GdkPixbuf"
 import Astal from "gi://Astal?version=4.0"
 import Gtk from "gi://Gtk?version=4.0"
 import Gdk from "gi://Gdk?version=4.0"
@@ -37,6 +39,12 @@ interface ThemePreset {
   wallpaper: string
 }
 
+interface Rgb {
+  r: number
+  g: number
+  b: number
+}
+
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 // CONSTANTS
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -45,7 +53,8 @@ const HOME = GLib.get_home_dir()
 const THEMES_DIR = `${HOME}/.config/ags/themes`
 const WALLPAPER_DIR = `${HOME}/wallpaper`
 const CURRENT_THEME_FILE = `${THEMES_DIR}/current.json`
-
+const DYNAMIC_THEME_DIR = `${GLib.get_user_cache_dir()}/ags`
+const DYNAMIC_THEME_FILE = `${DYNAMIC_THEME_DIR}/dynamic-theme.css`
 const THEME_IDS = [
   "frozen-winter",
   "catppuccin-mocha",
@@ -56,6 +65,8 @@ const THEME_IDS = [
 
 const IMAGE_EXTS = new Set([".jpg", ".jpeg", ".png", ".webp", ".gif", ".bmp"])
 const WALLPAPER_CHUNK_SIZE = 12
+
+const FALLBACK_ACCENT: Rgb = { r: 0, g: 191, b: 255 }
 
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 // HELPERS
@@ -69,6 +80,215 @@ function loadThemes(): ThemePreset[] {
       return [JSON.parse(new TextDecoder().decode(bytes)) as ThemePreset]
     } catch { return [] }
   })
+}
+
+function resolveHomePath(path: string): string {
+  if (!path) return ""
+  if (path === "~") return HOME
+  if (path.startsWith("~/")) return `${HOME}/${path.slice(2)}`
+  return path
+}
+
+function clampByte(v: number): number {
+  return Math.max(0, Math.min(255, Math.round(v)))
+}
+
+function clamp01(v: number): number {
+  return Math.max(0, Math.min(1, v))
+}
+
+function mixRgb(a: Rgb, b: Rgb, amount: number): Rgb {
+  const t = clamp01(amount)
+  return {
+    r: clampByte(a.r + (b.r - a.r) * t),
+    g: clampByte(a.g + (b.g - a.g) * t),
+    b: clampByte(a.b + (b.b - a.b) * t),
+  }
+}
+
+function rgbToHex(c: Rgb): string {
+  const h = (n: number) => clampByte(n).toString(16).padStart(2, "0")
+  return `#${h(c.r)}${h(c.g)}${h(c.b)}`
+}
+
+function rgba(c: Rgb, alpha: number): string {
+  return `rgba(${clampByte(c.r)}, ${clampByte(c.g)}, ${clampByte(c.b)}, ${clamp01(alpha).toFixed(3)})`
+}
+
+function toOpaqueColor(color: string): string {
+  const m = color.match(/^rgba\(\s*([\d.]+)\s*,\s*([\d.]+)\s*,\s*([\d.]+)\s*,\s*[\d.]+\s*\)$/)
+  if (!m) return color
+  return `rgb(${m[1]}, ${m[2]}, ${m[3]})`
+}
+
+function parseHexColor(input: string): Rgb | null {
+  const m = input.trim().match(/^#?([0-9a-fA-F]{6})$/)
+  if (!m) return null
+  const hex = m[1]
+  return {
+    r: parseInt(hex.slice(0, 2), 16),
+    g: parseInt(hex.slice(2, 4), 16),
+    b: parseInt(hex.slice(4, 6), 16),
+  }
+}
+
+function rgbToHsl(c: Rgb): { h: number; s: number; l: number } {
+  const r = c.r / 255
+  const g = c.g / 255
+  const b = c.b / 255
+  const max = Math.max(r, g, b)
+  const min = Math.min(r, g, b)
+  const d = max - min
+  let h = 0
+  const l = (max + min) / 2
+
+  if (d !== 0) {
+    switch (max) {
+      case r: h = ((g - b) / d) % 6; break
+      case g: h = (b - r) / d + 2; break
+      default: h = (r - g) / d + 4; break
+    }
+    h *= 60
+    if (h < 0) h += 360
+  }
+
+  const s = d === 0 ? 0 : d / (1 - Math.abs(2 * l - 1))
+  return { h, s, l }
+}
+
+function hslToRgb(h: number, s: number, l: number): Rgb {
+  const hue = ((h % 360) + 360) % 360
+  const sat = clamp01(s)
+  const light = clamp01(l)
+  const c = (1 - Math.abs(2 * light - 1)) * sat
+  const x = c * (1 - Math.abs(((hue / 60) % 2) - 1))
+  const m = light - c / 2
+
+  let rp = 0
+  let gp = 0
+  let bp = 0
+  if (hue < 60) [rp, gp, bp] = [c, x, 0]
+  else if (hue < 120) [rp, gp, bp] = [x, c, 0]
+  else if (hue < 180) [rp, gp, bp] = [0, c, x]
+  else if (hue < 240) [rp, gp, bp] = [0, x, c]
+  else if (hue < 300) [rp, gp, bp] = [x, 0, c]
+  else [rp, gp, bp] = [c, 0, x]
+
+  return {
+    r: clampByte((rp + m) * 255),
+    g: clampByte((gp + m) * 255),
+    b: clampByte((bp + m) * 255),
+  }
+}
+
+function relativeLuminance(c: Rgb): number {
+  const linear = (v: number) => {
+    const srgb = v / 255
+    return srgb <= 0.04045 ? srgb / 12.92 : ((srgb + 0.055) / 1.055) ** 2.4
+  }
+  const r = linear(c.r)
+  const g = linear(c.g)
+  const b = linear(c.b)
+  return 0.2126 * r + 0.7152 * g + 0.0722 * b
+}
+
+function readAverageWallpaperColor(path: string): Rgb | null {
+  const resolved = resolveHomePath(path)
+  if (!resolved) return null
+  if (!GLib.file_test(resolved, GLib.FileTest.EXISTS)) return null
+
+  try {
+    const pixbuf = GdkPixbuf.Pixbuf.new_from_file_at_scale(resolved, 96, 96, true)
+    const rawPixels = pixbuf.get_pixels() as unknown as Uint8Array | number[]
+    const pixels = rawPixels instanceof Uint8Array ? rawPixels : new Uint8Array(rawPixels)
+    const width = pixbuf.get_width()
+    const height = pixbuf.get_height()
+    const rowstride = pixbuf.get_rowstride()
+    const channels = pixbuf.get_n_channels()
+
+    let sumR = 0
+    let sumG = 0
+    let sumB = 0
+    let weight = 0
+
+    for (let y = 0; y < height; y += 1) {
+      for (let x = 0; x < width; x += 1) {
+        const idx = y * rowstride + x * channels
+        const alpha = channels >= 4 ? pixels[idx + 3] / 255 : 1
+        if (alpha < 0.02) continue
+        sumR += pixels[idx] * alpha
+        sumG += pixels[idx + 1] * alpha
+        sumB += pixels[idx + 2] * alpha
+        weight += alpha
+      }
+    }
+
+    if (weight <= 0) return null
+    return {
+      r: clampByte(sumR / weight),
+      g: clampByte(sumG / weight),
+      b: clampByte(sumB / weight),
+    }
+  } catch {
+    return null
+  }
+}
+
+function deriveAdaptiveColors(base: ThemeColors, wallpaperPath: string): ThemeColors {
+  const avg =
+    readAverageWallpaperColor(wallpaperPath)
+    ?? parseHexColor(base.accent)
+    ?? parseHexColor(base.fg)
+    ?? FALLBACK_ACCENT
+
+  const wallpaperLuminance = relativeLuminance(avg)
+  const wallpaperIsDark = wallpaperLuminance < 0.52
+  const uiIsDark = wallpaperIsDark
+
+  const surface = uiIsDark
+    ? mixRgb(avg, { r: 10, g: 12, b: 17 }, 0.84)
+    : mixRgb(avg, { r: 247, g: 250, b: 255 }, 0.52)
+  const surfaceSolid = uiIsDark
+    ? mixRgb(surface, { r: 7, g: 9, b: 13 }, 0.45)
+    : mixRgb(surface, { r: 255, g: 255, b: 255 }, 0.18)
+  const surfaceDark = uiIsDark
+    ? mixRgb(surface, { r: 0, g: 0, b: 0 }, 0.38)
+    : mixRgb(surface, { r: 221, g: 227, b: 237 }, 0.52)
+
+  const hsl = rgbToHsl(avg)
+  const accentHue = hsl.s < 0.18 ? 205 : (hsl.h + 150) % 360
+  const accentSat = Math.min(0.88, Math.max(0.56, hsl.s + 0.2))
+  const accentLight = uiIsDark ? 0.64 : 0.38
+  const accent = hslToRgb(accentHue, accentSat, accentLight)
+
+  const fg = uiIsDark ? { r: 247, g: 249, b: 252 } : { r: 20, g: 24, b: 32 }
+  const fgDim = uiIsDark ? mixRgb(fg, surface, 0.32) : mixRgb(fg, surface, 0.4)
+  const fgFaint = uiIsDark ? mixRgb(fg, surface, 0.52) : mixRgb(fg, surface, 0.56)
+
+  const green = hslToRgb((accentHue + 118) % 360, 0.5, uiIsDark ? 0.58 : 0.4)
+  const teal = hslToRgb((accentHue + 84) % 360, 0.52, uiIsDark ? 0.62 : 0.42)
+  const magenta = hslToRgb((accentHue + 36) % 360, 0.58, uiIsDark ? 0.68 : 0.44)
+  const yellow = hslToRgb((accentHue + 176) % 360, 0.66, uiIsDark ? 0.66 : 0.45)
+  const red = hslToRgb((accentHue + 308) % 360, 0.66, uiIsDark ? 0.64 : 0.42)
+  const orange = hslToRgb((accentHue + 236) % 360, 0.64, uiIsDark ? 0.62 : 0.44)
+
+  return {
+    bg: rgba(surface, uiIsDark ? 0.84 : 0.9),
+    bg_solid: rgba(surfaceSolid, uiIsDark ? 0.96 : 0.94),
+    bg_dark: rgba(surfaceDark, uiIsDark ? 0.98 : 0.97),
+    fg: rgbToHex(fg),
+    fg_dim: rgbToHex(fgDim),
+    fg_faint: rgba(fgFaint, uiIsDark ? 0.78 : 0.82),
+    accent: rgbToHex(accent),
+    accent_dim: rgba(accent, uiIsDark ? 0.26 : 0.2),
+    accent_glow: rgba(accent, uiIsDark ? 0.14 : 0.12),
+    green: rgbToHex(green),
+    teal: rgbToHex(teal),
+    magenta: rgbToHex(magenta),
+    yellow: rgbToHex(yellow),
+    red: rgbToHex(red),
+    orange: rgbToHex(orange),
+  }
 }
 
 function getCurrentThemeId(): string {
@@ -102,7 +322,7 @@ function listWallpapers(themeId: string): string[] {
 
 function setWallpaper(path: string) {
   execAsync([
-    "swww", "img", path,
+    "swww", "img", resolveHomePath(path),
     "--transition-type", "wipe",
     "--transition-angle", "30",
     "--transition-duration", "0.8",
@@ -110,25 +330,44 @@ function setWallpaper(path: string) {
 }
 
 function saveCurrentWallpaper(themeId: string, path: string) {
-  execAsync([
-    "bash", "-c",
-    `jq --arg w "${path}" '.wallpaper = $w' "${THEMES_DIR}/${themeId}.json" > /tmp/theme-tmp.json && mv /tmp/theme-tmp.json "${THEMES_DIR}/${themeId}.json"`,
-  ]).catch(console.error)
+  const updateFile = (filePath: string) => {
+    try {
+      const [ok, bytes] = GLib.file_get_contents(filePath)
+      if (!ok) return
+      const parsed = JSON.parse(new TextDecoder().decode(bytes)) as ThemePreset
+      parsed.wallpaper = path
+      GLib.file_set_contents(filePath, `${JSON.stringify(parsed, null, 2)}\n`)
+    } catch {
+      // ignore invalid or missing file
+    }
+  }
+
+  updateFile(`${THEMES_DIR}/${themeId}.json`)
+  if (getCurrentThemeId() === themeId) {
+    updateFile(CURRENT_THEME_FILE)
+  }
 }
 
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 // CSS GENERATOR (exported for app.tsx)
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-export function generateThemeCSS(preset: ThemePreset): string {
-  const c = preset.colors
-  return `
-/* ── Theme: ${preset.name} ── auto-generated ── */
+export function generateThemeCSS(preset: ThemePreset, wallpaperOverride = ""): string {
+  const c = deriveAdaptiveColors(
+    preset.colors,
+    wallpaperOverride || preset.wallpaper || "",
+  )
+  const barBg = toOpaqueColor(c.bg)
+  const barBgSolid = toOpaqueColor(c.bg_solid)
+  const barBgDark = toOpaqueColor(c.bg_dark)
+  const css = `
+/* ── Theme: ${preset.name} ── adaptive from wallpaper average ── */
 @define-color theme_bg           ${c.bg};
 @define-color theme_bg_solid     ${c.bg_solid};
 @define-color theme_bg_dark      ${c.bg_dark};
 @define-color theme_fg           ${c.fg};
 @define-color theme_fg_dim       ${c.fg_dim};
+@define-color theme_fg_faint     ${c.fg_faint};
 @define-color theme_accent       ${c.accent};
 @define-color theme_accent_dim   ${c.accent_dim};
 @define-color theme_accent_glow  ${c.accent_glow};
@@ -138,7 +377,225 @@ export function generateThemeCSS(preset: ThemePreset): string {
 @define-color theme_yellow       ${c.yellow};
 @define-color theme_red          ${c.red};
 @define-color theme_orange       ${c.orange};
+
+* {
+  color: ${c.fg};
+}
+
+window {
+  color: ${c.fg} !important;
+}
+
+window > box.bar-shell {
+  background: linear-gradient(165deg, ${barBgSolid} 0%, ${barBg} 60%, ${barBgDark} 100%) !important;
+  border-color: ${c.accent_dim} !important;
+  box-shadow: none !important;
+}
+
+.bar-shell .bar-cluster,
+.workspaces,
+.active-window,
+.clock {
+  background: ${barBg} !important;
+  border-color: ${c.accent_dim} !important;
+}
+
+.bar-shell .bar-cluster-status {
+  background: ${barBgDark} !important;
+  border-color: ${c.accent_dim} !important;
+}
+
+.bar-shell .bar-divider {
+  background: ${c.accent_dim} !important;
+}
+
+.workspaces button {
+  color: ${c.fg_dim} !important;
+}
+
+.workspaces button:hover {
+  background: ${c.accent_glow} !important;
+  color: ${c.fg} !important;
+}
+
+.workspaces button.focused {
+  color: ${c.fg} !important;
+  background: ${c.accent_dim} !important;
+  border-color: ${c.accent} !important;
+}
+
+.active-window .active-window-icon,
+.ts-header-icon,
+.ts-wp-icon,
+.wifi-header-icon,
+.bluetooth-header-icon {
+  color: ${c.fg} !important;
+}
+
+.volume-percent,
+.battery-percent,
+.media-title-bar,
+.clock-time,
+.clock-date,
+.active-window label,
+.notification-count {
+  color: ${c.fg} !important;
+}
+
+button,
+menubutton > button,
+.session-button,
+.notification-action,
+.ts-apply-btn,
+.applauncher-item,
+.theme-row,
+.wifi-network-btn,
+.wifi-action-btn,
+.bluetooth-device-btn,
+.battery-profile-btn {
+  color: ${c.fg} !important;
+}
+
+button:hover,
+menubutton > button:hover,
+.session-button:hover,
+.notification-action:hover,
+.ts-apply-btn:hover,
+.applauncher-item:hover,
+.theme-row:hover,
+.wifi-network-btn:hover,
+.wifi-action-btn:hover,
+.bluetooth-device-btn:hover,
+.battery-profile-btn:hover {
+  background: ${c.accent_glow} !important;
+  border-color: ${c.accent_dim} !important;
+}
+
+popover > contents,
+.notification,
+.notification-center,
+.applauncher,
+.session-menu,
+.osd,
+.ts-panel,
+.dw-clock-card,
+.dw-stats-card,
+.dw-viz-card,
+.dw-np-card {
+  background: ${c.bg_solid} !important;
+  border-color: ${c.accent_dim} !important;
+  color: ${c.fg} !important;
+}
+
+.notification-body,
+.notification-appname,
+.notification-history-meta label,
+.applauncher-footer-text,
+.applauncher-count,
+.applauncher-desc,
+.ts-footer-text,
+.ts-wp-dir,
+.ts-wp-empty-hint,
+.theme-row-desc,
+.wifi-subtitle,
+.battery-popup-status,
+.osd-percent {
+  color: ${c.fg_dim} !important;
+}
+
+.theme-row-badge,
+.applauncher-key,
+.ts-key,
+.notification-history-urgency,
+.wifi-status-row,
+.notification-dnd-toggle,
+.notification-clear-all,
+.notification-clear-history {
+  background: ${c.accent_dim} !important;
+  color: ${c.fg} !important;
+  border-color: ${c.accent} !important;
+}
+
+.applauncher-entry {
+  color: ${c.fg} !important;
+  caret-color: ${c.accent} !important;
+  border-color: ${c.accent_dim} !important;
+  background: ${c.bg_dark} !important;
+}
+
+.applauncher-entry selection {
+  background: ${c.accent_dim} !important;
+  color: ${c.fg} !important;
+}
+
+slider highlight,
+levelbar block.filled,
+.osd-level block.filled {
+  background: ${c.accent} !important;
+}
+
+entry,
+textarea {
+  color: ${c.fg} !important;
+}
+
+.bar-shell image,
+.bar-shell label,
+.notification-center image,
+.notification-center label,
+.notification image,
+.notification label,
+.applauncher image,
+.applauncher label,
+.session-menu image,
+.session-menu label,
+.osd image,
+.osd label,
+.ts-panel image,
+.ts-panel label,
+.desktop-widgets image,
+.desktop-widgets label {
+  color: ${c.fg} !important;
+}
+
+.bar-shell button,
+.notification-center button,
+.notification button,
+.applauncher button,
+.session-menu button,
+.ts-panel button,
+.desktop-widgets button,
+.desktop-widgets levelbar,
+.osd levelbar {
+  border-color: ${c.accent_dim} !important;
+}
+
+.bar-shell button:hover,
+.notification-center button:hover,
+.notification button:hover,
+.applauncher button:hover,
+.session-menu button:hover,
+.ts-panel button:hover,
+.desktop-widgets button:hover {
+  background: ${c.accent_glow} !important;
+}
 `
+
+  // GTK CSS parser does not support !important; strip it from generated output.
+  return css.replaceAll(" !important", "")
+}
+
+export function applyGeneratedThemeCSS(preset: ThemePreset, wallpaperOverride = "") {
+  const css = generateThemeCSS(preset, wallpaperOverride)
+  const stamped = `${css}\n/* apply-ts:${Date.now()} */\n`
+
+  try {
+    GLib.mkdir_with_parents(DYNAMIC_THEME_DIR, 0o755)
+    GLib.file_set_contents(DYNAMIC_THEME_FILE, stamped)
+    app.apply_css(`${baseStyle}\n${stamped}`, true)
+  } catch (e) {
+    console.error("applyGeneratedThemeCSS: failed:", e)
+  }
 }
 
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -290,10 +747,10 @@ export function ThemeSwitcher({ gdkmonitor }: { gdkmonitor: Gdk.Monitor }) {
     }
   }
 
-  const applyThemeCssImmediately = (id: string) => {
+  const applyThemeCssImmediately = (id: string, wallpaperOverride = "") => {
     const preset = findTheme(id)
     if (!preset) return
-    app.apply_css(generateThemeCSS(preset), false)
+    applyGeneratedThemeCSS(preset, wallpaperOverride)
   }
 
   const syncActiveTheme = (id: string) => {
@@ -357,15 +814,17 @@ export function ThemeSwitcher({ gdkmonitor }: { gdkmonitor: Gdk.Monitor }) {
         const thumb = WallpaperThumb(path, isActive, () => {
           activeWallpaper = path
           const themeChanged = selectedThemeId !== activeThemeId
+          const selected = findTheme(selectedThemeId)
+          if (selected) selected.wallpaper = path
 
           setWallpaper(path)
           saveCurrentWallpaper(selectedThemeId, path)
+          applyThemeCssImmediately(selectedThemeId, path)
 
           // Also apply the theme if not already active.
           if (themeChanged) {
             syncActiveTheme(selectedThemeId)
             activeWallpaper = path
-            applyThemeCssImmediately(selectedThemeId)
             applyTheme(selectedThemeId)
             rebuildThemeList()
           }
@@ -392,7 +851,7 @@ export function ThemeSwitcher({ gdkmonitor }: { gdkmonitor: Gdk.Monitor }) {
   // ── Apply theme button ───────────────────────────────────
   const applySelectedTheme = () => {
     syncActiveTheme(selectedThemeId)
-    applyThemeCssImmediately(selectedThemeId)
+    applyThemeCssImmediately(selectedThemeId, activeWallpaper)
     applyTheme(selectedThemeId)
     rebuildThemeList()
     refreshWallpaperActiveState()
