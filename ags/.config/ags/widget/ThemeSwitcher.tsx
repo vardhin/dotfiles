@@ -322,7 +322,7 @@ function listWallpapers(themeId: string): string[] {
 
 function setWallpaper(path: string) {
   execAsync([
-    "swww", "img", resolveHomePath(path),
+    "awww", "img", resolveHomePath(path),
     "--transition-type", "wipe",
     "--transition-angle", "30",
     "--transition-duration", "0.8",

@@ -94,7 +94,7 @@ if [[ "$WALLPAPER" == ~/* ]]; then
 fi
 
 if [[ -n "$WALLPAPER" && -f "$WALLPAPER" ]]; then
-  swww img "$WALLPAPER" \
+  awww img "$WALLPAPER" \
     --transition-type wipe \
     --transition-angle 30 \
     --transition-duration 0.8
