@@ -188,6 +188,7 @@ export function AppLauncher({ gdkmonitor }: { gdkmonitor: Gdk.Monitor }) {
       gdkmonitor={gdkmonitor}
       exclusivity={Astal.Exclusivity.IGNORE}
       keymode={Astal.Keymode.EXCLUSIVE}
+      layer={Astal.Layer.OVERLAY}
       anchor={TOP | BOTTOM | LEFT | RIGHT}
       application={app}
     >

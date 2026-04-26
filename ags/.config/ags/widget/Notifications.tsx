@@ -281,7 +281,7 @@ export function NotificationCenter({ gdkmonitor }: { gdkmonitor: Gdk.Monitor }) 
   const history = createPoll([] as NotificationHistoryItem[], 3000, () => loadNotificationHistory(45))
 
   let win: Astal.Window | null = null
-  const { TOP, RIGHT, BOTTOM } = Astal.WindowAnchor
+  const { TOP, RIGHT, BOTTOM, LEFT } = Astal.WindowAnchor
 
   const hide = () => {
     if (win) win.visible = false
@@ -306,101 +306,116 @@ export function NotificationCenter({ gdkmonitor }: { gdkmonitor: Gdk.Monitor }) 
       namespace="ags-notification-center"
       name="notification-center"
       gdkmonitor={gdkmonitor}
-      exclusivity={Astal.Exclusivity.NORMAL}
-      anchor={TOP | RIGHT | BOTTOM}
+      exclusivity={Astal.Exclusivity.IGNORE}
       keymode={Astal.Keymode.ON_DEMAND}
+      layer={Astal.Layer.OVERLAY}
+      anchor={TOP | RIGHT | BOTTOM | LEFT}
       application={app}
     >
-      <box orientation={Gtk.Orientation.VERTICAL} class="notification-center" widthRequest={420}>
-        <box class="notification-center-header" spacing={8}>
-          <image iconName="preferences-system-notifications-symbolic" pixelSize={20} class="notification-center-icon" />
-          <label class="notification-center-title" label="Notifications" hexpand xalign={0} />
-          <button
-            class="notification-dnd-toggle"
-            tooltipText="Toggle Do Not Disturb"
-            onClicked={() => {
-              notifd.dontDisturb = !notifd.dontDisturb
-            }}
-          >
-            <image
-              iconName={createBinding(notifd, "dontDisturb")((dnd) =>
-                dnd ? "notifications-disabled-symbolic" : "user-available-symbolic"
-              )}
-              pixelSize={16}
-            />
-          </button>
-          <button
-            class="notification-clear-all"
-            onClicked={() => {
-              for (const n of notifd.get_notifications()) n.dismiss()
-            }}
-            tooltipText="Clear active notifications"
-          >
-            <box spacing={4}>
-              <image iconName="user-trash-symbolic" pixelSize={14} />
-              <label label="Clear Live" />
-            </box>
-          </button>
-          <button
-            class="notification-clear-history"
-            onClicked={() => {
-              clearNotificationHistory()
-            }}
-            tooltipText="Clear notification history"
-          >
-            <box spacing={4}>
-              <image iconName="edit-clear-all-symbolic" pixelSize={14} />
-              <label label="Clear History" />
-            </box>
-          </button>
-        </box>
-        <Gtk.ScrolledWindow vexpand hscrollbarPolicy={Gtk.PolicyType.NEVER}>
-          <box orientation={Gtk.Orientation.VERTICAL} spacing={6} class="notification-center-list">
-            <box class="notification-center-section-header" spacing={8}>
-              <label class="notification-center-section-title" label="Active" xalign={0} hexpand />
-              <label class="notification-center-section-count" label={notifications((n) => `${n.length}`)} />
-            </box>
-            <For each={notifications}>
-              {(n) => <NotificationWidget notification={n} autoDismiss={false} />}
-            </For>
-            <box
-              class="notification-placeholder"
-              visible={notifications((n) => n.length === 0)}
-              halign={Gtk.Align.CENTER}
-              valign={Gtk.Align.CENTER}
-              orientation={Gtk.Orientation.VERTICAL}
-              spacing={12}
-              vexpand
+      <overlay>
+        <button class="notification-center-backdrop" hexpand vexpand onClicked={hide}>
+          <box />
+        </button>
+
+        <box
+          $type="overlay"
+          orientation={Gtk.Orientation.VERTICAL}
+          class="notification-center"
+          widthRequest={420}
+          halign={Gtk.Align.END}
+          valign={Gtk.Align.FILL}
+          vexpand
+        >
+          <box class="notification-center-header" spacing={8}>
+            <image iconName="preferences-system-notifications-symbolic" pixelSize={20} class="notification-center-icon" />
+            <label class="notification-center-title" label="Notifications" hexpand xalign={0} />
+            <button
+              class="notification-dnd-toggle"
+              tooltipText="Toggle Do Not Disturb"
+              onClicked={() => {
+                notifd.dontDisturb = !notifd.dontDisturb
+              }}
             >
-              <image iconName="preferences-system-notifications-symbolic" pixelSize={64} class="placeholder-icon" />
-              <label label="All caught up!" class="dim-label" />
-              <label label="No new notifications" class="dim-sublabel" />
-            </box>
-
-            <box class="notification-center-history-separator" />
-
-            <box class="notification-center-section-header" spacing={8}>
-              <label class="notification-center-section-title" label="History" xalign={0} hexpand />
-              <label class="notification-center-section-count" label={history((h) => `${h.length}`)} />
-            </box>
-
-            <For each={history}>
-              {(item) => <NotificationHistoryCard item={item} />}
-            </For>
-
-            <box
-              class="notification-history-empty"
-              visible={history((h) => h.length === 0)}
-              halign={Gtk.Align.CENTER}
-              orientation={Gtk.Orientation.VERTICAL}
-              spacing={8}
+              <image
+                iconName={createBinding(notifd, "dontDisturb")((dnd) =>
+                  dnd ? "notifications-disabled-symbolic" : "user-available-symbolic"
+                )}
+                pixelSize={16}
+              />
+            </button>
+            <button
+              class="notification-clear-all"
+              onClicked={() => {
+                for (const n of notifd.get_notifications()) n.dismiss()
+              }}
+              tooltipText="Clear active notifications"
             >
-              <image iconName="document-open-recent-symbolic" pixelSize={36} class="placeholder-icon" />
-              <label label="No history yet" class="dim-sublabel" />
-            </box>
+              <box spacing={4}>
+                <image iconName="user-trash-symbolic" pixelSize={14} />
+                <label label="Clear Live" />
+              </box>
+            </button>
+            <button
+              class="notification-clear-history"
+              onClicked={() => {
+                clearNotificationHistory()
+              }}
+              tooltipText="Clear notification history"
+            >
+              <box spacing={4}>
+                <image iconName="edit-clear-all-symbolic" pixelSize={14} />
+                <label label="Clear History" />
+              </box>
+            </button>
           </box>
-        </Gtk.ScrolledWindow>
-      </box>
+          <Gtk.ScrolledWindow vexpand hscrollbarPolicy={Gtk.PolicyType.NEVER}>
+            <box orientation={Gtk.Orientation.VERTICAL} spacing={6} class="notification-center-list">
+              <box class="notification-center-section-header" spacing={8}>
+                <label class="notification-center-section-title" label="Active" xalign={0} hexpand />
+                <label class="notification-center-section-count" label={notifications((n) => `${n.length}`)} />
+              </box>
+              <For each={notifications}>
+                {(n) => <NotificationWidget notification={n} autoDismiss={false} />}
+              </For>
+              <box
+                class="notification-placeholder"
+                visible={notifications((n) => n.length === 0)}
+                halign={Gtk.Align.CENTER}
+                valign={Gtk.Align.CENTER}
+                orientation={Gtk.Orientation.VERTICAL}
+                spacing={12}
+                vexpand
+              >
+                <image iconName="preferences-system-notifications-symbolic" pixelSize={64} class="placeholder-icon" />
+                <label label="All caught up!" class="dim-label" />
+                <label label="No new notifications" class="dim-sublabel" />
+              </box>
+
+              <box class="notification-center-history-separator" />
+
+              <box class="notification-center-section-header" spacing={8}>
+                <label class="notification-center-section-title" label="History" xalign={0} hexpand />
+                <label class="notification-center-section-count" label={history((h) => `${h.length}`)} />
+              </box>
+
+              <For each={history}>
+                {(item) => <NotificationHistoryCard item={item} />}
+              </For>
+
+              <box
+                class="notification-history-empty"
+                visible={history((h) => h.length === 0)}
+                halign={Gtk.Align.CENTER}
+                orientation={Gtk.Orientation.VERTICAL}
+                spacing={8}
+              >
+                <image iconName="document-open-recent-symbolic" pixelSize={36} class="placeholder-icon" />
+                <label label="No history yet" class="dim-sublabel" />
+              </box>
+            </box>
+          </Gtk.ScrolledWindow>
+        </box>
+      </overlay>
     </window>
   )
 }

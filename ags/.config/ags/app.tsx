@@ -1,13 +1,22 @@
 import app from "ags/gtk4/app"
 import { createBinding, For, This } from "ags"
 import style from "./style.scss"
-import Bar from "./widget/Bar"
+import Bar, {
+  BatteryPopover,
+  BluetoothPopover,
+  BrightnessPopover,
+  ClockPopover,
+  MediaPopover,
+  VolumePopover,
+  WifiPopover,
+} from "./widget/Bar"
 import { NotificationPopups, NotificationCenter } from "./widget/Notifications"
 import { OSD } from "./widget/OSD"
 import { AppLauncher } from "./widget/AppLauncher"
 import { SessionMenu } from "./widget/Session"
 import { DesktopWidgets } from "./widget/DesktopWidgets"
 import { ThemeSwitcher, applyGeneratedThemeCSS } from "./widget/ThemeSwitcher"
+import { startBatteryMonitor } from "./lib/batteryMonitor"
 import GLib from "gi://GLib"
 import Gtk from "gi://Gtk?version=4.0"
 import Gdk from "gi://Gdk?version=4.0"
@@ -38,6 +47,9 @@ app.start({
       const iconTheme = Gtk.IconTheme.get_for_display(display)
       iconTheme.add_search_path(`${GLib.get_home_dir()}/.config/ags/assets/icons`)
     }
+
+    // Battery monitor: charger events + low-power warnings + 5% emergency shutdown.
+    startBatteryMonitor()
 
     // Apply saved theme override CSS on top of base stylesheet
     const savedPreset = loadSavedThemePreset()
@@ -84,6 +96,13 @@ app.start({
           return (
             <This this={app}>
               <Bar gdkmonitor={monitor} />
+              <ClockPopover gdkmonitor={monitor} />
+              <MediaPopover gdkmonitor={monitor} />
+              <VolumePopover gdkmonitor={monitor} />
+              <BrightnessPopover gdkmonitor={monitor} />
+              <WifiPopover gdkmonitor={monitor} />
+              <BluetoothPopover gdkmonitor={monitor} />
+              <BatteryPopover gdkmonitor={monitor} />
               <NotificationPopups gdkmonitor={monitor} />
               <OSD gdkmonitor={monitor} />
               {needsLauncher && <AppLauncher gdkmonitor={monitor} />}

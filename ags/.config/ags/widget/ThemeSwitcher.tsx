@@ -115,12 +115,6 @@ function rgba(c: Rgb, alpha: number): string {
   return `rgba(${clampByte(c.r)}, ${clampByte(c.g)}, ${clampByte(c.b)}, ${clamp01(alpha).toFixed(3)})`
 }
 
-function toOpaqueColor(color: string): string {
-  const m = color.match(/^rgba\(\s*([\d.]+)\s*,\s*([\d.]+)\s*,\s*([\d.]+)\s*,\s*[\d.]+\s*\)$/)
-  if (!m) return color
-  return `rgb(${m[1]}, ${m[2]}, ${m[3]})`
-}
-
 function parseHexColor(input: string): Rgb | null {
   const m = input.trim().match(/^#?([0-9a-fA-F]{6})$/)
   if (!m) return null
@@ -256,9 +250,11 @@ function deriveAdaptiveColors(base: ThemeColors, wallpaperPath: string): ThemeCo
     : mixRgb(surface, { r: 221, g: 227, b: 237 }, 0.52)
 
   const hsl = rgbToHsl(avg)
-  const accentHue = hsl.s < 0.18 ? 205 : (hsl.h + 150) % 360
-  const accentSat = Math.min(0.88, Math.max(0.56, hsl.s + 0.2))
-  const accentLight = uiIsDark ? 0.64 : 0.38
+  // Use the wallpaper's own dominant hue as the accent (not its complement).
+  // If the wallpaper is near-grayscale, fall back to a cool blue.
+  const accentHue = hsl.s < 0.12 ? 205 : hsl.h
+  const accentSat = Math.min(0.92, Math.max(0.62, hsl.s + 0.25))
+  const accentLight = uiIsDark ? 0.66 : 0.4
   const accent = hslToRgb(accentHue, accentSat, accentLight)
 
   const fg = uiIsDark ? { r: 247, g: 249, b: 252 } : { r: 20, g: 24, b: 32 }
@@ -273,9 +269,9 @@ function deriveAdaptiveColors(base: ThemeColors, wallpaperPath: string): ThemeCo
   const orange = hslToRgb((accentHue + 236) % 360, 0.64, uiIsDark ? 0.62 : 0.44)
 
   return {
-    bg: rgba(surface, uiIsDark ? 0.84 : 0.9),
-    bg_solid: rgba(surfaceSolid, uiIsDark ? 0.96 : 0.94),
-    bg_dark: rgba(surfaceDark, uiIsDark ? 0.98 : 0.97),
+    bg: rgba(surface, uiIsDark ? 0.42 : 0.5),
+    bg_solid: rgba(surfaceSolid, uiIsDark ? 0.58 : 0.62),
+    bg_dark: rgba(surfaceDark, uiIsDark ? 0.5 : 0.55),
     fg: rgbToHex(fg),
     fg_dim: rgbToHex(fgDim),
     fg_faint: rgba(fgFaint, uiIsDark ? 0.78 : 0.82),
@@ -357,9 +353,10 @@ export function generateThemeCSS(preset: ThemePreset, wallpaperOverride = ""): s
     preset.colors,
     wallpaperOverride || preset.wallpaper || "",
   )
-  const barBg = toOpaqueColor(c.bg)
-  const barBgSolid = toOpaqueColor(c.bg_solid)
-  const barBgDark = toOpaqueColor(c.bg_dark)
+  // Keep alpha so Hyprland layer blur (configured in windowrules.conf) shows through.
+  const barBg = c.bg
+  const barBgSolid = c.bg_solid
+  const barBgDark = c.bg_dark
   const css = `
 /* ── Theme: ${preset.name} ── adaptive from wallpaper average ── */
 @define-color theme_bg           ${c.bg};
@@ -386,23 +383,33 @@ window {
   color: ${c.fg} !important;
 }
 
+/* Single translucent shell — Hyprland blur + wallpaper accent tint */
 window > box.bar-shell {
   background: linear-gradient(165deg, ${barBgSolid} 0%, ${barBg} 60%, ${barBgDark} 100%) !important;
   border-color: ${c.accent_dim} !important;
   box-shadow: none !important;
 }
 
+/* Lanes & legacy cluster wrappers stay flat — they're layout only */
 .bar-shell .bar-cluster,
+.bar-shell .bar-cluster-tray,
+.bar-shell .bar-cluster-status,
+.bar-shell .bar-lane,
 .workspaces,
 .active-window,
-.clock {
-  background: ${barBg} !important;
-  border-color: ${c.accent_dim} !important;
-}
-
-.bar-shell .bar-cluster-status {
-  background: ${barBgDark} !important;
-  border-color: ${c.accent_dim} !important;
+.clock,
+.systray,
+.volume,
+.brightness,
+.wifi,
+.bluetooth,
+.battery,
+.notification-bell,
+.theme-launcher,
+.media,
+.media-player {
+  background: transparent !important;
+  border-color: transparent !important;
 }
 
 .bar-shell .bar-divider {
@@ -415,6 +422,7 @@ window > box.bar-shell {
 
 .workspaces button:hover {
   background: ${c.accent_glow} !important;
+  border-color: ${c.accent_dim} !important;
   color: ${c.fg} !important;
 }
 
@@ -471,13 +479,21 @@ menubutton > button:hover,
   border-color: ${c.accent_dim} !important;
 }
 
-popover > contents,
+.ts-backdrop,
+.popover-backdrop,
+.notification-center-backdrop,
+.ts-backdrop:hover,
+.popover-backdrop:hover,
+.notification-center-backdrop:hover {
+  background: transparent !important;
+  border-color: transparent !important;
+}
+
 .notification,
 .notification-center,
 .applauncher,
 .session-menu,
 .osd,
-.ts-panel,
 .dw-clock-card,
 .dw-stats-card,
 .dw-viz-card,
@@ -485,6 +501,163 @@ popover > contents,
   background: ${c.bg_solid} !important;
   border-color: ${c.accent_dim} !important;
   color: ${c.fg} !important;
+}
+
+.ts-panel {
+  background: ${c.bg} !important;
+  border-color: ${c.accent_dim} !important;
+  color: ${c.fg} !important;
+}
+
+.ts-left,
+.ts-apply-row {
+  background: ${c.bg_dark} !important;
+}
+
+.ts-vsep,
+.ts-divider {
+  background: ${c.accent_dim} !important;
+}
+
+.theme-row.theme-row-active {
+  border-color: ${c.accent} !important;
+}
+
+.theme-row .theme-row-badge,
+.ts-apply-row .ts-apply-btn label,
+.ts-apply-row .ts-apply-btn image {
+  color: ${c.accent} !important;
+}
+
+.ts-apply-row .ts-apply-btn {
+  background: ${c.accent_dim} !important;
+  border-color: ${c.accent} !important;
+}
+
+.ts-apply-row .ts-apply-btn:hover {
+  background: ${c.accent_glow} !important;
+  border-color: ${c.accent} !important;
+}
+
+/* Bar popovers — use the lower-alpha surface so Hyprland's blur shows
+ * through, matching the frosted look of the notification center. */
+popover > contents {
+  background: ${c.bg} !important;
+  border-color: ${c.accent_dim} !important;
+  color: ${c.fg} !important;
+}
+
+.bar-popup-window,
+.wifi-popup-window {
+  background: ${c.bg} !important;
+  border-color: ${c.accent_dim} !important;
+  color: ${c.fg} !important;
+}
+
+/* Inner popup containers stay transparent — the frosty bg is on
+ * popover > contents. Track accent colors on their accent-colored
+ * children so they follow the wallpaper-derived accent. */
+.wifi-popup,
+.bluetooth-popup,
+.battery-popup,
+.volume-popup,
+.brightness-popup,
+.media-popup {
+  background: transparent !important;
+  color: ${c.fg} !important;
+}
+
+.wifi-popup .wifi-header-icon,
+.bluetooth-popup .bluetooth-header-icon,
+.wifi-popup .wifi-scan-btn image,
+.bluetooth-popup .bluetooth-scan-btn image,
+.bluetooth-popup .bluetooth-toggle-btn.active,
+.bluetooth-popup .bluetooth-device-btn image,
+.bluetooth .bluetooth-count,
+.wifi-popup .wifi-network-btn image,
+.wifi-popup .wifi-action-btn.connect,
+.wifi-popup .wifi-settings-btn image,
+.battery-popup .battery-big-icon,
+.battery-popup .battery-profile-btn image,
+.volume-popup .volume-mute-btn image,
+.brightness-popup .brightness-icon,
+.brightness-popup .night-light-icon,
+.brightness-popup .night-light-toggle.active {
+  color: ${c.accent} !important;
+}
+
+.bluetooth .bluetooth-count {
+  background: ${c.accent} !important;
+  color: ${c.bg_dark} !important;
+}
+
+.wifi-popup .wifi-status-row.info,
+.wifi-popup .wifi-status-row.info .wifi-status-icon,
+.wifi-popup .wifi-status-row.info .wifi-status-label {
+  border-color: ${c.accent_dim} !important;
+  color: ${c.accent} !important;
+}
+
+.wifi-popup .wifi-scan-btn,
+.wifi-popup .wifi-network-btn,
+.wifi-popup .wifi-settings-btn,
+.bluetooth-popup .bluetooth-scan-btn,
+.bluetooth-popup .bluetooth-device-btn,
+.bluetooth-popup .bluetooth-toggle-btn,
+.battery-popup .battery-profile-btn {
+  border-color: transparent !important;
+}
+
+.wifi-popup .wifi-scan-btn:hover,
+.wifi-popup .wifi-network-btn:hover,
+.wifi-popup .wifi-settings-btn:hover,
+.bluetooth-popup .bluetooth-scan-btn:hover,
+.bluetooth-popup .bluetooth-device-btn:hover,
+.bluetooth-popup .bluetooth-toggle-btn:hover,
+.battery-popup .battery-profile-btn:hover {
+  background: ${c.accent_glow} !important;
+  border-color: ${c.accent_dim} !important;
+}
+
+.wifi-popup .wifi-action-btn.connect {
+  background: ${c.accent_glow} !important;
+  border-color: ${c.accent_dim} !important;
+}
+
+.wifi-popup .wifi-action-btn.connect:hover {
+  background: ${c.accent_dim} !important;
+  border-color: ${c.accent} !important;
+}
+
+.media-popup .media-control-btn:hover,
+.media-popup .media-play-btn {
+  background: ${c.accent_dim} !important;
+  border-color: ${c.accent} !important;
+}
+
+.media-popup .media-play-btn:hover {
+  background: ${c.accent} !important;
+}
+
+slider highlight,
+.volume-popup .volume-slider highlight,
+.brightness-popup .brightness-slider highlight,
+.media-popup .media-progress highlight {
+  background: ${c.accent} !important;
+}
+
+.brightness-popup .night-light-toggle {
+  border-color: ${c.accent_dim} !important;
+}
+
+.brightness-popup .night-light-toggle:hover {
+  background: ${c.accent_glow} !important;
+  border-color: ${c.accent} !important;
+}
+
+.brightness-popup .night-light-toggle.active {
+  background: ${c.accent_dim} !important;
+  border-color: ${c.accent} !important;
 }
 
 .notification-body,
@@ -499,15 +672,16 @@ popover > contents,
 .theme-row-desc,
 .wifi-subtitle,
 .battery-popup-status,
+.brightness-popup .night-light-label,
 .osd-percent {
   color: ${c.fg_dim} !important;
 }
 
-.theme-row-badge,
+.theme-row .theme-row-badge,
 .applauncher-key,
 .ts-key,
 .notification-history-urgency,
-.wifi-status-row,
+.wifi-popup .wifi-status-row,
 .notification-dnd-toggle,
 .notification-clear-all,
 .notification-clear-history {
@@ -532,6 +706,32 @@ slider highlight,
 levelbar block.filled,
 .osd-level block.filled {
   background: ${c.accent} !important;
+}
+
+/* Active/selected state across popovers — battery profile, wifi network,
+ * bluetooth device, etc. The base SCSS uses $accent rgbas for these, but
+ * we re-emit them here so they track the wallpaper-derived accent. */
+.battery-popup .battery-profile-btn.active,
+.wifi-popup .wifi-network-btn.active,
+.wifi-popup .wifi-network-row.active .wifi-network-btn,
+.bluetooth-popup .bluetooth-device-btn.connected,
+.bluetooth-popup .bluetooth-toggle-btn.active {
+  background: ${c.accent_dim} !important;
+  border-color: ${c.accent} !important;
+  color: ${c.fg} !important;
+}
+
+.battery-popup .battery-check,
+.wifi-popup .wifi-status-row.ok .wifi-status-icon,
+.wifi-popup .wifi-status-row.ok .wifi-status-label {
+  color: ${c.green} !important;
+}
+
+.wifi-popup .wifi-status-row.err .wifi-status-icon,
+.wifi-popup .wifi-status-row.err .wifi-status-label,
+.wifi-popup .wifi-action-btn.forget,
+.wifi-popup .wifi-action-btn.disconnect {
+  color: ${c.red} !important;
 }
 
 entry,
@@ -559,6 +759,7 @@ textarea {
 }
 
 .bar-shell button,
+.bar-shell menubutton > button,
 .notification-center button,
 .notification button,
 .applauncher button,
@@ -567,10 +768,12 @@ textarea {
 .desktop-widgets button,
 .desktop-widgets levelbar,
 .osd levelbar {
-  border-color: ${c.accent_dim} !important;
+  border-color: transparent !important;
+  background: transparent !important;
 }
 
 .bar-shell button:hover,
+.bar-shell menubutton > button:hover,
 .notification-center button:hover,
 .notification button:hover,
 .applauncher button:hover,
@@ -578,6 +781,7 @@ textarea {
 .ts-panel button:hover,
 .desktop-widgets button:hover {
   background: ${c.accent_glow} !important;
+  border-color: ${c.accent_dim} !important;
 }
 `
 

@@ -13,6 +13,7 @@ import AstalNotifd from "gi://AstalNotifd"
 import { For, With, createBinding, onCleanup } from "ags"
 import { createPoll } from "ags/time"
 import { execAsync } from "ags/process"
+import { notify } from "../lib/notify"
 
 function svgIcon(name: string): string {
   return `ags-${name}-symbolic`
@@ -41,11 +42,59 @@ function micGlyph(level: number, muted: boolean): string {
   return svgIcon("mic")
 }
 
+type BarPopoverKind = "clock" | "media" | "volume" | "brightness" | "wifi" | "bluetooth" | "battery"
+
+const BAR_POPOVER_KINDS: BarPopoverKind[] = [
+  "clock",
+  "media",
+  "volume",
+  "brightness",
+  "wifi",
+  "bluetooth",
+  "battery",
+]
+
+const BAR_POPOVER_TOP_MARGIN = 50
+const BAR_POPOVER_RIGHT_MARGIN: Record<Exclude<BarPopoverKind, "clock" | "media">, number> = {
+  volume: 188,
+  brightness: 140,
+  wifi: 92,
+  bluetooth: 52,
+  battery: 12,
+}
+const BAR_POPOVER_CLOCK_LEFT_MARGIN = 88
+
+function barPopoverName(kind: BarPopoverKind, gdkmonitor: Gdk.Monitor): string {
+  return `${kind}-popover-${gdkmonitor.connector}`
+}
+
+function toggleBarPopover(kind: BarPopoverKind, gdkmonitor: Gdk.Monitor) {
+  const targetName = barPopoverName(kind, gdkmonitor)
+  const target = app.get_window(targetName)
+  if (!target) return
+
+  const opening = !target.visible
+  for (const popupKind of BAR_POPOVER_KINDS) {
+    const name = barPopoverName(popupKind, gdkmonitor)
+    if (name === targetName) continue
+    const win = app.get_window(name)
+    if (win) win.visible = false
+  }
+
+  target.visible = opening
+}
+
 // ━━━━━━━━━━━━━━ HYPRLAND WORKSPACES ━━━━━━━━━━━━━━━━━━
 function Workspaces() {
   const hyprland = AstalHyprland.get_default()
   const focused = createBinding(hyprland, "focusedWorkspace")
   const workspaces = createBinding(hyprland, "workspaces")
+
+  const createNextWorkspace = () => {
+    const all = hyprland.get_workspaces() ?? []
+    const maxId = all.reduce((m, ws) => (ws.id > m ? ws.id : m), 0)
+    hyprland.dispatch("workspace", `${maxId + 1}`)
+  }
 
   return (
     <box class="workspaces">
@@ -63,6 +112,13 @@ function Workspaces() {
           </button>
         )}
       </For>
+      <button
+        class="workspace-add"
+        onClicked={createNextWorkspace}
+        tooltipText="New workspace"
+      >
+        <label label="+" />
+      </button>
     </box>
   )
 }
@@ -92,7 +148,14 @@ function ActiveWindow() {
 }
 
 // ━━━━━━━━━━━━━━━━ MEDIA PLAYER ━━━━━━━━━━━━━━━━━━━━━━━
-function Mpris() {
+function formatMediaTime(seconds: number): string {
+  if (!seconds || seconds < 0) return "0:00"
+  const m = Math.floor(seconds / 60)
+  const s = Math.floor(seconds % 60)
+  return `${m}:${s.toString().padStart(2, "0")}`
+}
+
+function Mpris({ gdkmonitor }: { gdkmonitor: Gdk.Monitor }) {
   const mpris = AstalMpris.get_default()
   const players = createBinding(mpris, "players")
 
@@ -101,30 +164,20 @@ function Mpris() {
       <For each={players}>
         {(player) => {
           const title = createBinding(player, "title")
-          const artist = createBinding(player, "artist")
           const playbackStatus = createBinding(player, "playbackStatus")
-          const canGoPrev = createBinding(player, "canGoPrevious")
-          const canGoNext = createBinding(player, "canGoNext")
-          const canControl = createBinding(player, "canControl")
-          const position = createBinding(player, "position")
-          const length = createBinding(player, "length")
-
           const mediaIcon = playbackStatus((s) =>
             s === AstalMpris.PlaybackStatus.PLAYING
               ? svgIcon("pause")
               : svgIcon("play")
           )
 
-          const formatTime = (seconds: number) => {
-            if (!seconds || seconds < 0) return "0:00"
-            const m = Math.floor(seconds / 60)
-            const s = Math.floor(seconds % 60)
-            return `${m}:${s.toString().padStart(2, "0")}`
-          }
-
           return (
             <box class="media-player" spacing={0}>
-              <menubutton class="media-toggle">
+              <button
+                class="media-toggle"
+                onClicked={() => toggleBarPopover("media", gdkmonitor)}
+                tooltipText="Media controls"
+              >
                 <box spacing={6}>
                   <image iconName={mediaIcon} />
                   <label
@@ -134,9 +187,78 @@ function Mpris() {
                     )}
                   />
                 </box>
-                <popover>
+              </button>
+            </box>
+          )
+        }}
+      </For>
+    </box>
+  )
+}
+
+export function MediaPopover({ gdkmonitor }: { gdkmonitor: Gdk.Monitor }) {
+  const mpris = AstalMpris.get_default()
+  const players = createBinding(mpris, "players")
+  const popupName = barPopoverName("media", gdkmonitor)
+
+  let win: Astal.Window | null = null
+  const { TOP, LEFT, RIGHT, BOTTOM } = Astal.WindowAnchor
+
+  const hide = () => {
+    if (win) win.visible = false
+  }
+
+  onCleanup(() => {
+    win?.destroy()
+  })
+
+  return (
+    <window
+      $={(self) => {
+        win = self
+        const keyCtrl = new Gtk.EventControllerKey()
+        keyCtrl.connect("key-pressed", (_ctrl, keyval) => {
+          if (keyval === Gdk.KEY_Escape) hide()
+        })
+        self.add_controller(keyCtrl)
+      }}
+      visible={false}
+      namespace="ags-bar-popover"
+      name={popupName}
+      gdkmonitor={gdkmonitor}
+      exclusivity={Astal.Exclusivity.IGNORE}
+      keymode={Astal.Keymode.ON_DEMAND}
+      layer={Astal.Layer.OVERLAY}
+      anchor={TOP | LEFT | BOTTOM | RIGHT}
+      application={app}
+    >
+      <overlay>
+        <button class="popover-backdrop" hexpand vexpand onClicked={hide}>
+          <box />
+        </button>
+
+        <box
+          $type="overlay"
+          class="bar-popup-window media-popup-window"
+          orientation={Gtk.Orientation.VERTICAL}
+          halign={Gtk.Align.CENTER}
+          valign={Gtk.Align.START}
+          marginTop={BAR_POPOVER_TOP_MARGIN}
+        >
+          <box orientation={Gtk.Orientation.VERTICAL} spacing={8}>
+            <For each={players}>
+              {(player) => {
+                const title = createBinding(player, "title")
+                const artist = createBinding(player, "artist")
+                const playbackStatus = createBinding(player, "playbackStatus")
+                const canGoPrev = createBinding(player, "canGoPrevious")
+                const canGoNext = createBinding(player, "canGoNext")
+                const canControl = createBinding(player, "canControl")
+                const position = createBinding(player, "position")
+                const length = createBinding(player, "length")
+
+                return (
                   <box class="media-popup" orientation={Gtk.Orientation.VERTICAL} spacing={10}>
-                    {/* Title & Artist */}
                     <box orientation={Gtk.Orientation.VERTICAL} spacing={2}>
                       <label
                         class="media-popup-title"
@@ -154,7 +276,6 @@ function Mpris() {
                       />
                     </box>
 
-                    {/* Progress bar */}
                     <box orientation={Gtk.Orientation.VERTICAL} spacing={2}>
                       <slider
                         class="media-progress"
@@ -171,19 +292,18 @@ function Mpris() {
                       <box>
                         <label
                           class="media-time"
-                          label={position((p) => formatTime(p))}
+                          label={position((p) => formatMediaTime(p))}
                           hexpand
                           xalign={0}
                         />
                         <label
                           class="media-time"
-                          label={length((l) => formatTime(l))}
+                          label={length((l) => formatMediaTime(l))}
                           xalign={1}
                         />
                       </box>
                     </box>
 
-                    {/* Controls */}
                     <box class="media-controls" halign={Gtk.Align.CENTER} spacing={16}>
                       <button
                         class="media-control-btn"
@@ -218,7 +338,6 @@ function Mpris() {
                       </button>
                     </box>
 
-                    {/* Player identity */}
                     <box halign={Gtk.Align.CENTER}>
                       <label
                         class="media-player-name"
@@ -226,13 +345,20 @@ function Mpris() {
                       />
                     </box>
                   </box>
-                </popover>
-              </menubutton>
-            </box>
-          )
-        }}
-      </For>
-    </box>
+                )
+              }}
+            </For>
+
+            <label
+              class="media-time"
+              visible={players((p) => p.length === 0)}
+              label="No active media players"
+              xalign={0.5}
+            />
+          </box>
+        </box>
+      </overlay>
+    </window>
   )
 }
 
@@ -263,19 +389,34 @@ function Tray() {
 }
 
 // ━━━━━━━━━━━━━━━━━━ BLUETOOTH ━━━━━━━━━━━━━━━━━━━━━━━━━
-function Bluetooth() {
+interface BluetoothDevice {
+  address: string
+  name: string
+  connected: boolean
+}
+
+interface BluetoothSharedState {
+  powered: ReturnType<typeof createPoll<boolean>>
+  devices: ReturnType<typeof createPoll<BluetoothDevice[]>>
+  pollBluetooth: () => boolean
+}
+
+let bluetoothSharedState: BluetoothSharedState | null = null
+
+function getBluetoothSharedState(): BluetoothSharedState {
+  if (bluetoothSharedState) return bluetoothSharedState
+
   const pollBluetooth = () => {
     try {
       const out = GLib.spawn_command_line_sync("bluetoothctl show")[1]
       const text = new TextDecoder().decode(out)
-      const powered = /Powered:\s*yes/i.test(text)
-      return powered
+      return /Powered:\s*yes/i.test(text)
     } catch {
       return false
     }
   }
 
-  const pollDevices = (): { address: string; name: string; connected: boolean }[] => {
+  const pollDevices = (): BluetoothDevice[] => {
     try {
       const pairedOut = GLib.spawn_command_line_sync("bluetoothctl devices Paired")[1]
       const pairedText = new TextDecoder().decode(pairedOut).trim()
@@ -301,15 +442,25 @@ function Bluetooth() {
   }
 
   const powered = createPoll(false, 3000, pollBluetooth)
-  const devices = createPoll([] as { address: string; name: string; connected: boolean }[], 5000, pollDevices)
+  const devices = createPoll([] as BluetoothDevice[], 5000, pollDevices)
 
+  bluetoothSharedState = {
+    powered,
+    devices,
+    pollBluetooth,
+  }
+
+  return bluetoothSharedState
+}
+
+function Bluetooth({ gdkmonitor }: { gdkmonitor: Gdk.Monitor }) {
+  const { powered, devices } = getBluetoothSharedState()
   const connectedCount = devices((devs) => devs.filter((d) => d.connected).length)
-
   const icon = powered(() => svgIcon("bluetooth"))
 
   return (
     <box class="bluetooth">
-      <menubutton>
+      <button onClicked={() => toggleBarPopover("bluetooth", gdkmonitor)} tooltipText="Bluetooth">
         <box spacing={4}>
           <image iconName={icon} />
           <label
@@ -318,9 +469,60 @@ function Bluetooth() {
             label={connectedCount((c) => `${c}`)}
           />
         </box>
-        <popover>
+      </button>
+    </box>
+  )
+}
+
+export function BluetoothPopover({ gdkmonitor }: { gdkmonitor: Gdk.Monitor }) {
+  const { powered, devices, pollBluetooth } = getBluetoothSharedState()
+  const popupName = barPopoverName("bluetooth", gdkmonitor)
+
+  let win: Astal.Window | null = null
+  const { TOP, LEFT, RIGHT, BOTTOM } = Astal.WindowAnchor
+
+  const hide = () => {
+    if (win) win.visible = false
+  }
+
+  onCleanup(() => {
+    win?.destroy()
+  })
+
+  return (
+    <window
+      $={(self) => {
+        win = self
+        const keyCtrl = new Gtk.EventControllerKey()
+        keyCtrl.connect("key-pressed", (_ctrl, keyval) => {
+          if (keyval === Gdk.KEY_Escape) hide()
+        })
+        self.add_controller(keyCtrl)
+      }}
+      visible={false}
+      namespace="ags-bar-popover"
+      name={popupName}
+      gdkmonitor={gdkmonitor}
+      exclusivity={Astal.Exclusivity.IGNORE}
+      keymode={Astal.Keymode.ON_DEMAND}
+      layer={Astal.Layer.OVERLAY}
+      anchor={TOP | LEFT | BOTTOM | RIGHT}
+      application={app}
+    >
+      <overlay>
+        <button class="popover-backdrop" hexpand vexpand onClicked={hide}>
+          <box />
+        </button>
+
+        <box
+          $type="overlay"
+          class="bar-popup-window bluetooth-popup-window"
+          halign={Gtk.Align.END}
+          valign={Gtk.Align.START}
+          marginTop={BAR_POPOVER_TOP_MARGIN}
+          marginEnd={BAR_POPOVER_RIGHT_MARGIN.bluetooth}
+        >
           <box class="bluetooth-popup" orientation={Gtk.Orientation.VERTICAL} spacing={10}>
-            {/* Header with toggle */}
             <box class="bluetooth-header" spacing={10}>
               <image iconName={svgIcon("bluetooth")} pixelSize={20} class="bluetooth-header-icon" />
               <label class="bluetooth-title" label="Bluetooth" hexpand xalign={0} />
@@ -338,7 +540,6 @@ function Bluetooth() {
 
             <box class="bluetooth-separator" />
 
-            {/* Scan button */}
             <button
               class="bluetooth-scan-btn"
               onClicked={() => {
@@ -353,11 +554,10 @@ function Bluetooth() {
               </box>
             </button>
 
-            {/* Device list */}
             <box
               orientation={Gtk.Orientation.VERTICAL}
               spacing={4}
-              visible={powered((on) => on && pollDevices().length > 0)}
+              visible={powered}
             >
               <label class="bluetooth-section-title" label="Devices" xalign={0} />
               <For each={devices}>
@@ -390,9 +590,15 @@ function Bluetooth() {
                   </button>
                 )}
               </For>
+
+              <label
+                class="wifi-empty-label"
+                visible={devices((devs) => devs.length === 0)}
+                label="No paired devices"
+                xalign={0}
+              />
             </box>
 
-            {/* Open settings */}
             <button
               class="bluetooth-settings-btn"
               onClicked={() => execAsync(["blueman-manager"])}
@@ -404,36 +610,53 @@ function Bluetooth() {
               </box>
             </button>
           </box>
-        </popover>
-      </menubutton>
-    </box>
+        </box>
+      </overlay>
+    </window>
   )
 }
 
 // ━━━━━━━━━━━━━━━━━━ WIFI ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-function WiFi() {
-  interface WifiNetwork {
-    ssid: string
-    signal: number
-    active: boolean
-    security: string
-    savedUuid: string
-  }
+// ━━━━━━━━━━━━━━ WIFI SHARED STATE ━━━━━━━━━━━━━━━━━━━━
+// State + polling lives in a module-level singleton so the bar button
+// and the layer-shell popover window can both subscribe to the same data.
 
-  interface WifiInfo {
-    available: boolean
-    connected: boolean
-    ssid: string
-    signal: number
-    ip: string
-    iface: string
-  }
+interface WifiNetwork {
+  ssid: string
+  signal: number
+  active: boolean
+  security: string
+  savedUuid: string
+}
 
-  interface WifiUiState {
-    busy: boolean
-    message: string
-    tone: "info" | "ok" | "err"
-  }
+interface WifiInfo {
+  available: boolean
+  connected: boolean
+  ssid: string
+  signal: number
+  ip: string
+  iface: string
+}
+
+interface WifiUiState {
+  busy: boolean
+  message: string
+  tone: "info" | "ok" | "err"
+}
+
+interface WifiSharedState {
+  wifiInfo: ReturnType<typeof createPoll<WifiInfo>>
+  networks: ReturnType<typeof createPoll<WifiNetwork[]>>
+  status: ReturnType<typeof createPoll<WifiUiState>>
+  handleRescan: () => void
+  handleConnectToggle: (net: WifiNetwork) => void
+  handleForget: (net: WifiNetwork) => void
+}
+
+let wifiSharedState: WifiSharedState | null = null
+
+function getWifiSharedState(): WifiSharedState {
+  if (wifiSharedState) return wifiSharedState
 
   const decode = (buf: Uint8Array) => new TextDecoder().decode(buf)
   const splitNmcliLine = (line: string) => line.includes("|") ? line.split("|") : line.split(":")
@@ -683,25 +906,84 @@ function WiFi() {
   const networks = createPoll([] as WifiNetwork[], 8000, pollNetworks)
   const status = createPoll(uiState, 250, () => ({ ...uiState }))
 
-  onCleanup(() => {
-    if (clearStatusSource !== 0) {
-      GLib.source_remove(clearStatusSource)
-      clearStatusSource = 0
-    }
-  })
+  wifiSharedState = {
+    wifiInfo,
+    networks,
+    status,
+    handleRescan,
+    handleConnectToggle,
+    handleForget,
+  }
+  return wifiSharedState
+}
 
+// ━━━━━━━━━━━━━━━━━━ WIFI BAR BUTTON ━━━━━━━━━━━━━━━━━━━
+function WiFi({ gdkmonitor }: { gdkmonitor: Gdk.Monitor }) {
+  const { wifiInfo } = getWifiSharedState()
   const wifiIcon = wifiInfo((w) => wifiGlyph(w.signal, w.connected))
-
-  const signalIcon = (signal: number) => wifiGlyph(signal, true)
 
   return (
     <box class="wifi">
-      <menubutton>
-        <box spacing={4}>
-          <image iconName={wifiIcon} />
-        </box>
-        <popover>
-          <box class="wifi-popup" orientation={Gtk.Orientation.VERTICAL} spacing={10}>
+      <button onClicked={() => toggleBarPopover("wifi", gdkmonitor)} tooltipText="Wi-Fi">
+        <image iconName={wifiIcon} />
+      </button>
+    </box>
+  )
+}
+
+// ━━━━━━━━━━━━━━━ WIFI POPOVER (layer window) ━━━━━━━━━━
+export function WifiPopover({ gdkmonitor }: { gdkmonitor: Gdk.Monitor }) {
+  const { wifiInfo, networks, status, handleRescan, handleConnectToggle, handleForget } =
+    getWifiSharedState()
+  const popupName = barPopoverName("wifi", gdkmonitor)
+
+  let win: Astal.Window | null = null
+  const { TOP, LEFT, RIGHT, BOTTOM } = Astal.WindowAnchor
+
+  const hide = () => {
+    if (win) win.visible = false
+  }
+
+  const signalIcon = (signal: number) => wifiGlyph(signal, true)
+
+  onCleanup(() => {
+    win?.destroy()
+  })
+
+  return (
+    <window
+      $={(self) => {
+        win = self
+        const keyCtrl = new Gtk.EventControllerKey()
+        keyCtrl.connect("key-pressed", (_ctrl, keyval) => {
+          if (keyval === Gdk.KEY_Escape) hide()
+        })
+        self.add_controller(keyCtrl)
+      }}
+      visible={false}
+      namespace="ags-wifi-popover"
+      name={popupName}
+      gdkmonitor={gdkmonitor}
+      exclusivity={Astal.Exclusivity.IGNORE}
+      keymode={Astal.Keymode.ON_DEMAND}
+      layer={Astal.Layer.OVERLAY}
+      anchor={TOP | LEFT | BOTTOM | RIGHT}
+      application={app}
+    >
+      <overlay>
+        <button class="popover-backdrop" hexpand vexpand onClicked={hide}>
+          <box />
+        </button>
+
+        <box
+          $type="overlay"
+          class="wifi-popup-window"
+          halign={Gtk.Align.END}
+          valign={Gtk.Align.START}
+          marginTop={BAR_POPOVER_TOP_MARGIN}
+          marginEnd={BAR_POPOVER_RIGHT_MARGIN.wifi}
+        >
+          <box class="wifi-popup" orientation={Gtk.Orientation.VERTICAL} spacing={10} widthRequest={380}>
             {/* Header */}
             <box class="wifi-header" spacing={10}>
               <image iconName={svgIcon("wifi-high")} pixelSize={20} class="wifi-header-icon" />
@@ -736,7 +1018,6 @@ function WiFi() {
               <label class="wifi-status-label" label={status((s) => s.message)} hexpand xalign={0} />
             </box>
 
-            {/* Connection info when connected */}
             <box
               class="wifi-info-row"
               spacing={6}
@@ -752,7 +1033,6 @@ function WiFi() {
 
             <box class="wifi-separator" />
 
-            {/* Rescan button */}
             <button
               class={status((s) => `wifi-scan-btn ${s.busy ? "busy" : ""}`)}
               onClicked={handleRescan}
@@ -765,7 +1045,6 @@ function WiFi() {
               </box>
             </button>
 
-            {/* Network list */}
             <box orientation={Gtk.Orientation.VERTICAL} spacing={4}>
               <label class="wifi-section-title" label="Available Networks" xalign={0} />
               <For each={networks((n) => n.slice(0, 8))}>
@@ -825,7 +1104,6 @@ function WiFi() {
               />
             </box>
 
-            {/* Open settings */}
             <button
               class="wifi-settings-btn"
               onClicked={() => execAsync(["nm-connection-editor"])}
@@ -837,14 +1115,14 @@ function WiFi() {
               </box>
             </button>
           </box>
-        </popover>
-      </menubutton>
-    </box>
+        </box>
+      </overlay>
+    </window>
   )
 }
 
 // ━━━━━━━━━━━━━━━━━ VOLUME ━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-function AudioOutput() {
+function createAudioSharedState() {
   const wp = AstalWp.get_default()!
   const speaker = wp.defaultSpeaker
   const mic = wp.defaultMicrophone
@@ -858,9 +1136,29 @@ function AudioOutput() {
     micGlyph(mic.volume, mic.mute)
   )
 
+  return {
+    speaker,
+    mic,
+    speakerVol,
+    micVol,
+    speakerGlyphIcon,
+    micGlyphIcon,
+  }
+}
+
+let audioSharedState: ReturnType<typeof createAudioSharedState> | null = null
+
+function getAudioSharedState() {
+  if (!audioSharedState) audioSharedState = createAudioSharedState()
+  return audioSharedState
+}
+
+function AudioOutput({ gdkmonitor }: { gdkmonitor: Gdk.Monitor }) {
+  const { speakerVol, speakerGlyphIcon } = getAudioSharedState()
+
   return (
     <box class="volume">
-      <menubutton>
+      <button onClicked={() => toggleBarPopover("volume", gdkmonitor)} tooltipText="Volume and microphone">
         <box spacing={4}>
           <image iconName={speakerGlyphIcon} />
           <label
@@ -868,9 +1166,60 @@ function AudioOutput() {
             label={speakerVol((v) => `${Math.round(v * 100)}%`)}
           />
         </box>
-        <popover>
+      </button>
+    </box>
+  )
+}
+
+export function VolumePopover({ gdkmonitor }: { gdkmonitor: Gdk.Monitor }) {
+  const { speaker, mic, speakerVol, micVol, speakerGlyphIcon, micGlyphIcon } = getAudioSharedState()
+  const popupName = barPopoverName("volume", gdkmonitor)
+
+  let win: Astal.Window | null = null
+  const { TOP, LEFT, RIGHT, BOTTOM } = Astal.WindowAnchor
+
+  const hide = () => {
+    if (win) win.visible = false
+  }
+
+  onCleanup(() => {
+    win?.destroy()
+  })
+
+  return (
+    <window
+      $={(self) => {
+        win = self
+        const keyCtrl = new Gtk.EventControllerKey()
+        keyCtrl.connect("key-pressed", (_ctrl, keyval) => {
+          if (keyval === Gdk.KEY_Escape) hide()
+        })
+        self.add_controller(keyCtrl)
+      }}
+      visible={false}
+      namespace="ags-bar-popover"
+      name={popupName}
+      gdkmonitor={gdkmonitor}
+      exclusivity={Astal.Exclusivity.IGNORE}
+      keymode={Astal.Keymode.ON_DEMAND}
+      layer={Astal.Layer.OVERLAY}
+      anchor={TOP | LEFT | BOTTOM | RIGHT}
+      application={app}
+    >
+      <overlay>
+        <button class="popover-backdrop" hexpand vexpand onClicked={hide}>
+          <box />
+        </button>
+
+        <box
+          $type="overlay"
+          class="bar-popup-window volume-popup-window"
+          halign={Gtk.Align.END}
+          valign={Gtk.Align.START}
+          marginTop={BAR_POPOVER_TOP_MARGIN}
+          marginEnd={BAR_POPOVER_RIGHT_MARGIN.volume}
+        >
           <box class="volume-popup" orientation={Gtk.Orientation.VERTICAL} spacing={10}>
-            {/* Speaker */}
             <box class="volume-row" spacing={8}>
               <button
                 class="volume-mute-btn"
@@ -894,7 +1243,6 @@ function AudioOutput() {
 
             <box class="volume-separator" />
 
-            {/* Microphone */}
             <box class="volume-row" spacing={8}>
               <button
                 class="volume-mute-btn"
@@ -916,121 +1264,321 @@ function AudioOutput() {
               />
             </box>
           </box>
-        </popover>
-      </menubutton>
-    </box>
+        </box>
+      </overlay>
+    </window>
   )
 }
 
 // ━━━━━━━━━━━━━━━━━ BRIGHTNESS ━━━━━━━━━━━━━━━━━━━━━━━━━━
-function Brightness() {
-  const readBrightness = (): number => {
-    const paths = [
-      "/sys/class/backlight/intel_backlight",
-      "/sys/class/backlight/amdgpu_bl0",
-      "/sys/class/backlight/amdgpu_bl1",
-      "/sys/class/backlight/acpi_video0",
-    ]
-    for (const base of paths) {
-      try {
-        const cur = Number(String.fromCharCode(...GLib.file_get_contents(`${base}/brightness`)[1]).trim())
-        const max = Number(String.fromCharCode(...GLib.file_get_contents(`${base}/max_brightness`)[1]).trim())
-        if (max > 0) return cur / max
-      } catch { /* skip */ }
+function readBrightness(): number {
+  const paths = [
+    "/sys/class/backlight/intel_backlight",
+    "/sys/class/backlight/amdgpu_bl0",
+    "/sys/class/backlight/amdgpu_bl1",
+    "/sys/class/backlight/acpi_video0",
+  ]
+  for (const base of paths) {
+    try {
+      const cur = Number(String.fromCharCode(...GLib.file_get_contents(`${base}/brightness`)[1]).trim())
+      const max = Number(String.fromCharCode(...GLib.file_get_contents(`${base}/max_brightness`)[1]).trim())
+      if (max > 0) return cur / max
+    } catch {
+      // skip
     }
-    return 1
   }
+  return 1
+}
 
-  const brightnessValue = createPoll(1, 2000, readBrightness)
+let brightnessValueState: ReturnType<typeof createPoll<number>> | null = null
+let nightLightEnabledState: ReturnType<typeof createPoll<boolean>> | null = null
 
-  const brightnessIcon = brightnessValue((v) => {
-    return brightnessGlyph(v)
-  })
+function getBrightnessValue() {
+  if (!brightnessValueState) brightnessValueState = createPoll(1, 2000, readBrightness)
+  return brightnessValueState
+}
+
+function isNightLightEnabled(): boolean {
+  try {
+    const out = GLib.spawn_command_line_sync("pgrep -x hyprsunset")[1]
+    return new TextDecoder().decode(out).trim().length > 0
+  } catch {
+    return false
+  }
+}
+
+function getNightLightEnabled() {
+  if (!nightLightEnabledState) nightLightEnabledState = createPoll(false, 2000, isNightLightEnabled)
+  return nightLightEnabledState
+}
+
+function toggleNightLight() {
+  execAsync(["bash", "-c", "pkill hyprsunset || hyprsunset --temperature 4000"]).catch(console.error)
+}
+
+function Brightness({ gdkmonitor }: { gdkmonitor: Gdk.Monitor }) {
+  const brightnessValue = getBrightnessValue()
+  const brightnessIcon = brightnessValue((v) => brightnessGlyph(v))
 
   return (
     <box class="brightness">
-      <menubutton>
+      <button onClicked={() => toggleBarPopover("brightness", gdkmonitor)} tooltipText="Brightness">
         <box spacing={4}>
           <image iconName={brightnessIcon} />
         </box>
-        <popover>
-          <box class="brightness-popup" spacing={8}>
-            <image iconName={brightnessIcon} pixelSize={18} class="brightness-icon" />
-            <slider
-              class="brightness-slider"
-              hexpand
-              widthRequest={180}
-              value={brightnessValue}
-              onChangeValue={({ value }) => {
-                const pct = Math.round(value * 100)
-                execAsync(["brightnessctl", "set", `${pct}%`])
-              }}
-            />
-            <label
-              class="brightness-value"
-              label={brightnessValue((v) => `${Math.round(v * 100)}%`)}
-              widthRequest={42}
-            />
-          </box>
-        </popover>
-      </menubutton>
+      </button>
     </box>
   )
 }
 
+export function BrightnessPopover({ gdkmonitor }: { gdkmonitor: Gdk.Monitor }) {
+  const brightnessValue = getBrightnessValue()
+  const nightLightEnabled = getNightLightEnabled()
+  const brightnessIcon = brightnessValue((v) => brightnessGlyph(v))
+  const popupName = barPopoverName("brightness", gdkmonitor)
+
+  let win: Astal.Window | null = null
+  const { TOP, LEFT, RIGHT, BOTTOM } = Astal.WindowAnchor
+
+  const hide = () => {
+    if (win) win.visible = false
+  }
+
+  onCleanup(() => {
+    win?.destroy()
+  })
+
+  return (
+    <window
+      $={(self) => {
+        win = self
+        const keyCtrl = new Gtk.EventControllerKey()
+        keyCtrl.connect("key-pressed", (_ctrl, keyval) => {
+          if (keyval === Gdk.KEY_Escape) hide()
+        })
+        self.add_controller(keyCtrl)
+      }}
+      visible={false}
+      namespace="ags-bar-popover"
+      name={popupName}
+      gdkmonitor={gdkmonitor}
+      exclusivity={Astal.Exclusivity.IGNORE}
+      keymode={Astal.Keymode.ON_DEMAND}
+      layer={Astal.Layer.OVERLAY}
+      anchor={TOP | LEFT | BOTTOM | RIGHT}
+      application={app}
+    >
+      <overlay>
+        <button class="popover-backdrop" hexpand vexpand onClicked={hide}>
+          <box />
+        </button>
+
+        <box
+          $type="overlay"
+          class="bar-popup-window brightness-popup-window"
+          halign={Gtk.Align.END}
+          valign={Gtk.Align.START}
+          marginTop={BAR_POPOVER_TOP_MARGIN}
+          marginEnd={BAR_POPOVER_RIGHT_MARGIN.brightness}
+        >
+          <box class="brightness-popup" orientation={Gtk.Orientation.VERTICAL} spacing={10}>
+            <box class="brightness-main-row" spacing={8}>
+              <image iconName={brightnessIcon} pixelSize={18} class="brightness-icon" />
+              <slider
+                class="brightness-slider"
+                hexpand
+                widthRequest={180}
+                value={brightnessValue}
+                onChangeValue={({ value }) => {
+                  const pct = Math.round(value * 100)
+                  execAsync(["brightnessctl", "set", `${pct}%`])
+                }}
+              />
+              <label
+                class="brightness-value"
+                label={brightnessValue((v) => `${Math.round(v * 100)}%`)}
+                widthRequest={42}
+              />
+            </box>
+
+            <box class="brightness-separator" />
+
+            <box class="night-light-row" spacing={8}>
+              <image iconName="weather-clear-night-symbolic" pixelSize={15} class="night-light-icon" />
+              <label class="night-light-label" label="Night Light" hexpand xalign={0} />
+              <button
+                class={nightLightEnabled((on) => `night-light-toggle ${on ? "active" : ""}`)}
+                onClicked={toggleNightLight}
+                tooltipText={nightLightEnabled((on) => on ? "Disable night light" : "Enable night light")}
+              >
+                <label label={nightLightEnabled((on) => on ? "ON" : "OFF")} />
+              </button>
+            </box>
+          </box>
+        </box>
+      </overlay>
+    </window>
+  )
+}
+
 // ━━━━━━━━━━━━━━━━━ BATTERY ━━━━━━━━━━━━━━━━━━━━━━━━━━━
-function Battery() {
+function formatBatteryTime(seconds: number) {
+  if (!seconds || seconds <= 0) return ""
+  const h = Math.floor(seconds / 3600)
+  const m = Math.floor((seconds % 3600) / 60)
+  if (h > 0) return `${h}h ${m}m`
+  return `${m}m`
+}
+
+function batteryProfileIcon(profile: string) {
+  switch (profile) {
+    case "power-saver": return svgIcon("leaf")
+    case "balanced": return svgIcon("gauge")
+    case "performance": return svgIcon("bolt")
+    default: return svgIcon("gauge")
+  }
+}
+
+function batteryProfileLabel(profile: string) {
+  switch (profile) {
+    case "power-saver": return "Power Saver"
+    case "balanced": return "Balanced"
+    case "performance": return "Performance"
+    default: return profile
+  }
+}
+
+function createBatterySharedState() {
   const battery = AstalBattery.get_default()
   const powerprofiles = AstalPowerProfiles.get_default()
 
   const percentage = createBinding(battery, "percentage")
-  const charging = createBinding(battery, "charging")
   const isPresent = createBinding(battery, "isPresent")
-  const timeToEmpty = createBinding(battery, "timeToEmpty")
-  const timeToFull = createBinding(battery, "timeToFull")
+  const state = createBinding(battery, "state")
   const activeProfile = createBinding(powerprofiles, "activeProfile")
   const batteryGlyphIcon = createPoll(svgIcon("battery"), 1200, () =>
     battery.charging ? svgIcon("battery-charging") : svgIcon("battery")
   )
 
-  const formatTime = (seconds: number) => {
-    if (!seconds || seconds <= 0) return ""
-    const h = Math.floor(seconds / 3600)
-    const m = Math.floor((seconds % 3600) / 60)
-    if (h > 0) return `${h}h ${m}m`
-    return `${m}m`
-  }
+  const timeText = createPoll("", 5000, () => {
+    const s = battery.state
+    if (s === AstalBattery.State.FULLY_CHARGED) return "Fully charged"
+    if (s === AstalBattery.State.CHARGING) {
+      const t = battery.timeToFull
+      return t > 0 ? `Full in ${formatBatteryTime(t)}` : "Estimating..."
+    }
+    if (s === AstalBattery.State.DISCHARGING) {
+      const t = battery.timeToEmpty
+      return t > 0 ? `${formatBatteryTime(t)} remaining` : "Estimating..."
+    }
+    if (s === AstalBattery.State.EMPTY) return "Empty"
+    if (s === AstalBattery.State.PENDING_CHARGE) return "Waiting to charge"
+    if (s === AstalBattery.State.PENDING_DISCHARGE) return "Waiting to discharge"
+    return "Idle"
+  })
+
+  const statusText = state((s: AstalBattery.State) => {
+    if (s === AstalBattery.State.FULLY_CHARGED) return "Fully charged"
+    if (s === AstalBattery.State.CHARGING) return "Charging"
+    if (s === AstalBattery.State.DISCHARGING) return "On battery"
+    if (s === AstalBattery.State.EMPTY) return "Empty"
+    return "Idle"
+  })
 
   const percentText = percentage((p) => `${Math.floor(p * 100)}%`)
 
-  const profileIcon = (profile: string) => {
-    switch (profile) {
-      case "power-saver": return svgIcon("leaf")
-      case "balanced": return svgIcon("gauge")
-      case "performance": return svgIcon("bolt")
-      default: return svgIcon("gauge")
-    }
+  return {
+    battery,
+    powerprofiles,
+    percentage,
+    isPresent,
+    state,
+    activeProfile,
+    batteryGlyphIcon,
+    timeText,
+    statusText,
+    percentText,
   }
+}
 
-  const profileLabel = (profile: string) => {
-    switch (profile) {
-      case "power-saver": return "Power Saver"
-      case "balanced": return "Balanced"
-      case "performance": return "Performance"
-      default: return profile
-    }
-  }
+let batterySharedState: ReturnType<typeof createBatterySharedState> | null = null
+
+function getBatterySharedState() {
+  if (!batterySharedState) batterySharedState = createBatterySharedState()
+  return batterySharedState
+}
+
+function Battery({ gdkmonitor }: { gdkmonitor: Gdk.Monitor }) {
+  const { isPresent, batteryGlyphIcon, percentText } = getBatterySharedState()
 
   return (
     <box class="battery">
-      <menubutton visible={isPresent}>
+      <button visible={isPresent} onClicked={() => toggleBarPopover("battery", gdkmonitor)} tooltipText="Battery and power profiles">
         <box spacing={4}>
           <image iconName={batteryGlyphIcon} />
           <label class="battery-percent" label={percentText} />
         </box>
-        <popover>
+      </button>
+    </box>
+  )
+}
+
+export function BatteryPopover({ gdkmonitor }: { gdkmonitor: Gdk.Monitor }) {
+  const {
+    powerprofiles,
+    activeProfile,
+    batteryGlyphIcon,
+    percentText,
+    statusText,
+    timeText,
+  } = getBatterySharedState()
+  const popupName = barPopoverName("battery", gdkmonitor)
+
+  let win: Astal.Window | null = null
+  const { TOP, LEFT, RIGHT, BOTTOM } = Astal.WindowAnchor
+
+  const hide = () => {
+    if (win) win.visible = false
+  }
+
+  onCleanup(() => {
+    win?.destroy()
+  })
+
+  return (
+    <window
+      $={(self) => {
+        win = self
+        const keyCtrl = new Gtk.EventControllerKey()
+        keyCtrl.connect("key-pressed", (_ctrl, keyval) => {
+          if (keyval === Gdk.KEY_Escape) hide()
+        })
+        self.add_controller(keyCtrl)
+      }}
+      visible={false}
+      namespace="ags-bar-popover"
+      name={popupName}
+      gdkmonitor={gdkmonitor}
+      exclusivity={Astal.Exclusivity.IGNORE}
+      keymode={Astal.Keymode.ON_DEMAND}
+      layer={Astal.Layer.OVERLAY}
+      anchor={TOP | LEFT | BOTTOM | RIGHT}
+      application={app}
+    >
+      <overlay>
+        <button class="popover-backdrop" hexpand vexpand onClicked={hide}>
+          <box />
+        </button>
+
+        <box
+          $type="overlay"
+          class="bar-popup-window battery-popup-window"
+          halign={Gtk.Align.END}
+          valign={Gtk.Align.START}
+          marginTop={BAR_POPOVER_TOP_MARGIN}
+          marginEnd={BAR_POPOVER_RIGHT_MARGIN.battery}
+        >
           <box class="battery-popup" orientation={Gtk.Orientation.VERTICAL} spacing={10}>
-            {/* Battery status header */}
             <box class="battery-header" spacing={10}>
               <image iconName={batteryGlyphIcon} pixelSize={32} class="battery-big-icon" />
               <box orientation={Gtk.Orientation.VERTICAL} hexpand>
@@ -1041,25 +1589,17 @@ function Battery() {
                 />
                 <label
                   class="battery-popup-status"
-                  label={charging((c) => c ? "Charging" : "On battery")}
+                  label={statusText}
                   xalign={0}
                 />
               </box>
             </box>
 
-            {/* Time remaining */}
             <box class="battery-info-row" spacing={6}>
               <image iconName={svgIcon("hourglass")} pixelSize={14} class="battery-info-icon" />
               <label
                 class="battery-info-label"
-                label={charging((isCharging) => {
-                  if (isCharging) {
-                    const t = battery.timeToFull
-                    return t > 0 ? `Full in ${formatTime(t)}` : "Calculating..."
-                  }
-                  const t = battery.timeToEmpty
-                  return t > 0 ? `${formatTime(t)} remaining` : "Calculating..."
-                })}
+                label={timeText}
                 hexpand
                 xalign={0}
               />
@@ -1067,7 +1607,6 @@ function Battery() {
 
             <box class="battery-separator" />
 
-            {/* Power profiles */}
             <label class="battery-section-title" label="Power Profile" xalign={0} />
             <box orientation={Gtk.Orientation.VERTICAL} spacing={4} class="battery-profiles">
               {powerprofiles.get_profiles().map(({ profile }) => (
@@ -1075,11 +1614,23 @@ function Battery() {
                   class={activeProfile((ap) =>
                     `battery-profile-btn ${ap === profile ? "active" : ""}`
                   )}
-                  onClicked={() => powerprofiles.set_active_profile(profile)}
+                  onClicked={() => {
+                    if (powerprofiles.activeProfile === profile) return
+                    powerprofiles.set_active_profile(profile)
+                    notify({
+                      summary: "Power profile",
+                      body: batteryProfileLabel(profile),
+                      urgency: "low",
+                      appName: "ags-battery",
+                      expireTime: 1800,
+                      replaceTag: "ags-power-profile",
+                      icon: batteryProfileIcon(profile),
+                    })
+                  }}
                 >
                   <box spacing={8}>
-                    <image iconName={profileIcon(profile)} pixelSize={16} />
-                    <label label={profileLabel(profile)} hexpand xalign={0} />
+                    <image iconName={batteryProfileIcon(profile)} pixelSize={16} />
+                    <label label={batteryProfileLabel(profile)} hexpand xalign={0} />
                     <image
                       iconName={svgIcon("check")}
                       pixelSize={14}
@@ -1091,14 +1642,14 @@ function Battery() {
               ))}
             </box>
           </box>
-        </popover>
-      </menubutton>
-    </box>
+        </box>
+      </overlay>
+    </window>
   )
 }
 
 // ━━━━━━━━━━━━━━━━━━ CLOCK ━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-function Clock() {
+function Clock({ gdkmonitor }: { gdkmonitor: Gdk.Monitor }) {
   const time = createPoll("", 1000, () =>
     GLib.DateTime.new_now_local().format("%H:%M")!
   )
@@ -1108,16 +1659,68 @@ function Clock() {
 
   return (
     <box class="clock" spacing={8}>
-      <menubutton>
+      <button onClicked={() => toggleBarPopover("clock", gdkmonitor)} tooltipText="Calendar">
         <box spacing={8}>
           <label class="clock-time" label={time} />
           <label class="clock-date" label={date} />
         </box>
-        <popover>
-          <Gtk.Calendar />
-        </popover>
-      </menubutton>
+      </button>
     </box>
+  )
+}
+
+export function ClockPopover({ gdkmonitor }: { gdkmonitor: Gdk.Monitor }) {
+  const popupName = barPopoverName("clock", gdkmonitor)
+  let win: Astal.Window | null = null
+  const { TOP, LEFT, RIGHT, BOTTOM } = Astal.WindowAnchor
+
+  const hide = () => {
+    if (win) win.visible = false
+  }
+
+  onCleanup(() => {
+    win?.destroy()
+  })
+
+  return (
+    <window
+      $={(self) => {
+        win = self
+        const keyCtrl = new Gtk.EventControllerKey()
+        keyCtrl.connect("key-pressed", (_ctrl, keyval) => {
+          if (keyval === Gdk.KEY_Escape) hide()
+        })
+        self.add_controller(keyCtrl)
+      }}
+      visible={false}
+      namespace="ags-bar-popover"
+      name={popupName}
+      gdkmonitor={gdkmonitor}
+      exclusivity={Astal.Exclusivity.IGNORE}
+      keymode={Astal.Keymode.ON_DEMAND}
+      layer={Astal.Layer.OVERLAY}
+      anchor={TOP | LEFT | BOTTOM | RIGHT}
+      application={app}
+    >
+      <overlay>
+        <button class="popover-backdrop" hexpand vexpand onClicked={hide}>
+          <box />
+        </button>
+
+        <box
+          $type="overlay"
+          class="bar-popup-window clock-popup-window"
+          halign={Gtk.Align.START}
+          valign={Gtk.Align.START}
+          marginTop={BAR_POPOVER_TOP_MARGIN}
+          marginStart={BAR_POPOVER_CLOCK_LEFT_MARGIN}
+        >
+          <box class="clock-popup" orientation={Gtk.Orientation.VERTICAL}>
+            <Gtk.Calendar />
+          </box>
+        </box>
+      </overlay>
+    </window>
   )
 }
 
@@ -1203,12 +1806,12 @@ export default function Bar({ gdkmonitor }: { gdkmonitor: Gdk.Monitor }) {
       <box class="bar-shell" spacing={8}>
         <box class="bar-lane bar-lane-left" spacing={8}>
           <Workspaces />
-          <Clock />
+          <Clock gdkmonitor={gdkmonitor} />
         </box>
 
         <box class="bar-lane bar-lane-middle" hexpand spacing={8}>
           <ActiveWindow />
-          <Mpris />
+          <Mpris gdkmonitor={gdkmonitor} />
         </box>
 
         <box class="bar-lane bar-lane-right" spacing={6} halign={Gtk.Align.END}>
@@ -1221,11 +1824,11 @@ export default function Bar({ gdkmonitor }: { gdkmonitor: Gdk.Monitor }) {
           <box class="bar-divider" />
 
           <box class="bar-cluster bar-cluster-status" spacing={2}>
-            <AudioOutput />
-            <Brightness />
-            <WiFi />
-            <Bluetooth />
-            <Battery />
+            <AudioOutput gdkmonitor={gdkmonitor} />
+            <Brightness gdkmonitor={gdkmonitor} />
+            <WiFi gdkmonitor={gdkmonitor} />
+            <Bluetooth gdkmonitor={gdkmonitor} />
+            <Battery gdkmonitor={gdkmonitor} />
           </box>
         </box>
       </box>

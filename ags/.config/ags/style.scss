@@ -38,153 +38,125 @@ $shadow-lg:   0 12px 48px rgba(0, 0, 0, 0.5), 0 4px 16px rgba(0, 0, 0, 0.3);
 }
 
 // ━━━━━━━━━━━━━━━ BAR ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+//
+// Single-shell design. The bar-shell is the only rounded surface;
+// everything inside is flat, with hover/focus the only background fills.
+// The runtime theme generator (ThemeSwitcher.tsx) repaints the shell
+// and the hover/focus states with wallpaper-derived accent colors.
+
+$bar-radius:      18px;   // bar shell
+$btn-radius:      10px;   // every interactive element
+$btn-pad-y:       3px;
+$btn-pad-x:       9px;
+$bar-gap:         6px;    // breathing room between siblings inside a lane
+
 window {
   background: transparent;
   color: $fg;
 }
 
 window > box.bar-shell {
-  background: linear-gradient(
-    165deg,
-    rgb(30, 35, 48) 0%,
-    rgb(15, 18, 27) 58%,
-    rgb(12, 14, 20) 100%
-  );
-  border: 1px solid rgba(255, 255, 255, 0.18);
-  border-radius: 20px;
-  padding: 2px 12px;
-  min-height: 38px;
+  background: $surface-bar;
+  border: 1px solid $surface-border;
+  border-radius: $bar-radius;
+  padding: 3px 10px;
+  min-height: 36px;
   box-shadow: none;
 }
 
+// Lanes are layout-only: no background, no border, no rounding.
 .bar-shell {
-  .bar-lane {
-    margin: 1px 0;
-  }
-
-  .bar-lane-left {
-    margin-right: 4px;
-  }
-
-  .bar-lane-middle {
-    margin: 0 6px;
-  }
-
-  .bar-lane-right {
-    margin-left: 4px;
-  }
-
+  .bar-lane,
   .bar-cluster {
-    background: rgb(32, 36, 44);
-    border: 1px solid rgba(255, 255, 255, 0.17);
-    border-radius: 14px;
-    padding: 1px 4px;
+    background: transparent;
+    border: none;
+    padding: 0;
+    margin: 0;
   }
 
-  .bar-cluster-tray {
-    padding-right: 6px;
-  }
-
-  .bar-cluster-status {
-    background: rgb(12, 15, 22);
-    border-color: rgba(255, 255, 255, 0.2);
-    padding-left: 4px;
-    padding-right: 4px;
-  }
-
+  // Thin vertical accent line separating tray group from status group.
   .bar-divider {
     min-width: 1px;
-    min-height: 22px;
-    margin: 0 4px;
-    background: rgba(255, 255, 255, 0.24);
-    border-radius: 10px;
+    min-height: 18px;
+    margin: 0 6px;
+    background: $surface-border;
+    border-radius: 1px;
   }
+}
+
+// One mixin for every clickable thing in the bar.
+@mixin bar-button {
+  padding: $btn-pad-y $btn-pad-x;
+  margin: 0;
+  border-radius: $btn-radius;
+  border: 1px solid transparent;
+  background: transparent;
+  color: $fg;
+  transition: background 160ms ease, border-color 160ms ease, color 160ms ease;
+
+  &:hover {
+    background: $accent-glow;
+    border-color: $accent-dim;
+    color: $fg;
+  }
+}
+
+// All bar buttons (top-level) inherit the unified style.
+.bar-shell button,
+.bar-shell menubutton > button {
+  @include bar-button;
+  min-height: 0;
+  min-width: 0;
 }
 
 popover {
   > contents {
-    background: $surface-solid;
-    border: 1px solid $surface-border;
+    background: $widget-card-bg;
+    border: 1px solid $widget-card-border;
     border-radius: $radius-lg;
     padding: 0;
   }
 }
 
-@mixin bar-pill {
-  background: rgba(255, 255, 255, 0.1);
-  border: 1px solid rgba(255, 255, 255, 0.18);
-  border-radius: 13px;
-  padding: 1px 3px;
-  margin: 2px 2px;
-}
-
-@mixin bar-btn-hover {
-  padding: 4px 7px;
-  border-radius: 10px;
-  transition: all 170ms ease;
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  background: rgba(255, 255, 255, 0.02);
-
-  &:hover {
-    background: rgba(255, 255, 255, 0.12);
-    border-color: rgba(255, 255, 255, 0.2);
-  }
-}
-
-.bar-lane-right {
-  > * > menubutton > button,
-  > * > button {
-    min-height: 24px;
-  }
-
-  > * > menubutton > button image,
-  > * > button image,
-  > * > menubutton > button label,
-  > * > button label {
-    color: $fg;
-  }
-
-  > * > menubutton > button:hover image,
-  > * > button:hover image,
-  > * > menubutton > button:hover label,
-  > * > button:hover label {
-    color: $fg;
-  }
-}
-
+// ── Workspaces ─────────────────────────────────────────────
 .workspaces {
-  @include bar-pill;
-  padding: 0 4px;
+  padding: 0;
 
   button {
+    @include bar-button;
     padding: 2px 8px;
-    margin: 2px 1px;
-    border-radius: 8px;
-    color: $fg;
-    background: transparent;
-    border: 1px solid rgba(255, 255, 255, 0.06);
-    transition: all 250ms cubic-bezier(0.4, 0, 0.2, 1);
+    min-width: 22px;
+    color: $fg-dim;
     font-weight: 700;
     font-size: 11px;
-    min-width: 22px;
-
-    &:hover {
-      background: rgba(255, 255, 255, 0.16);
-      color: $fg;
-    }
 
     &.focused {
-      background: rgba(0, 191, 255, 0.22);
+      background: $accent-dim;
+      border-color: $accent;
       color: $fg;
-      border-color: rgba(0, 191, 255, 0.52);
+    }
+  }
+
+  .workspace-add {
+    color: $fg-faint;
+    font-weight: 600;
+    margin-left: 2px;
+
+    label {
+      font-size: 14px;
+      // optical alignment with workspace digits
+      margin-top: -1px;
+    }
+
+    &:hover {
+      color: $fg;
     }
   }
 }
 
+// ── Active window title ────────────────────────────────────
 .active-window {
-  @include bar-pill;
-  padding: 0 10px;
-  margin-left: 3px;
+  padding: 0 8px;
   min-width: 200px;
 
   .active-window-icon {
@@ -194,28 +166,15 @@ popover {
 
   label {
     color: $fg;
-    font-style: normal;
     font-size: 11px;
     letter-spacing: 0.35px;
     font-weight: 600;
   }
 }
 
+// ── Clock ──────────────────────────────────────────────────
 .clock {
-  @include bar-pill;
-  padding: 0 5px;
-
-  menubutton button {
-    padding: 2px 10px;
-    border-radius: 10px;
-    transition: all 200ms ease;
-    border: 1px solid rgba(255, 255, 255, 0.08);
-
-    &:hover {
-      background: rgba(255, 255, 255, 0.14);
-      border-color: rgba(255, 255, 255, 0.2);
-    }
-  }
+  padding: 0;
 
   .clock-time {
     color: $fg;
@@ -232,24 +191,12 @@ popover {
   }
 }
 
+// ── Systray ────────────────────────────────────────────────
 .systray {
-  padding: 0 2px;
+  padding: 0;
 
   menubutton {
-    padding: 0;
-    margin: 0 2px;
-
-    button {
-      padding: 3px 5px;
-      border-radius: 8px;
-      transition: all 200ms ease;
-      border: 1px solid rgba(255, 255, 255, 0.08);
-
-      &:hover {
-        background: rgba(255, 255, 255, 0.14);
-        border-color: rgba(255, 255, 255, 0.2);
-      }
-    }
+    margin: 0;
   }
 }
 
@@ -263,13 +210,21 @@ menubutton button {
   min-width: 0;
 }
 
+// Legacy mixin kept so the rest of the (large) stylesheet still compiles.
+// It now matches the unified bar-button behavior.
+@mixin bar-btn-hover {
+  @include bar-button;
+}
+
 // ━━━━━━━━━━━━━ VOLUME WIDGET ━━━━━━━━━━━━━━━━━━━━━━
 .volume {
-  menubutton button {
+  menubutton button,
+  > button {
     @include bar-btn-hover;
   }
 
-  > menubutton > button image {
+  > menubutton > button image,
+  > button image {
     color: $fg;
   }
 
@@ -343,11 +298,13 @@ menubutton button {
 
 // ━━━━━━━━━━━━━ BRIGHTNESS WIDGET ━━━━━━━━━━━━━━━━━━
 .brightness {
-  menubutton button {
+  menubutton button,
+  > button {
     @include bar-btn-hover;
   }
 
-  > menubutton > button image {
+  > menubutton > button image,
+  > button image {
     color: $fg;
   }
 }
@@ -355,6 +312,10 @@ menubutton button {
 .brightness-popup {
   padding: 14px 16px;
   min-width: 260px;
+
+  .brightness-main-row {
+    padding: 2px 0;
+  }
 
   .brightness-icon {
     color: $yellow;
@@ -390,15 +351,67 @@ menubutton button {
     color: $fg-dim;
     font-weight: 600;
   }
+
+  .brightness-separator {
+    min-height: 1px;
+    background: rgba(255, 255, 255, 0.06);
+    margin: 2px 0;
+  }
+
+  .night-light-row {
+    padding-top: 1px;
+  }
+
+  .night-light-icon {
+    color: $accent;
+  }
+
+  .night-light-label {
+    font-size: 11px;
+    color: $fg-dim;
+    font-weight: 600;
+  }
+
+  .night-light-toggle {
+    padding: 4px 12px;
+    border-radius: 8px;
+    background: rgba(255, 255, 255, 0.04);
+    color: $fg-dim;
+    font-size: 10px;
+    font-weight: 700;
+    border: 1px solid transparent;
+    transition: all 180ms ease;
+
+    &:hover {
+      background: rgba($accent, 0.1);
+      border-color: rgba($accent, 0.22);
+      color: $fg;
+    }
+
+    &.active {
+      background: rgba($accent, 0.18);
+      border-color: rgba($accent, 0.35);
+      color: $accent;
+    }
+  }
+}
+
+.bar-popup-window,
+.wifi-popup-window {
+  background: $widget-card-bg;
+  border: 1px solid $widget-card-border;
+  border-radius: $radius-lg;
 }
 
 // ━━━━━━━━━━━━━ WIFI WIDGET ━━━━━━━━━━━━━━━━━━━━━━━
 .wifi {
-  menubutton button {
+  menubutton button,
+  > button {
     @include bar-btn-hover;
   }
 
-  > menubutton > button image {
+  > menubutton > button image,
+  > button image {
     color: $fg;
   }
 }
@@ -454,8 +467,8 @@ menubutton button {
     }
 
     &.info {
-      border-color: rgba(0, 191, 255, 0.28);
-      background: rgba(0, 191, 255, 0.12);
+      border-color: rgba($accent, 0.28);
+      background: rgba($accent, 0.12);
 
       .wifi-status-icon,
       .wifi-status-label {
@@ -492,26 +505,26 @@ menubutton button {
   .wifi-scan-btn {
     padding: 8px 12px;
     border-radius: 8px;
-    background: rgba(0, 191, 255, 0.06);
+    background: rgba($accent, 0.06);
     color: $fg;
     font-size: 12px;
-    border: 1px solid rgba(0, 191, 255, 0.12);
+    border: 1px solid rgba($accent, 0.12);
     transition: all 200ms ease;
 
     &:hover {
-      background: rgba(0, 191, 255, 0.12);
-      border-color: rgba(0, 191, 255, 0.25);
+      background: rgba($accent, 0.12);
+      border-color: rgba($accent, 0.25);
       color: $fg;
     }
 
     &:active {
-      background: rgba(0, 191, 255, 0.2);
-      border-color: rgba(0, 191, 255, 0.4);
+      background: rgba($accent, 0.2);
+      border-color: rgba($accent, 0.4);
     }
 
     &.busy {
-      background: rgba(0, 191, 255, 0.15);
-      border-color: rgba(0, 191, 255, 0.35);
+      background: rgba($accent, 0.15);
+      border-color: rgba($accent, 0.35);
     }
 
     image {
@@ -533,7 +546,7 @@ menubutton button {
 
     &.active {
       .wifi-network-btn {
-        border-color: rgba(0, 191, 255, 0.25);
+        border-color: rgba($accent, 0.25);
       }
     }
   }
@@ -547,18 +560,18 @@ menubutton button {
     color: $fg-dim;
 
     &:hover {
-      background: rgba(0, 191, 255, 0.06);
-      border-color: rgba(0, 191, 255, 0.12);
+      background: rgba($accent, 0.06);
+      border-color: rgba($accent, 0.12);
     }
 
     &:active {
-      background: rgba(0, 191, 255, 0.12);
-      border-color: rgba(0, 191, 255, 0.3);
+      background: rgba($accent, 0.12);
+      border-color: rgba($accent, 0.3);
     }
 
     &.active {
-      background: rgba(0, 191, 255, 0.1);
-      border-color: rgba(0, 191, 255, 0.25);
+      background: rgba($accent, 0.1);
+      border-color: rgba($accent, 0.25);
       color: $fg;
     }
 
@@ -596,13 +609,13 @@ menubutton button {
     font-weight: 700;
 
     &.connect {
-      background: rgba(0, 191, 255, 0.1);
-      border-color: rgba(0, 191, 255, 0.24);
+      background: rgba($accent, 0.1);
+      border-color: rgba($accent, 0.24);
       color: $accent;
 
       &:hover {
-        background: rgba(0, 191, 255, 0.2);
-        border-color: rgba(0, 191, 255, 0.4);
+        background: rgba($accent, 0.2);
+        border-color: rgba($accent, 0.4);
       }
     }
 
@@ -653,8 +666,8 @@ menubutton button {
     margin-top: 4px;
 
     &:hover {
-      background: rgba(0, 191, 255, 0.06);
-      border-color: rgba(0, 191, 255, 0.12);
+      background: rgba($accent, 0.06);
+      border-color: rgba($accent, 0.12);
       color: $fg;
     }
 
@@ -665,14 +678,15 @@ menubutton button {
 }
 
 // ━━━━━━━━━━━━━ BLUETOOTH WIDGET ━━━━━━━━━━━━━━━━━━━
-$blue: #61afef;
 
 .bluetooth {
-  menubutton button {
+  menubutton button,
+  > button {
     @include bar-btn-hover;
   }
 
-  > menubutton > button image {
+  > menubutton > button image,
+  > button image {
     color: $fg;
   }
 
@@ -680,7 +694,7 @@ $blue: #61afef;
     font-size: 10px;
     font-weight: bold;
     color: $bg-dark;
-    background: $blue;
+    background: $accent;
     border-radius: 50%;
     min-width: 16px;
     min-height: 16px;
@@ -698,7 +712,7 @@ $blue: #61afef;
   }
 
   .bluetooth-header-icon {
-    color: $blue;
+    color: $accent;
   }
 
   .bluetooth-title {
@@ -718,14 +732,14 @@ $blue: #61afef;
     transition: all 200ms ease;
 
     &:hover {
-      background: rgba(97, 175, 239, 0.12);
-      border-color: rgba(97, 175, 239, 0.2);
+      background: rgba($accent, 0.12);
+      border-color: rgba($accent, 0.2);
     }
 
     &.active {
-      background: rgba(97, 175, 239, 0.15);
-      border-color: rgba(97, 175, 239, 0.35);
-      color: $blue;
+      background: rgba($accent, 0.15);
+      border-color: rgba($accent, 0.35);
+      color: $accent;
     }
   }
 
@@ -745,13 +759,13 @@ $blue: #61afef;
     transition: all 200ms ease;
 
     &:hover {
-      background: rgba(97, 175, 239, 0.08);
-      border-color: rgba(97, 175, 239, 0.15);
+      background: rgba($accent, 0.08);
+      border-color: rgba($accent, 0.15);
       color: $fg;
     }
 
     image {
-      color: $blue;
+      color: $accent;
     }
   }
 
@@ -773,18 +787,18 @@ $blue: #61afef;
     color: $fg-dim;
 
     &:hover {
-      background: rgba(97, 175, 239, 0.08);
-      border-color: rgba(97, 175, 239, 0.15);
+      background: rgba($accent, 0.08);
+      border-color: rgba($accent, 0.15);
     }
 
     &.connected {
-      background: rgba(97, 175, 239, 0.1);
-      border-color: rgba(97, 175, 239, 0.25);
+      background: rgba($accent, 0.1);
+      border-color: rgba($accent, 0.25);
       color: $fg;
     }
 
     image {
-      color: $blue;
+      color: $accent;
     }
 
     .bluetooth-device-status {
@@ -808,8 +822,8 @@ $blue: #61afef;
     margin-top: 4px;
 
     &:hover {
-      background: rgba(97, 175, 239, 0.08);
-      border-color: rgba(97, 175, 239, 0.15);
+      background: rgba($accent, 0.08);
+      border-color: rgba($accent, 0.15);
       color: $fg;
     }
 
@@ -821,11 +835,13 @@ $blue: #61afef;
 
 // ━━━━━━━━━━━━━ BATTERY WIDGET ━━━━━━━━━━━━━━━━━━━━━
 .battery {
-  menubutton button {
+  menubutton button,
+  > button {
     @include bar-btn-hover;
   }
 
-  > menubutton > button image {
+  > menubutton > button image,
+  > button image {
     color: $fg;
   }
 
@@ -898,13 +914,13 @@ $blue: #61afef;
     color: $fg-dim;
 
     &:hover {
-      background: rgba(229, 192, 123, 0.08);
-      border-color: rgba(229, 192, 123, 0.15);
+      background: rgba($accent, 0.08);
+      border-color: rgba($accent, 0.15);
     }
 
     &.active {
-      background: rgba(229, 192, 123, 0.12);
-      border-color: rgba(229, 192, 123, 0.3);
+      background: rgba($accent, 0.12);
+      border-color: rgba($accent, 0.3);
       color: $fg;
     }
 
@@ -924,11 +940,9 @@ $blue: #61afef;
 }
 
 .media-toggle {
-  button {
-    @include bar-btn-hover;
-  }
+  @include bar-btn-hover;
 
-  > button image {
+  image {
     color: $fg;
   }
 
@@ -940,6 +954,10 @@ $blue: #61afef;
     letter-spacing: 0.35px;
     max-width: 110px;
   }
+}
+
+.clock-popup {
+  padding: 10px;
 }
 
 .media-inline-btn {
@@ -983,7 +1001,7 @@ $blue: #61afef;
     }
 
     highlight {
-      background: linear-gradient(90deg, $magenta, rgba(198, 120, 221, 0.6));
+      background: linear-gradient(90deg, $magenta, rgba($accent, 0.6));
       border-radius: 3px;
       min-height: 6px;
     }
@@ -1015,7 +1033,7 @@ $blue: #61afef;
     transition: all 200ms ease;
 
     &:hover {
-      background: rgba(198, 120, 221, 0.15);
+      background: rgba($accent, 0.15);
     }
 
     image {
@@ -1026,13 +1044,13 @@ $blue: #61afef;
   .media-play-btn {
     padding: 10px;
     border-radius: 50%;
-    background: rgba(198, 120, 221, 0.2);
-    border: 1px solid rgba(198, 120, 221, 0.3);
+    background: rgba($accent, 0.2);
+    border: 1px solid rgba($accent, 0.3);
     transition: all 200ms ease;
 
     &:hover {
-      background: rgba(198, 120, 221, 0.35);
-      border-color: rgba(198, 120, 221, 0.5);
+      background: rgba($accent, 0.35);
+      border-color: rgba($accent, 0.5);
     }
 
     image {
@@ -1164,16 +1182,16 @@ $blue: #61afef;
   .notification-action {
     padding: 6px 14px;
     border-radius: 8px;
-    background: rgba(0, 191, 255, 0.08);
+    background: rgba($accent, 0.08);
     color: $teal;
-    border: 1px solid rgba(0, 191, 255, 0.18);
+    border: 1px solid rgba($accent, 0.18);
     font-weight: 600;
     font-size: 12px;
     transition: all 200ms ease;
 
     &:hover {
-      background: rgba(0, 191, 255, 0.2);
-      border-color: rgba(0, 191, 255, 0.4);
+      background: rgba($accent, 0.2);
+      border-color: rgba($accent, 0.4);
     }
   }
 
@@ -1234,7 +1252,7 @@ $blue: #61afef;
     transition: all 200ms ease;
 
     &:hover {
-      background: rgba(0, 191, 255, 0.15);
+      background: rgba($accent, 0.15);
     }
 
     image {
@@ -1271,8 +1289,8 @@ $blue: #61afef;
     transition: all 200ms ease;
 
     &:hover {
-      background: rgba(0, 191, 255, 0.12);
-      border-color: rgba(0, 191, 255, 0.26);
+      background: rgba($accent, 0.12);
+      border-color: rgba($accent, 0.26);
       color: $fg;
     }
 
@@ -1300,8 +1318,8 @@ $blue: #61afef;
     font-size: 10px;
     font-weight: 700;
     color: $accent;
-    background: rgba(0, 191, 255, 0.08);
-    border: 1px solid rgba(0, 191, 255, 0.18);
+    background: rgba($accent, 0.08);
+    border: 1px solid rgba($accent, 0.18);
     border-radius: 6px;
     min-width: 18px;
     padding: 1px 6px;
@@ -1476,17 +1494,17 @@ $blue: #61afef;
     border: 1px solid transparent;
 
     &:hover {
-      background: rgba(0, 191, 255, 0.06);
+      background: rgba($accent, 0.06);
     }
 
     &.selected {
-      background: linear-gradient(135deg, rgba(0, 191, 255, 0.12), rgba(0, 191, 255, 0.06));
-      border-color: rgba(0, 191, 255, 0.25);
+      background: linear-gradient(135deg, rgba($accent, 0.12), rgba($accent, 0.06));
+      border-color: rgba($accent, 0.25);
       box-shadow: none;
     }
 
     &:focus {
-      background: rgba(0, 191, 255, 0.12);
+      background: rgba($accent, 0.12);
       outline: none;
     }
   }
@@ -1514,7 +1532,7 @@ $blue: #61afef;
     color: $accent;
     padding: 2px 8px;
     border-radius: 6px;
-    background: rgba(0, 191, 255, 0.08);
+    background: rgba($accent, 0.08);
     font-weight: 600;
   }
 
@@ -1542,8 +1560,8 @@ $blue: #61afef;
     color: $accent;
     padding: 2px 6px;
     border-radius: 4px;
-    background: rgba(0, 191, 255, 0.08);
-    border: 1px solid rgba(0, 191, 255, 0.15);
+    background: rgba($accent, 0.08);
+    border: 1px solid rgba($accent, 0.15);
   }
 
   .applauncher-footer-text {
@@ -1582,8 +1600,8 @@ $blue: #61afef;
   }
 
   &:hover {
-    background: rgba(0, 191, 255, 0.1);
-    border-color: rgba(0, 191, 255, 0.3);
+    background: rgba($accent, 0.1);
+    border-color: rgba($accent, 0.3);
     color: $fg;
     box-shadow: none;
 
@@ -1623,8 +1641,8 @@ $blue: #61afef;
   }
 
   &.session-suspend:hover {
-    background: rgba(198, 120, 221, 0.12);
-    border-color: rgba(198, 120, 221, 0.4);
+    background: rgba($accent, 0.12);
+    border-color: rgba($accent, 0.4);
     box-shadow: none;
 
     image {
@@ -1750,7 +1768,7 @@ $dw-card-shadow: 0 12px 28px rgba(0, 0, 0, 0.34), 0 3px 8px rgba(0, 0, 0, 0.2);
       background: linear-gradient(90deg, $accent, $teal);
     }
     &.dw-stat-bar-mem block.filled {
-      background: linear-gradient(90deg, $magenta, rgba(198, 120, 221, 0.6));
+      background: linear-gradient(90deg, $magenta, rgba($accent, 0.6));
     }
     &.dw-stat-bar-disk block.filled {
       background: linear-gradient(90deg, $yellow, $orange);
@@ -1902,7 +1920,7 @@ $dw-card-shadow: 0 12px 28px rgba(0, 0, 0, 0.34), 0 3px 8px rgba(0, 0, 0, 0.2);
     min-height: 0;
 
     &:focus {
-      border-color: rgba(0, 191, 255, 0.3);
+      border-color: rgba($accent, 0.3);
       background: rgba(255, 255, 255, 0.06);
     }
   }
@@ -2000,8 +2018,10 @@ $dw-card-shadow: 0 12px 28px rgba(0, 0, 0, 0.34), 0 3px 8px rgba(0, 0, 0, 0.2);
 
 // ━━━━━━━━━━━━━ THEME SWITCHER ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-// Invisible backdrop — no dim, wallpaper shows through cleanly
-.ts-backdrop {
+// Invisible backdrops — no dim, wallpaper shows through cleanly
+.ts-backdrop,
+.popover-backdrop,
+.notification-center-backdrop {
   background: transparent;
   border: none;
   border-radius: 0;
@@ -2009,10 +2029,10 @@ $dw-card-shadow: 0 12px 28px rgba(0, 0, 0, 0.34), 0 3px 8px rgba(0, 0, 0, 0.2);
   min-height: 0;
 }
 
-// Main floating panel — solid bg, no blur, crisp on wallpaper
+// Main floating panel — frosty translucent surface (uses Hypr blur)
 .ts-panel {
-  background: rgba(14, 15, 20, 0.97);
-  border: 1px solid rgba(255, 255, 255, 0.10);
+  background: $widget-card-bg;
+  border: 1px solid $widget-card-border;
   border-radius: $radius-xl;
   box-shadow: none;
   min-width: 820px;
@@ -2148,7 +2168,7 @@ $dw-card-shadow: 0 12px 28px rgba(0, 0, 0, 0.34), 0 3px 8px rgba(0, 0, 0, 0.2);
 
   .ts-apply-btn {
     background: $accent-dim;
-    border: 1px solid rgba(0, 191, 255, 0.3);
+    border: 1px solid rgba($accent, 0.3);
     border-radius: 8px;
     padding: 8px;
     min-height: 0;
@@ -2158,7 +2178,7 @@ $dw-card-shadow: 0 12px 28px rgba(0, 0, 0, 0.34), 0 3px 8px rgba(0, 0, 0, 0.2);
     image { color: $accent; }
 
     &:hover {
-      background: rgba(0, 191, 255, 0.22);
+      background: rgba($accent, 0.22);
       border-color: $accent;
     }
   }
