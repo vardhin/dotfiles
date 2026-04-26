@@ -42,9 +42,12 @@ function hashText(input: string): string {
   return Math.abs(hash).toString(16)
 }
 
-function runSql(sql: string): string {
+function runSql(sql: string, separator?: string): string {
   try {
-    const cmd = `sqlite3 ${GLib.shell_quote(DB_PATH)} ${GLib.shell_quote(sql)}`
+    const sepArg = separator
+      ? ` -separator ${GLib.shell_quote(separator)}`
+      : ""
+    const cmd = `sqlite3${sepArg} ${GLib.shell_quote(DB_PATH)} ${GLib.shell_quote(sql)}`
     const out = GLib.spawn_command_line_sync(cmd)[1]
     return decode(out).trim()
   } catch {
@@ -85,8 +88,10 @@ function urgencyLabel(urgency: AstalNotifd.Urgency): string {
 
 function persistNotification(notification: AstalNotifd.Notification) {
   const appName = sqlEscape(notification.appName || "System")
-  const summary = sqlEscape(notification.summary || "(no title)")
-  const body = sqlEscape(notification.body || "")
+  const bodyRaw = (notification.body || "").trim()
+  const summaryRaw = (notification.summary || "").trim()
+  const summary = sqlEscape(summaryRaw || bodyRaw || notification.appName || "Notification")
+  const body = sqlEscape(bodyRaw)
   const urgency = urgencyLabel(notification.urgency)
 
   const maybeId = (notification as unknown as { id?: number | string }).id
@@ -104,31 +109,40 @@ function persistNotification(notification: AstalNotifd.Notification) {
 function loadNotificationHistory(limit = 40): NotificationHistoryItem[] {
   const sql = `
     SELECT
-      notif_id || char(31) ||
-      app_name || char(31) ||
-      summary || char(31) ||
-      body || char(31) ||
-      urgency || char(31) ||
+      notif_id,
+      app_name,
+      summary,
+      body,
+      urgency,
       ts
     FROM notifications
     ORDER BY ts DESC
     LIMIT ${Math.max(1, limit)};
   `
 
-  const out = runSql(sql)
+  const out = runSql(sql, HISTORY_SEP)
   if (!out) return []
+
+  const splitHistoryLine = (line: string): string[] => {
+    if (line.includes(HISTORY_SEP)) return line.split(HISTORY_SEP)
+    if (line.includes("^_")) return line.split("^_")
+    return line.split("|")
+  }
 
   return out
     .split("\n")
     .map((line) => line.trim())
     .filter(Boolean)
     .map((line) => {
-      const [id, appName, summary, body, urgency, tsRaw] = line.split(HISTORY_SEP)
+      const [id, appName, summary, body, urgency, tsRaw] = splitHistoryLine(line)
+      const normalizedAppName = appName || "System"
+      const normalizedBody = body || ""
+      const normalizedSummary = summary || normalizedBody || normalizedAppName || "Notification"
       return {
         id: id || "",
-        appName: appName || "System",
-        summary: summary || "(no title)",
-        body: body || "",
+        appName: normalizedAppName,
+        summary: normalizedSummary,
+        body: normalizedBody,
         urgency: urgency || "normal",
         timestamp: Number(tsRaw) || 0,
       }
@@ -279,6 +293,9 @@ export function NotificationCenter({ gdkmonitor }: { gdkmonitor: Gdk.Monitor }) 
   const notifd = AstalNotifd.get_default()
   const notifications = createBinding(notifd, "notifications")
   const history = createPoll([] as NotificationHistoryItem[], 3000, () => loadNotificationHistory(45))
+  const monitorHeight = gdkmonitor.get_geometry().height
+  const maxCenterContentHeight = Math.max(420, Math.floor(monitorHeight * 0.72))
+  const centerTopOffset = 48
 
   let win: Astal.Window | null = null
   const { TOP, RIGHT, BOTTOM, LEFT } = Astal.WindowAnchor
@@ -323,8 +340,8 @@ export function NotificationCenter({ gdkmonitor }: { gdkmonitor: Gdk.Monitor }) 
           class="notification-center"
           widthRequest={420}
           halign={Gtk.Align.END}
-          valign={Gtk.Align.FILL}
-          vexpand
+          valign={Gtk.Align.START}
+          marginTop={centerTopOffset}
         >
           <box class="notification-center-header" spacing={8}>
             <image iconName="preferences-system-notifications-symbolic" pixelSize={20} class="notification-center-icon" />
@@ -368,7 +385,11 @@ export function NotificationCenter({ gdkmonitor }: { gdkmonitor: Gdk.Monitor }) 
               </box>
             </button>
           </box>
-          <Gtk.ScrolledWindow vexpand hscrollbarPolicy={Gtk.PolicyType.NEVER}>
+          <Gtk.ScrolledWindow
+            hscrollbarPolicy={Gtk.PolicyType.NEVER}
+            maxContentHeight={maxCenterContentHeight}
+            propagateNaturalHeight
+          >
             <box orientation={Gtk.Orientation.VERTICAL} spacing={6} class="notification-center-list">
               <box class="notification-center-section-header" spacing={8}>
                 <label class="notification-center-section-title" label="Active" xalign={0} hexpand />
@@ -384,7 +405,6 @@ export function NotificationCenter({ gdkmonitor }: { gdkmonitor: Gdk.Monitor }) 
                 valign={Gtk.Align.CENTER}
                 orientation={Gtk.Orientation.VERTICAL}
                 spacing={12}
-                vexpand
               >
                 <image iconName="preferences-system-notifications-symbolic" pixelSize={64} class="placeholder-icon" />
                 <label label="All caught up!" class="dim-label" />
