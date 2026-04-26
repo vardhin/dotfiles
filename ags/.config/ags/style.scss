@@ -156,19 +156,54 @@ popover {
 
 // ── Active window title ────────────────────────────────────
 .active-window {
-  padding: 0 8px;
+  padding: 0;
   min-width: 200px;
+
+  .active-window-toggle {
+    @include bar-button;
+    padding: 2px 8px;
+    min-height: 24px;
+    width: 100%;
+  }
 
   .active-window-icon {
     margin-right: 6px;
     color: $fg;
   }
 
-  label {
+  .active-window-flip {
+    min-width: 0;
+  }
+
+  .active-window-face {
     color: $fg;
     font-size: 11px;
     letter-spacing: 0.35px;
     font-weight: 600;
+    transition: transform 220ms cubic-bezier(0.2, 0.75, 0.25, 1), opacity 220ms ease;
+  }
+
+  .active-window-face-title {
+    opacity: 1;
+    transform: rotateX(0deg) translateY(0);
+  }
+
+  .active-window-face-prompt {
+    opacity: 0;
+    color: $accent;
+    transform: rotateX(-82deg) translateY(6px);
+  }
+
+  .active-window-toggle:hover {
+    .active-window-face-title {
+      opacity: 0;
+      transform: rotateX(82deg) translateY(-6px);
+    }
+
+    .active-window-face-prompt {
+      opacity: 1;
+      transform: rotateX(0deg) translateY(0);
+    }
   }
 }
 

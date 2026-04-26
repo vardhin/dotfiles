@@ -15,6 +15,11 @@ import { createPoll } from "ags/time"
 import { execAsync } from "ags/process"
 import { notify } from "../lib/notify"
 
+const DROPDOWN_KITTY_CLASS = "ags-dropdown-cli"
+const DROPDOWN_KITTY_TITLE = "AGS CLI"
+const DROPDOWN_SCRATCH_WORKSPACE = "ags-cli-scratch"
+const DROPDOWN_SPAWN_GRACE_MS = 650
+
 function svgIcon(name: string): string {
   return `ags-${name}-symbolic`
 }
@@ -40,6 +45,138 @@ function volumeGlyph(level: number, muted: boolean): string {
 function micGlyph(level: number, muted: boolean): string {
   if (muted || level <= 0.01) return svgIcon("mic-muted")
   return svgIcon("mic")
+}
+
+interface HyprClientInfo {
+  class?: string
+  initialClass?: string
+  pinned?: boolean
+}
+
+let dropdownCliSpawnGraceUntil = 0
+let dropdownCliAutohideUsers = 0
+let dropdownCliFocusSignalId = 0
+let dropdownCliHidden = true
+
+function decodeBytes(bytes: Uint8Array): string {
+  return new TextDecoder().decode(bytes)
+}
+
+function listHyprClients(): HyprClientInfo[] {
+  try {
+    const out = GLib.spawn_command_line_sync("hyprctl -j clients")[1]
+    const parsed = JSON.parse(decodeBytes(out)) as unknown
+    return Array.isArray(parsed) ? parsed as HyprClientInfo[] : []
+  } catch {
+    return []
+  }
+}
+
+function dropdownCliClient(): HyprClientInfo | null {
+  const clients = listHyprClients()
+  for (const client of clients) {
+    const cls = (client.class || client.initialClass || "").toLowerCase()
+    if (cls === DROPDOWN_KITTY_CLASS) return client
+  }
+  return null
+}
+
+function hasDropdownCliClient(): boolean {
+  return dropdownCliClient() !== null
+}
+
+function focusedWorkspaceName(): string {
+  const hyprland = AstalHyprland.get_default()
+  return hyprland.focusedWorkspace?.name || ""
+}
+
+function moveDropdownToWorkspace(workspaceName: string) {
+  const hyprland = AstalHyprland.get_default()
+  hyprland.dispatch(
+    "movetoworkspacesilent",
+    `name:${workspaceName},class:^(${DROPDOWN_KITTY_CLASS})$`,
+  )
+}
+
+function hideDropdownCli() {
+  moveDropdownToWorkspace(DROPDOWN_SCRATCH_WORKSPACE)
+  dropdownCliHidden = true
+}
+
+function showDropdownCli() {
+  const target = focusedWorkspaceName()
+  if (!target) return
+  moveDropdownToWorkspace(target)
+  const hyprland = AstalHyprland.get_default()
+  hyprland.dispatch("focuswindow", `class:^(${DROPDOWN_KITTY_CLASS})$`)
+  dropdownCliHidden = false
+}
+
+function maybeAutoHideDropdownCli(eventArgs?: string) {
+  if (Date.now() < dropdownCliSpawnGraceUntil) return
+  if (!hasDropdownCliClient()) return
+  if (dropdownCliHidden) return
+
+  let focusedClass = ""
+  if (eventArgs && eventArgs.includes(",")) {
+    focusedClass = eventArgs.split(",", 1)[0].toLowerCase()
+  } else {
+    const hyprland = AstalHyprland.get_default()
+    const focused = hyprland.focusedClient
+    focusedClass = (focused?.class || focused?.initialClass || "").toLowerCase()
+  }
+  if (focusedClass === DROPDOWN_KITTY_CLASS) return
+
+  hideDropdownCli()
+}
+
+function retainDropdownCliAutohide() {
+  dropdownCliAutohideUsers += 1
+  if (dropdownCliFocusSignalId !== 0) return
+
+  const hyprland = AstalHyprland.get_default()
+  dropdownCliFocusSignalId = hyprland.connect("event", (_h: unknown, event: string, args: string) => {
+    if (event === "activewindow" || event === "activewindowv2" || event === "workspace") {
+      maybeAutoHideDropdownCli(args)
+    }
+  })
+}
+
+function releaseDropdownCliAutohide() {
+  dropdownCliAutohideUsers = Math.max(0, dropdownCliAutohideUsers - 1)
+  if (dropdownCliAutohideUsers > 0) return
+  if (dropdownCliFocusSignalId === 0) return
+
+  const hyprland = AstalHyprland.get_default()
+  hyprland.disconnect(dropdownCliFocusSignalId)
+  dropdownCliFocusSignalId = 0
+}
+
+export function toggleDropdownCli() {
+  const exists = hasDropdownCliClient()
+
+  if (!exists) {
+    dropdownCliSpawnGraceUntil = Date.now() + DROPDOWN_SPAWN_GRACE_MS
+    dropdownCliHidden = false
+    execAsync([
+      "kitty",
+      "--class",
+      DROPDOWN_KITTY_CLASS,
+      "--title",
+      DROPDOWN_KITTY_TITLE,
+      "-o",
+      "background_opacity=0.0",
+    ]).catch(console.error)
+    return
+  }
+
+  if (dropdownCliHidden) {
+    dropdownCliSpawnGraceUntil = Date.now() + DROPDOWN_SPAWN_GRACE_MS
+    showDropdownCli()
+    return
+  }
+
+  hideDropdownCli()
 }
 
 type BarPopoverKind = "clock" | "media" | "volume" | "brightness" | "wifi" | "bluetooth" | "battery"
@@ -127,22 +264,44 @@ function Workspaces() {
 function ActiveWindow() {
   const hyprland = AstalHyprland.get_default()
   const focused = createBinding(hyprland, "focusedClient")
+  const user = GLib.getenv("USER") || "user"
+  const host = GLib.get_host_name()
+  const promptPreview = `${user}@${host}:~$ kitty`
 
   return (
     <box class="active-window" hexpand>
-      <image class="active-window-icon" iconName={svgIcon("radio")} />
-      <With value={focused}>
-        {(client) =>
-            <label
-              label={client
-                ? createBinding(client, "title")((t) => {
-                    const title = t || ""
-                    return title.length > 52 ? title.substring(0, 49) + "..." : title
-                  })
-                : "Desktop"}
-            />
-        }
-      </With>
+      <button
+        class="active-window-toggle"
+        hexpand
+        onClicked={toggleDropdownCli}
+        tooltipText="Toggle persistent Kitty CLI"
+      >
+        <image class="active-window-icon" iconName={svgIcon("radio")} />
+        <overlay class="active-window-flip" hexpand>
+          <With value={focused}>
+            {(client) =>
+              <label
+                class="active-window-face active-window-face-title"
+                hexpand
+                xalign={0}
+                label={client
+                  ? createBinding(client, "title")((t) => {
+                      const title = t || ""
+                      return title.length > 52 ? title.substring(0, 49) + "..." : title
+                    })
+                  : "Desktop"}
+              />
+            }
+          </With>
+          <label
+            $type="overlay"
+            class="active-window-face active-window-face-prompt"
+            hexpand
+            xalign={0}
+            label={promptPreview}
+          />
+        </overlay>
+      </button>
     </box>
   )
 }
@@ -1786,12 +1945,16 @@ export default function Bar({ gdkmonitor }: { gdkmonitor: Gdk.Monitor }) {
   const { TOP, LEFT, RIGHT } = Astal.WindowAnchor
 
   onCleanup(() => {
+    releaseDropdownCliAutohide()
     win.destroy()
   })
 
   return (
     <window
-      $={(self) => (win = self)}
+      $={(self) => {
+        win = self
+        retainDropdownCliAutohide()
+      }}
       visible
       namespace="ags-bar"
       name={`bar-${gdkmonitor.connector}`}

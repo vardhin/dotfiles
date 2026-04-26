@@ -9,6 +9,7 @@ import Bar, {
   MediaPopover,
   VolumePopover,
   WifiPopover,
+  toggleDropdownCli,
 } from "./widget/Bar"
 import { NotificationPopups, NotificationCenter } from "./widget/Notifications"
 import { OSD } from "./widget/OSD"
@@ -117,7 +118,8 @@ app.start({
     )
   },
 
-  requestHandler(request: string, respond: (msg: string) => void) {
+  requestHandler(rawRequest: string | string[], respond: (msg: string) => void) {
+    const request = Array.isArray(rawRequest) ? rawRequest.join(" ") : String(rawRequest)
     if (request.startsWith("osd-brightness")) {
       respond("ok")
       return
@@ -131,6 +133,11 @@ app.start({
     if (request === "toggle-theme-switcher") {
       const win = app.get_window("theme-switcher")
       if (win) win.visible = !win.visible
+      respond("ok")
+      return
+    }
+    if (request === "toggle-dropdown-cli") {
+      toggleDropdownCli()
       respond("ok")
       return
     }

@@ -446,8 +446,13 @@ window > box.bar-shell {
 .clock-time,
 .clock-date,
 .active-window label,
+.active-window .active-window-face-title,
 .notification-count {
   color: ${c.fg} !important;
+}
+
+.active-window .active-window-face-prompt {
+  color: ${c.accent} !important;
 }
 
 button,
