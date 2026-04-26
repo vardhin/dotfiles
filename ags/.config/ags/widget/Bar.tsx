@@ -11,7 +11,7 @@ import AstalTray from "gi://AstalTray"
 import AstalMpris from "gi://AstalMpris"
 import AstalNotifd from "gi://AstalNotifd"
 import { For, With, createBinding, onCleanup } from "ags"
-import { YouTubeButton } from "./YouTubePlayer"
+import { MediaCenterButton } from "./MediaCenter"
 import { createPoll } from "ags/time"
 import { execAsync } from "ags/process"
 import { notify } from "../lib/notify"
@@ -335,7 +335,10 @@ function Mpris({ gdkmonitor }: { gdkmonitor: Gdk.Monitor }) {
             <box class="media-player" spacing={0}>
               <button
                 class="media-toggle"
-                onClicked={() => toggleBarPopover("media", gdkmonitor)}
+                onClicked={() => {
+                  const w = app.get_window("media-center")
+                  if (w) w.visible = !w.visible
+                }}
                 tooltipText="Media controls"
               >
                 <box spacing={6}>
@@ -1976,7 +1979,7 @@ export default function Bar({ gdkmonitor }: { gdkmonitor: Gdk.Monitor }) {
         <box class="bar-lane bar-lane-middle" hexpand spacing={8}>
           <ActiveWindow />
           <Mpris gdkmonitor={gdkmonitor} />
-          <YouTubeButton />
+          <MediaCenterButton />
         </box>
 
         <box class="bar-lane bar-lane-right" spacing={6} halign={Gtk.Align.END}>

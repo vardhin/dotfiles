@@ -2553,6 +2553,264 @@ $dw-card-shadow: 0 12px 28px rgba(0, 0, 0, 0.34), 0 3px 8px rgba(0, 0, 0, 0.2);
   }
 }
 
+// ━━━━━━━━━━━━━━━ MEDIA CENTER (combined widget) ━━━━━━━━━━━━━━━━━━━
+.mc-bar-btn {
+  button { @include bar-btn-hover; }
+  .mc-bar-label {
+    font-size: 10px;
+    font-weight: 700;
+    color: $accent;
+    letter-spacing: 0.4px;
+  }
+}
+
+.mc-panel {
+  background: $widget-card-bg;
+  border: 1px solid $widget-card-border;
+  border-radius: $radius-xl;
+  padding: 0 0 14px;
+
+  .mc-header {
+    padding: 12px 16px 10px;
+
+    .mc-header-icon { color: $accent; }
+
+    .mc-title {
+      font-size: 14px;
+      font-weight: 700;
+      color: $fg;
+      letter-spacing: 0.3px;
+    }
+
+    .mc-close-btn {
+      background: rgba(255,255,255,0.04);
+      border: 1px solid rgba(255,255,255,0.07);
+      border-radius: 7px;
+      padding: 5px;
+      min-height: 0;
+      min-width: 0;
+      transition: all 180ms ease;
+
+      &:hover {
+        background: rgba($red, 0.15);
+        border-color: rgba($red, 0.3);
+        image { color: $red; }
+      }
+      image { color: $fg-dim; }
+    }
+  }
+
+  .mc-divider {
+    min-height: 1px;
+    background: $surface-border-soft;
+    margin: 0 14px;
+  }
+
+  // TV — the framed thumbnail/video preview area
+  .mc-tv-row { padding: 0 14px; }
+
+  .mc-tv {
+    border-radius: $radius-lg;
+    border: 1px solid rgba(255,255,255,0.08);
+    background: rgba(0,0,0,0.55);
+    overflow: hidden;
+
+    .mc-tv-off-icon { color: rgba(255,255,255,0.18); }
+    .mc-tv-off-label {
+      font-size: 11px;
+      font-weight: 600;
+      letter-spacing: 2px;
+      color: rgba(255,255,255,0.25);
+    }
+
+    .mc-tv-img { border-radius: $radius-lg; }
+  }
+
+  .mc-tv-controls {
+    padding: 0 18px;
+
+    .mc-tv-title {
+      font-size: 11px;
+      font-weight: 600;
+      color: $fg-dim;
+    }
+
+    .mc-video-btn,
+    .mc-stop-btn {
+      padding: 5px 9px;
+      border-radius: 7px;
+      background: rgba(255,255,255,0.05);
+      border: 1px solid $surface-border;
+      transition: all 180ms ease;
+      min-height: 0;
+      min-width: 0;
+      image { color: $fg-dim; }
+    }
+
+    .mc-video-btn:hover {
+      background: rgba($accent, 0.12);
+      border-color: rgba($accent, 0.28);
+      image { color: $accent; }
+    }
+    .mc-video-btn.active {
+      background: rgba($accent, 0.18);
+      border-color: rgba($accent, 0.4);
+      image { color: $accent; }
+    }
+
+    .mc-stop-btn:hover {
+      background: rgba($red, 0.15);
+      border-color: rgba($red, 0.3);
+      image { color: $red; }
+    }
+  }
+
+  // CAVA visualizer
+  .mc-viz-row { padding: 0 14px; }
+
+  .mc-viz-card {
+    background: rgba(0,0,0,0.25);
+    border: 1px solid rgba(255,255,255,0.05);
+    border-radius: $radius-lg;
+    padding: 10px 14px 8px;
+
+    .mc-viz-header {
+      padding-bottom: 4px;
+    }
+    .mc-viz-header-icon { color: $magenta; }
+    .mc-viz-header-label {
+      font-size: 9px;
+      font-weight: 700;
+      color: $fg-faint;
+      letter-spacing: 2px;
+    }
+
+    .mc-viz-bars {
+      padding: 4px 0 2px;
+      min-height: 48px;
+    }
+
+    .mc-viz-bar {
+      min-width: 6px;
+      min-height: 48px;
+      border-radius: 2px;
+
+      trough {
+        background: rgba(255, 255, 255, 0.04);
+        border-radius: 2px;
+        min-width: 6px;
+      }
+      block {
+        border-radius: 2px;
+        min-width: 6px;
+      }
+      block.filled {
+        background: linear-gradient(0deg, $accent, $magenta);
+      }
+    }
+  }
+
+  // MPRIS player cards section
+  .mc-players-section { padding: 0 14px; }
+
+  .mc-section-label {
+    font-size: 9px;
+    font-weight: 700;
+    color: $fg-faint;
+    letter-spacing: 2px;
+    padding: 0 4px 2px;
+  }
+
+  .mc-player-card {
+    padding: 12px 14px;
+    border-radius: $radius-lg;
+    background: rgba(255,255,255,0.03);
+    border: 1px solid $surface-border-soft;
+
+    .mc-player-title {
+      font-size: 13px;
+      font-weight: 700;
+      color: $fg;
+    }
+    .mc-player-artist {
+      font-size: 11px;
+      color: $fg-dim;
+      font-style: italic;
+    }
+    .mc-player-identity {
+      font-size: 9px;
+      font-weight: 700;
+      color: $fg-faint;
+      letter-spacing: 1px;
+      padding: 3px 8px;
+      border-radius: 6px;
+      background: rgba(255,255,255,0.04);
+    }
+
+    .mc-player-progress {
+      margin: 2px 0;
+
+      trough {
+        background: rgba(255, 255, 255, 0.06);
+        border-radius: 3px;
+        min-height: 5px;
+      }
+      highlight {
+        background: linear-gradient(90deg, $magenta, rgba($accent, 0.7));
+        border-radius: 3px;
+        min-height: 5px;
+      }
+      slider {
+        background: $magenta;
+        border-radius: 50%;
+        min-width: 12px;
+        min-height: 12px;
+        margin: -4px 0;
+      }
+    }
+
+    .mc-player-time {
+      font-size: 10px;
+      color: $fg-faint;
+      font-weight: 600;
+    }
+
+    .mc-player-controls { padding: 4px 0 0; }
+
+    .mc-player-btn {
+      padding: 7px;
+      border-radius: 50%;
+      background: rgba(255, 255, 255, 0.04);
+      transition: all 180ms ease;
+      &:hover { background: rgba($accent, 0.15); }
+      image { color: $fg; }
+    }
+    .mc-player-play {
+      padding: 9px;
+      border-radius: 50%;
+      background: rgba($accent, 0.2);
+      border: 1px solid rgba($accent, 0.3);
+      transition: all 180ms ease;
+      &:hover {
+        background: rgba($accent, 0.35);
+        border-color: rgba($accent, 0.5);
+      }
+      image { color: white; }
+    }
+  }
+
+  .mc-no-players {
+    .mc-no-players-label {
+      font-size: 11px;
+      color: $fg-faint;
+      font-style: italic;
+    }
+  }
+
+  // Reuse YT styles, but scope tweaks for the embedded section
+  .mc-yt-section { padding: 0 14px; }
+}
+
 // ━━━━━━━━━━━━━━━ SHADOWLESS MODE ━━━━━━━━━━━━━━━━━━━
 // Force-disable shadows for all AGS widgets.
 window,

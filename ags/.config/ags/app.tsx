@@ -6,7 +6,6 @@ import Bar, {
   BluetoothPopover,
   BrightnessPopover,
   ClockPopover,
-  MediaPopover,
   VolumePopover,
   WifiPopover,
   toggleDropdownCli,
@@ -17,7 +16,7 @@ import { AppLauncher } from "./widget/AppLauncher"
 import { SessionMenu } from "./widget/Session"
 import { DesktopWidgets } from "./widget/DesktopWidgets"
 import { ThemeSwitcher, applyGeneratedThemeCSS } from "./widget/ThemeSwitcher"
-import { YouTubePlayerPopover } from "./widget/YouTubePlayer"
+import { MediaCenterPopover } from "./widget/MediaCenter"
 import { startBatteryMonitor } from "./lib/batteryMonitor"
 import GLib from "gi://GLib"
 import Gtk from "gi://Gtk?version=4.0"
@@ -94,13 +93,12 @@ app.start({
           const needsNotifCenter = !app.get_window("notification-center")
           const needsWidgets = !app.get_window("desktop-widgets")
           const needsThemeSwitcher = !app.get_window("theme-switcher")
-          const needsYtPlayer = !app.get_window("yt-player")
+          const needsMediaCenter = !app.get_window("media-center")
 
           return (
             <This this={app}>
               <Bar gdkmonitor={monitor} />
               <ClockPopover gdkmonitor={monitor} />
-              <MediaPopover gdkmonitor={monitor} />
               <VolumePopover gdkmonitor={monitor} />
               <BrightnessPopover gdkmonitor={monitor} />
               <WifiPopover gdkmonitor={monitor} />
@@ -113,7 +111,7 @@ app.start({
               {needsNotifCenter && <NotificationCenter gdkmonitor={monitor} />}
               {needsWidgets && <DesktopWidgets gdkmonitor={monitor} />}
               {needsThemeSwitcher && <ThemeSwitcher gdkmonitor={monitor} />}
-              {needsYtPlayer && <YouTubePlayerPopover gdkmonitor={monitor} />}
+              {needsMediaCenter && <MediaCenterPopover gdkmonitor={monitor} />}
             </This>
           )
         }}
