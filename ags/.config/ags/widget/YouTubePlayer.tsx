@@ -3,7 +3,7 @@ import Astal from "gi://Astal?version=4.0"
 import Gtk from "gi://Gtk?version=4.0"
 import Gdk from "gi://Gdk?version=4.0"
 import GLib from "gi://GLib"
-import { For, onCleanup } from "ags"
+import { onCleanup } from "ags"
 import { createPoll } from "ags/time"
 import { execAsync } from "ags/process"
 
@@ -16,9 +16,10 @@ interface YtResult {
 }
 
 // ── Thumbnail cache ────────────────────────────────────────────────────
-const thumbCache = new Map<string, string>()  // id → local file path
+const thumbCache = new Map<string, string>()
 const thumbPending = new Set<string>()
 const THUMB_DIR = `${GLib.get_user_cache_dir()}/ags-yt-thumbs`
+const YT_DLP = GLib.find_program_in_path("yt-dlp") || "/usr/bin/yt-dlp"
 
 function ensureThumbDir() {
   try { GLib.mkdir_with_parents(THUMB_DIR, 0o755) } catch { /* ignore */ }
@@ -45,7 +46,6 @@ function fetchThumbnail(id: string, onDone: (path: string) => void) {
 }
 
 // ── Thumbnail widget ───────────────────────────────────────────────────
-// Returns a Gtk.Stack that flips from placeholder to actual image once downloaded.
 function makeThumbnailWidget(id: string, w: number, h: number): Gtk.Widget {
   const stack = new Gtk.Stack()
   stack.set_size_request(w, h)
@@ -54,9 +54,8 @@ function makeThumbnailWidget(id: string, w: number, h: number): Gtk.Widget {
   const placeholder = new Gtk.Box()
   placeholder.set_halign(Gtk.Align.CENTER)
   placeholder.set_valign(Gtk.Align.CENTER)
-  const icon = new Gtk.Image()
-  icon.set_icon_name("multimedia-player-symbolic")
-  icon.set_pixel_size(Math.round(w / 3))
+  const icon = Gtk.Image.new_from_icon_name("multimedia-player-symbolic")
+  icon.pixel_size = Math.round(w / 3)
   icon.add_css_class("yt-thumb-placeholder")
   placeholder.append(icon)
   stack.add_named(placeholder, "placeholder")
@@ -64,6 +63,10 @@ function makeThumbnailWidget(id: string, w: number, h: number): Gtk.Widget {
 
   const tryLoad = (path: string) => {
     try {
+      if (stack.get_child_by_name("image")) {
+        stack.set_visible_child_name("image")
+        return
+      }
       const pic = new Gtk.Picture()
       pic.set_filename(path)
       pic.set_content_fit(Gtk.ContentFit.COVER)
@@ -78,7 +81,6 @@ function makeThumbnailWidget(id: string, w: number, h: number): Gtk.Widget {
     tryLoad(thumbCache.get(id)!)
   } else {
     fetchThumbnail(id, (path) => {
-      // Check stack still has children (not yet destroyed)
       if (stack.get_visible_child_name() !== "image") tryLoad(path)
     })
   }
@@ -86,7 +88,7 @@ function makeThumbnailWidget(id: string, w: number, h: number): Gtk.Widget {
   return stack
 }
 
-// ── Process management (real PIDs via GLib.spawn_async) ───────────────
+// ── Process management ─────────────────────────────────────────────────
 let audioPid: number | null = null
 let videoPid: number | null = null
 let videoVisible = false
@@ -120,7 +122,6 @@ function killPid(pid: number) {
 
 function killAudio() {
   if (audioPid !== null) { killPid(audioPid); audioPid = null }
-  // belt-and-suspenders for any stray mpv --no-video processes
   try { GLib.spawn_command_line_async("pkill -SIGTERM -f 'mpv --no-video'") } catch { /* ignore */ }
 }
 
@@ -161,7 +162,7 @@ function toggleVideoWindow(videoId: string) {
 async function searchYoutube(query: string): Promise<YtResult[]> {
   if (!query.trim()) return []
   const raw = await execAsync([
-    "yt-dlp", "--flat-playlist", "--dump-json", "--no-warnings", "--no-playlist",
+    YT_DLP, "--flat-playlist", "--dump-json", "--no-warnings", "--no-playlist",
     `ytsearch8:${query}`,
   ])
   const results: YtResult[] = []
@@ -185,20 +186,90 @@ async function searchYoutube(query: string): Promise<YtResult[]> {
       })
     } catch { /* skip */ }
   }
-  // kick off thumbnail fetches in background
-  for (const r of results) fetchThumbnail(r.id, () => { /* cached for later */ })
   return results
 }
 
 // ── Module-level state ─────────────────────────────────────────────────
-let ytResults: YtResult[] = []
 let ytStatus: "idle" | "searching" | "playing" | "error" = "idle"
 let ytStatusMsg = ""
 let ytNowPlaying: YtResult | null = null
 let ytSearchDebounce = 0
 
+// ── Build an imperative result row ────────────────────────────────────
+function makeResultRow(
+  track: YtResult,
+  onPlay: (t: YtResult) => void,
+): Gtk.Widget {
+  const row = new Gtk.Button()
+  row.add_css_class("yt-result-row")
+  row.set_tooltip_text(`Play: ${track.title}`)
+
+  const outer = new Gtk.Box({ spacing: 10 })
+  outer.set_margin_start(4); outer.set_margin_end(4)
+  outer.set_margin_top(2);   outer.set_margin_bottom(2)
+
+  const thumb = makeThumbnailWidget(track.id, 96, 54)
+  outer.append(thumb)
+
+  const textCol = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL, spacing: 3 })
+  textCol.set_hexpand(true)
+  textCol.set_valign(Gtk.Align.CENTER)
+
+  const titleLbl = new Gtk.Label({ xalign: 0 })
+  titleLbl.add_css_class("yt-result-title")
+  titleLbl.set_ellipsize(3)
+  titleLbl.set_max_width_chars(38)
+  titleLbl.set_label(track.title)
+
+  const chanLbl = new Gtk.Label({ xalign: 0 })
+  chanLbl.add_css_class("yt-result-channel")
+  chanLbl.set_label(track.channel)
+
+  textCol.append(titleLbl)
+  textCol.append(chanLbl)
+  outer.append(textCol)
+
+  const rightCol = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL, spacing: 4 })
+  rightCol.set_valign(Gtk.Align.CENTER)
+  rightCol.set_halign(Gtk.Align.END)
+
+  const playImg = Gtk.Image.new_from_icon_name("audio-x-generic-symbolic")
+  playImg.pixel_size = 16
+  playImg.add_css_class("yt-result-icon")
+  rightCol.append(playImg)
+
+  if (track.duration) {
+    const durLbl = new Gtk.Label()
+    durLbl.add_css_class("yt-result-duration")
+    durLbl.set_label(track.duration)
+    rightCol.append(durLbl)
+  }
+
+  outer.append(rightCol)
+  row.set_child(outer)
+
+  let wasPlaying = false
+  GLib.timeout_add(GLib.PRIORITY_DEFAULT, 200, () => {
+    if (!row.get_parent()) return GLib.SOURCE_REMOVE
+    const isPlaying = ytNowPlaying?.id === track.id
+    if (isPlaying !== wasPlaying) {
+      wasPlaying = isPlaying
+      if (isPlaying) {
+        row.add_css_class("playing")
+        playImg.icon_name = "media-playback-start-symbolic"
+      } else {
+        row.remove_css_class("playing")
+        playImg.icon_name = "audio-x-generic-symbolic"
+      }
+    }
+    return GLib.SOURCE_CONTINUE
+  })
+
+  row.connect("clicked", () => onPlay(track))
+  return row
+}
+
 // ── Now-playing thumbnail box ─────────────────────────────────────────
-// Returns the widget and a source ID to cancel the timer on cleanup.
 function NowPlayingThumb(): { widget: Gtk.Widget; sourceId: number } {
   const container = new Gtk.Box()
   container.set_size_request(64, 36)
@@ -223,7 +294,6 @@ function NowPlayingThumb(): { widget: Gtk.Widget; sourceId: number } {
 
 // ── Main popover ───────────────────────────────────────────────────────
 export function YouTubePlayerPopover({ gdkmonitor }: { gdkmonitor: Gdk.Monitor }) {
-  const resultsState    = createPoll([] as YtResult[], 300, () => ytResults)
   const statusState     = createPoll("idle" as typeof ytStatus, 200, () => ytStatus)
   const statusMsgState  = createPoll("", 200, () => ytStatusMsg)
   const nowPlayingState = createPoll(null as YtResult | null, 200, () => ytNowPlaying)
@@ -234,28 +304,39 @@ export function YouTubePlayerPopover({ gdkmonitor }: { gdkmonitor: Gdk.Monitor }
 
   const hide = () => { if (win) win.visible = false }
 
+  const { widget: npThumb, sourceId: npThumbSourceId } = NowPlayingThumb()
+
+  // Imperatively-managed results list
+  let resultsList: Gtk.Box | null = null
+  let emptyBox: Gtk.Widget | null = null
+
+  function rebuildResults(tracks: YtResult[], onPlay: (t: YtResult) => void) {
+    if (!resultsList) return
+
+    // remove old rows (everything except emptyBox)
+    let child = resultsList.get_first_child()
+    while (child) {
+      const next = child.get_next_sibling()
+      if (child !== emptyBox) resultsList.remove(child)
+      child = next
+    }
+
+    let prev: Gtk.Widget | null = null
+    for (const track of tracks) {
+      const row = makeResultRow(track, onPlay)
+      resultsList.insert_child_after(row, prev)
+      prev = row
+    }
+
+    if (emptyBox) emptyBox.set_visible(tracks.length === 0)
+  }
+
   onCleanup(() => {
     if (ytSearchDebounce) GLib.source_remove(ytSearchDebounce)
     GLib.source_remove(npThumbSourceId)
     stopAll()
     win?.destroy()
   })
-
-  const doSearch = (query: string) => {
-    if (ytSearchDebounce) { GLib.source_remove(ytSearchDebounce); ytSearchDebounce = 0 }
-    if (!query.trim()) { ytResults = []; ytStatus = "idle"; ytStatusMsg = ""; return }
-
-    ytSearchDebounce = GLib.timeout_add(GLib.PRIORITY_DEFAULT, 500, () => {
-      ytSearchDebounce = 0
-      ytStatus = "searching"; ytStatusMsg = "Searching..."
-      searchYoutube(query).then((res) => {
-        ytResults = res
-        ytStatus = ytNowPlaying ? "playing" : (res.length > 0 ? "idle" : "error")
-        ytStatusMsg = res.length > 0 ? "" : "No results found"
-      }).catch(() => { ytStatus = "error"; ytStatusMsg = "Search failed" })
-      return GLib.SOURCE_REMOVE
-    })
-  }
 
   const playTrack = (track: YtResult) => {
     ytNowPlaying = track
@@ -264,14 +345,39 @@ export function YouTubePlayerPopover({ gdkmonitor }: { gdkmonitor: Gdk.Monitor }
     playAudio(track.id)
   }
 
+  const doSearch = (query: string) => {
+    if (ytSearchDebounce) { GLib.source_remove(ytSearchDebounce); ytSearchDebounce = 0 }
+    if (!query.trim()) {
+      ytStatus = "idle"
+      ytStatusMsg = ""
+      rebuildResults([], playTrack)
+      return
+    }
+    ytStatus = "searching"
+    ytStatusMsg = "Searching..."
+    rebuildResults([], playTrack)
+
+    ytSearchDebounce = GLib.timeout_add(GLib.PRIORITY_DEFAULT, 500, () => {
+      ytSearchDebounce = 0
+      searchYoutube(query).then((res) => {
+        ytStatus = ytNowPlaying ? "playing" : (res.length > 0 ? "idle" : "error")
+        ytStatusMsg = res.length > 0 ? "" : "No results found"
+        rebuildResults(res, playTrack)
+      }).catch((error) => {
+        ytStatus = "error"
+        ytStatusMsg = error instanceof Error ? error.message : "Search failed"
+        rebuildResults([], playTrack)
+      })
+      return GLib.SOURCE_REMOVE
+    })
+  }
+
   const stopPlayback = () => {
     stopAll()
     ytNowPlaying = null
     ytStatus = "idle"
     ytStatusMsg = ""
   }
-
-  const { widget: npThumb, sourceId: npThumbSourceId } = NowPlayingThumb()
 
   return (
     <window
@@ -349,7 +455,6 @@ export function YouTubePlayerPopover({ gdkmonitor }: { gdkmonitor: Gdk.Monitor }
             spacing={10}
             visible={nowPlayingState((np) => np !== null)}
           >
-            {/* imperative thumbnail box — updated by NowPlayingThumb() timer */}
             <box $={(self) => { self.append(npThumb) }} />
 
             <box orientation={Gtk.Orientation.VERTICAL} hexpand spacing={2}>
@@ -388,94 +493,20 @@ export function YouTubePlayerPopover({ gdkmonitor }: { gdkmonitor: Gdk.Monitor }
             vscrollbarPolicy={Gtk.PolicyType.AUTOMATIC}
             maxContentHeight={460}
           >
-            <box class="yt-results-list" orientation={Gtk.Orientation.VERTICAL} spacing={3}>
-              <For each={resultsState}>
-                {(track) => {
-                  // Build row imperatively so we can embed a real Gtk.Widget thumbnail
-                  const row = new Gtk.Button()
-                  row.add_css_class("yt-result-row")
-                  row.set_tooltip_text(`Play: ${track.title}`)
-
-                  const outer = new Gtk.Box({ spacing: 10 })
-                  outer.set_margin_start(4); outer.set_margin_end(4)
-                  outer.set_margin_top(2);   outer.set_margin_bottom(2)
-
-                  // thumbnail
-                  const thumb = makeThumbnailWidget(track.id, 96, 54)
-                  outer.append(thumb)
-
-                  // text
-                  const textCol = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL, spacing: 3 })
-                  textCol.set_hexpand(true)
-                  textCol.set_valign(Gtk.Align.CENTER)
-
-                  const titleLbl = new Gtk.Label({ xalign: 0 })
-                  titleLbl.add_css_class("yt-result-title")
-                  titleLbl.set_ellipsize(3)
-                  titleLbl.set_max_width_chars(38)
-                  titleLbl.set_label(track.title)
-
-                  const chanLbl = new Gtk.Label({ xalign: 0 })
-                  chanLbl.add_css_class("yt-result-channel")
-                  chanLbl.set_label(track.channel)
-
-                  textCol.append(titleLbl)
-                  textCol.append(chanLbl)
-                  outer.append(textCol)
-
-                  // right side: play indicator + duration
-                  const rightCol = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL, spacing: 4 })
-                  rightCol.set_valign(Gtk.Align.CENTER)
-                  rightCol.set_halign(Gtk.Align.END)
-
-                  const playImg = new Gtk.Image()
-                  playImg.set_icon_name("audio-x-generic-symbolic")
-                  playImg.set_pixel_size(16)
-                  playImg.add_css_class("yt-result-icon")
-                  rightCol.append(playImg)
-
-                  if (track.duration) {
-                    const durLbl = new Gtk.Label()
-                    durLbl.add_css_class("yt-result-duration")
-                    durLbl.set_label(track.duration)
-                    rightCol.append(durLbl)
-                  }
-
-                  outer.append(rightCol)
-                  row.set_child(outer)
-
-                  // poll playing state for this row
-                  let wasPlaying = false
-                  GLib.timeout_add(GLib.PRIORITY_DEFAULT, 200, () => {
-                    // stop polling if row is no longer attached
-                    if (!row.get_parent()) return GLib.SOURCE_REMOVE
-                    const isPlaying = ytNowPlaying?.id === track.id
-                    if (isPlaying !== wasPlaying) {
-                      wasPlaying = isPlaying
-                      if (isPlaying) {
-                        row.add_css_class("playing")
-                        playImg.set_icon_name("media-playback-start-symbolic")
-                      } else {
-                        row.remove_css_class("playing")
-                        playImg.set_icon_name("audio-x-generic-symbolic")
-                      }
-                    }
-                    return GLib.SOURCE_CONTINUE
-                  })
-
-                  row.connect("clicked", () => playTrack(track))
-                  return row
-                }}
-              </For>
-
-              {/* empty */}
+            <box
+              class="yt-results-list"
+              orientation={Gtk.Orientation.VERTICAL}
+              spacing={3}
+              $={(self) => { resultsList = self }}
+            >
+              {/* empty state — always present, hidden when results exist */}
               <box
                 class="yt-empty"
                 orientation={Gtk.Orientation.VERTICAL}
                 spacing={8}
                 halign={Gtk.Align.CENTER}
                 marginTop={32} marginBottom={32}
-                visible={resultsState((r) => r.length === 0)}
+                $={(self) => { emptyBox = self }}
               >
                 <image iconName="multimedia-player-symbolic" pixelSize={48} class="yt-empty-icon" />
                 <label
