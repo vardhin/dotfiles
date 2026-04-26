@@ -11,6 +11,7 @@ import AstalTray from "gi://AstalTray"
 import AstalMpris from "gi://AstalMpris"
 import AstalNotifd from "gi://AstalNotifd"
 import { For, With, createBinding, onCleanup } from "ags"
+import { YouTubeButton } from "./YouTubePlayer"
 import { createPoll } from "ags/time"
 import { execAsync } from "ags/process"
 import { notify } from "../lib/notify"
@@ -1975,6 +1976,7 @@ export default function Bar({ gdkmonitor }: { gdkmonitor: Gdk.Monitor }) {
         <box class="bar-lane bar-lane-middle" hexpand spacing={8}>
           <ActiveWindow />
           <Mpris gdkmonitor={gdkmonitor} />
+          <YouTubeButton />
         </box>
 
         <box class="bar-lane bar-lane-right" spacing={6} halign={Gtk.Align.END}>

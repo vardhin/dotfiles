@@ -17,6 +17,7 @@ import { AppLauncher } from "./widget/AppLauncher"
 import { SessionMenu } from "./widget/Session"
 import { DesktopWidgets } from "./widget/DesktopWidgets"
 import { ThemeSwitcher, applyGeneratedThemeCSS } from "./widget/ThemeSwitcher"
+import { YouTubePlayerPopover } from "./widget/YouTubePlayer"
 import { startBatteryMonitor } from "./lib/batteryMonitor"
 import GLib from "gi://GLib"
 import Gtk from "gi://Gtk?version=4.0"
@@ -93,6 +94,7 @@ app.start({
           const needsNotifCenter = !app.get_window("notification-center")
           const needsWidgets = !app.get_window("desktop-widgets")
           const needsThemeSwitcher = !app.get_window("theme-switcher")
+          const needsYtPlayer = !app.get_window("yt-player")
 
           return (
             <This this={app}>
@@ -111,6 +113,7 @@ app.start({
               {needsNotifCenter && <NotificationCenter gdkmonitor={monitor} />}
               {needsWidgets && <DesktopWidgets gdkmonitor={monitor} />}
               {needsThemeSwitcher && <ThemeSwitcher gdkmonitor={monitor} />}
+              {needsYtPlayer && <YouTubePlayerPopover gdkmonitor={monitor} />}
             </This>
           )
         }}
