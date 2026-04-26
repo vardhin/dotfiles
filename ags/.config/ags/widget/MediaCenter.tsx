@@ -661,7 +661,7 @@ export function MediaCenterPopover({ gdkmonitor }: { gdkmonitor: Gdk.Monitor }) 
       gdkmonitor={gdkmonitor}
       exclusivity={Astal.Exclusivity.IGNORE}
       keymode={Astal.Keymode.ON_DEMAND}
-      layer={Astal.Layer.TOP}
+      layer={Astal.Layer.OVERLAY}
       anchor={TOP | LEFT | BOTTOM | RIGHT}
       application={app}
     >
@@ -675,9 +675,10 @@ export function MediaCenterPopover({ gdkmonitor }: { gdkmonitor: Gdk.Monitor }) 
           halign={Gtk.Align.CENTER}
           valign={Gtk.Align.START}
           marginTop={50}
+          marginBottom={50}
           widthRequest={620}
         >
-          {/* Header */}
+          {/* Header (sticky, outside scroll) */}
           <box class="mc-header" spacing={10}>
             <image iconName="multimedia-player-symbolic" pixelSize={18} class="mc-header-icon" />
             <label class="mc-title" label="Media Center" hexpand xalign={0} />
@@ -688,131 +689,135 @@ export function MediaCenterPopover({ gdkmonitor }: { gdkmonitor: Gdk.Monitor }) 
 
           <box class="mc-divider" />
 
-          {/* TV / current visual */}
-          <box class="mc-tv-row" halign={Gtk.Align.CENTER} marginTop={10}>
-            <box $={(self) => { self.append(tvWidget) }} />
-          </box>
-
-          {/* TV controls (only when YT track loaded) */}
-          <box
-            class="mc-tv-controls"
-            spacing={8}
-            halign={Gtk.Align.CENTER}
-            marginTop={6}
-            visible={ytPlayingState((np) => np !== null)}
+          {/* Scrollable body */}
+          <scrolledwindow
+            class="mc-scroll"
+            vexpand
+            hscrollbarPolicy={Gtk.PolicyType.NEVER}
+            vscrollbarPolicy={Gtk.PolicyType.AUTOMATIC}
+            propagateNaturalHeight
+            maxContentHeight={720}
           >
-            <label
-              class="mc-tv-title"
-              label={ytPlayingState((np) => np?.title || "")}
-              ellipsize={3}
-              maxWidthChars={42}
-              hexpand
-              xalign={0}
-            />
-            <button
-              class={videoVisState((v) => `mc-video-btn ${v ? "active" : ""}`)}
-              tooltipText={videoVisState((v) => v ? "Close video" : "Open video window")}
-              onClicked={() => { if (ytNowPlaying) toggleYtVideo(ytNowPlaying.id) }}
-            >
-              <image iconName="camera-video-symbolic" pixelSize={14} />
-            </button>
-            <button class="mc-stop-btn" onClicked={stopYtPlayback} tooltipText="Stop YouTube">
-              <image iconName="media-playback-stop-symbolic" pixelSize={14} />
-            </button>
-          </box>
+            <box orientation={Gtk.Orientation.VERTICAL} spacing={0}>
+              {/* TV */}
+              <box class="mc-tv-row" halign={Gtk.Align.CENTER} marginTop={10}>
+                <box $={(self) => { self.append(tvWidget) }} />
+              </box>
 
-          {/* CAVA visualizer */}
-          <box class="mc-viz-row" marginTop={10}>
-            <box hexpand $={(self) => { self.append(cavaWidget) }} />
-          </box>
-
-          <box class="mc-divider" marginTop={10} />
-
-          {/* MPRIS players */}
-          <box
-            class="mc-players-section"
-            orientation={Gtk.Orientation.VERTICAL}
-            spacing={8}
-            marginTop={10}
-            visible={players((p) => p.length > 0)}
-          >
-            <label class="mc-section-label" label="ACTIVE PLAYERS" xalign={0} />
-            <For each={players}>
-              {(player) => <MprisCard player={player} />}
-            </For>
-          </box>
-
-          <box
-            class="mc-no-players"
-            visible={players((p) => p.length === 0)}
-            halign={Gtk.Align.CENTER}
-            marginTop={10}
-            marginBottom={6}
-          >
-            <label class="mc-no-players-label" label="No active media players" />
-          </box>
-
-          <box class="mc-divider" marginTop={10} />
-
-          {/* YouTube search */}
-          <box class="mc-yt-section" orientation={Gtk.Orientation.VERTICAL} marginTop={8}>
-            <box class="yt-search-row" spacing={8}>
-              <image iconName="system-search-symbolic" pixelSize={16} class="yt-search-icon" />
-              <entry
-                class="yt-search-entry"
-                hexpand
-                placeholderText="Search YouTube..."
-                onChanged={(self) => doSearch(self.text)}
-                onActivate={(self) => doSearch(self.text)}
-              />
-            </box>
-
-            <box
-              class={statusState((s) => `yt-status-row yt-status-${s}`)}
-              spacing={6}
-              visible={statusMsgState((m) => m.length > 0)}
-            >
-              <image
-                iconName={statusState((s) =>
-                  s === "searching" ? "view-refresh-symbolic" :
-                  s === "error"     ? "dialog-error-symbolic" :
-                                      "media-playback-start-symbolic"
-                )}
-                pixelSize={12}
-              />
-              <label class="yt-status-label" label={statusMsgState} hexpand xalign={0} />
-            </box>
-
-            <scrolledwindow
-              class="yt-results-scroll"
-              vexpand
-              hscrollbarPolicy={Gtk.PolicyType.NEVER}
-              vscrollbarPolicy={Gtk.PolicyType.AUTOMATIC}
-              maxContentHeight={300}
-            >
+              {/* YT now-playing label + open-video / stop */}
               <box
-                class="yt-results-list"
-                orientation={Gtk.Orientation.VERTICAL}
-                spacing={3}
-                $={(self) => { resultsList = self }}
+                class="mc-tv-controls"
+                spacing={8}
+                halign={Gtk.Align.CENTER}
+                marginTop={6}
+                visible={ytPlayingState((np) => np !== null)}
               >
-                <box
-                  class="yt-empty"
-                  orientation={Gtk.Orientation.VERTICAL}
-                  spacing={8}
-                  halign={Gtk.Align.CENTER}
-                  marginTop={20} marginBottom={20}
-                  $={(self) => { emptyBox = self }}
+                <label
+                  class="mc-tv-title"
+                  label={ytPlayingState((np) => np?.title || "")}
+                  ellipsize={3}
+                  maxWidthChars={42}
+                  hexpand
+                  xalign={0}
+                />
+                <button
+                  class={videoVisState((v) => `mc-video-btn ${v ? "active" : ""}`)}
+                  tooltipText={videoVisState((v) => v ? "Close video" : "Open video window")}
+                  onClicked={() => { if (ytNowPlaying) toggleYtVideo(ytNowPlaying.id) }}
                 >
-                  <image iconName="multimedia-player-symbolic" pixelSize={36} class="yt-empty-icon" />
-                  <label
-                    class="yt-empty-label"
-                    label={statusState((s) => s === "searching" ? "Searching..." : "Search YouTube to play audio")}
+                  <image iconName="camera-video-symbolic" pixelSize={14} />
+                </button>
+                <button class="mc-stop-btn" onClicked={stopYtPlayback} tooltipText="Stop YouTube">
+                  <image iconName="media-playback-stop-symbolic" pixelSize={14} />
+                </button>
+              </box>
+
+              {/* CAVA visualizer */}
+              <box class="mc-viz-row" marginTop={10}>
+                <box hexpand $={(self) => { self.append(cavaWidget) }} />
+              </box>
+
+              <box class="mc-divider" marginTop={10} />
+
+              {/* MPRIS players */}
+              <box
+                class="mc-players-section"
+                orientation={Gtk.Orientation.VERTICAL}
+                spacing={8}
+                marginTop={10}
+                visible={players((p) => p.length > 0)}
+              >
+                <label class="mc-section-label" label="ACTIVE PLAYERS" xalign={0} />
+                <For each={players}>
+                  {(player) => <MprisCard player={player} />}
+                </For>
+              </box>
+
+              <box
+                class="mc-no-players"
+                visible={players((p) => p.length === 0)}
+                halign={Gtk.Align.CENTER}
+                marginTop={10}
+                marginBottom={6}
+              >
+                <label class="mc-no-players-label" label="No active media players" />
+              </box>
+
+              <box class="mc-divider" marginTop={10} />
+
+              {/* YouTube search */}
+              <box class="mc-yt-section" orientation={Gtk.Orientation.VERTICAL} marginTop={8}>
+                <box class="yt-search-row" spacing={8}>
+                  <image iconName="system-search-symbolic" pixelSize={16} class="yt-search-icon" />
+                  <entry
+                    class="yt-search-entry"
+                    hexpand
+                    placeholderText="Search YouTube..."
+                    onChanged={(self) => doSearch(self.text)}
+                    onActivate={(self) => doSearch(self.text)}
                   />
                 </box>
+
+                <box
+                  class={statusState((s) => `yt-status-row yt-status-${s}`)}
+                  spacing={6}
+                  visible={statusMsgState((m) => m.length > 0)}
+                >
+                  <image
+                    iconName={statusState((s) =>
+                      s === "searching" ? "view-refresh-symbolic" :
+                      s === "error"     ? "dialog-error-symbolic" :
+                                          "media-playback-start-symbolic"
+                    )}
+                    pixelSize={12}
+                  />
+                  <label class="yt-status-label" label={statusMsgState} hexpand xalign={0} />
+                </box>
+
+                <box
+                  class="yt-results-list"
+                  orientation={Gtk.Orientation.VERTICAL}
+                  spacing={3}
+                  $={(self) => { resultsList = self }}
+                >
+                  <box
+                    class="yt-empty"
+                    orientation={Gtk.Orientation.VERTICAL}
+                    spacing={8}
+                    halign={Gtk.Align.CENTER}
+                    marginTop={20} marginBottom={20}
+                    $={(self) => { emptyBox = self }}
+                  >
+                    <image iconName="multimedia-player-symbolic" pixelSize={36} class="yt-empty-icon" />
+                    <label
+                      class="yt-empty-label"
+                      label={statusState((s) => s === "searching" ? "Searching..." : "Search YouTube to play audio")}
+                    />
+                  </box>
+                </box>
               </box>
-            </scrolledwindow>
-          </box>
+            </box>
+          </scrolledwindow>
         </box>
       </overlay>
     </window>
@@ -821,6 +826,33 @@ export function MediaCenterPopover({ gdkmonitor }: { gdkmonitor: Gdk.Monitor }) 
 
 // ── Bar button ────────────────────────────────────────────────────────
 export function MediaCenterButton() {
+  const mpris = AstalMpris.get_default()
+  const players = createBinding(mpris, "players")
+
+  // active player = first PLAYING; fallback to first player
+  const activePlayer = players((list) => {
+    if (list.length === 0) return null
+    const playing = list.find((p) =>
+      p.playbackStatus === AstalMpris.PlaybackStatus.PLAYING
+    )
+    return playing || list[0]
+  })
+
+  // re-bind title/status when the active player changes
+  const labelBinding = activePlayer((p) => {
+    if (!p) return "MEDIA"
+    const t = p.title || ""
+    if (!t) return p.identity || "MEDIA"
+    return t.length > 24 ? t.substring(0, 21) + "..." : t
+  })
+
+  const iconBinding = activePlayer((p) => {
+    if (!p) return "multimedia-player-symbolic"
+    return p.playbackStatus === AstalMpris.PlaybackStatus.PLAYING
+      ? "media-playback-start-symbolic"
+      : "media-playback-pause-symbolic"
+  })
+
   return (
     <box class="mc-bar-btn">
       <button
@@ -830,9 +862,9 @@ export function MediaCenterButton() {
         }}
         tooltipText="Media Center"
       >
-        <box spacing={4}>
-          <image iconName="multimedia-player-symbolic" pixelSize={16} />
-          <label class="mc-bar-label" label="MEDIA" />
+        <box spacing={6}>
+          <image iconName={iconBinding} pixelSize={14} />
+          <label class="mc-bar-label" label={labelBinding} />
         </box>
       </button>
     </box>

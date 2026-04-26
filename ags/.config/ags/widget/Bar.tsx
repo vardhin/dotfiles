@@ -1978,7 +1978,6 @@ export default function Bar({ gdkmonitor }: { gdkmonitor: Gdk.Monitor }) {
 
         <box class="bar-lane bar-lane-middle" hexpand spacing={8}>
           <ActiveWindow />
-          <Mpris gdkmonitor={gdkmonitor} />
           <MediaCenterButton />
         </box>
 

@@ -2606,6 +2606,21 @@ $dw-card-shadow: 0 12px 28px rgba(0, 0, 0, 0.34), 0 3px 8px rgba(0, 0, 0, 0.2);
     margin: 0 14px;
   }
 
+  .mc-scroll {
+    background: transparent;
+
+    scrollbar {
+      background: transparent;
+      border: none;
+    }
+    scrollbar slider {
+      background: rgba(255, 255, 255, 0.12);
+      border-radius: 4px;
+      min-width: 6px;
+    }
+    scrollbar slider:hover { background: rgba(255, 255, 255, 0.2); }
+  }
+
   // TV — the framed thumbnail/video preview area
   .mc-tv-row { padding: 0 14px; }
 
