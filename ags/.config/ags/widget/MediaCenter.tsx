@@ -96,6 +96,28 @@ let ytVideo: Gtk.Video | null = null
 let ytMediaStream: Gtk.MediaFile | null = null
 let ytTvStack: Gtk.Stack | null = null
 let ytPlayToken = 0
+let ytUpgradeInFlightFor: string | null = null
+const YT_MEDIA_DIR = `${GLib.get_user_cache_dir()}/ags-yt-media`
+
+function ensureYtMediaDir() {
+  try { GLib.mkdir_with_parents(YT_MEDIA_DIR, 0o755) } catch { /* ignore */ }
+}
+
+function readMediaDurationRaw(): number {
+  try { return Number((ytMediaStream as any)?.get_duration?.() || 0) } catch { return 0 }
+}
+
+function readMediaTimestampRaw(): number {
+  try { return Number((ytMediaStream as any)?.get_timestamp?.() || 0) } catch { return 0 }
+}
+
+function mediaUnitsToSeconds(raw: number): number {
+  if (!raw || raw <= 0) return 0
+  // Gtk/GStreamer time can be ns or us depending on backend layers.
+  if (raw > 10_000_000_000) return raw / 1_000_000_000
+  if (raw > 10_000_000) return raw / 1_000_000
+  return raw
+}
 
 function refreshTvMode() {
   if (!ytTvStack) return
@@ -119,21 +141,19 @@ function clearEmbeddedMedia() {
 }
 
 function stopYtAll() {
+  ytUpgradeInFlightFor = null
   clearEmbeddedMedia()
   // Best-effort cleanup for legacy processes from previous config versions.
   try { GLib.spawn_command_line_async("pkill -SIGTERM -f 'mpv --no-video'") } catch { /* ignore */ }
   try { GLib.spawn_command_line_async("pkill -SIGTERM -f 'ags-yt-video'") } catch { /* ignore */ }
 }
 
-async function resolveYtStreamUrl(videoId: string): Promise<string> {
-  const watchUrl = `https://www.youtube.com/watch?v=${videoId}`
+function ytFilePath(videoId: string, quality: "360" | "480"): string {
+  return `${YT_MEDIA_DIR}/${videoId}-${quality}.mp4`
+}
 
-  const formats = [
-    // Prefer progressive mp4 first for best Gtk/GStreamer compatibility.
-    "best[ext=mp4][vcodec^=avc1][acodec^=mp4a]/best[ext=mp4][acodec!=none][vcodec!=none]",
-    "best[height<=1080][acodec!=none][vcodec!=none]",
-    "best",
-  ]
+async function downloadYtToFile(videoId: string, formats: string[], dest: string): Promise<boolean> {
+  const watchUrl = `https://www.youtube.com/watch?v=${videoId}`
 
   const commonArgs = [
     YT_DLP,
@@ -146,50 +166,133 @@ async function resolveYtStreamUrl(videoId: string): Promise<string> {
 
   for (const format of formats) {
     try {
-      const raw = await execAsync([
+      await execAsync([
         ...commonArgs,
         "-f",
         format,
-        "-g",
+        "--force-overwrites",
+        "-o",
+        dest,
         watchUrl,
       ])
-      const direct = raw
-        .split("\n")
-        .map((l: string) => l.trim())
-        .find((l: string) => l.length > 0)
-      if (direct) return direct
+      if (GLib.file_test(dest, GLib.FileTest.EXISTS)) return true
     } catch {
       // Try next format fallback.
     }
   }
 
-  throw new Error("Could not resolve a playable stream")
+  return false
+}
+
+async function ensureYtFile360(videoId: string): Promise<string> {
+  ensureYtMediaDir()
+  const dest = ytFilePath(videoId, "360")
+  if (GLib.file_test(dest, GLib.FileTest.EXISTS)) return dest
+  const ok = await downloadYtToFile(videoId, [
+    // 360p-first startup path, with safe mp4 fallbacks.
+    "best[height<=360][ext=mp4][vcodec!=none][acodec!=none]",
+    "18",
+    "best[height<=360][acodec!=none][vcodec!=none]",
+    "best[height<=480][ext=mp4][vcodec!=none][acodec!=none]",
+  ], dest)
+  if (!ok) throw new Error("Could not download startup stream")
+  return dest
+}
+
+async function ensureYtFile480(videoId: string): Promise<string> {
+  ensureYtMediaDir()
+  const dest = ytFilePath(videoId, "480")
+  if (GLib.file_test(dest, GLib.FileTest.EXISTS)) return dest
+  const ok = await downloadYtToFile(videoId, [
+    // 480p target path after startup playback begins.
+    "best[height<=480][ext=mp4][vcodec!=none][acodec!=none]",
+    "best[height<=480][acodec!=none][vcodec!=none]",
+    "best[ext=mp4][vcodec!=none][acodec!=none]",
+  ], dest)
+  if (!ok) throw new Error("Could not download upgraded stream")
+  return dest
+}
+
+function swapMediaToFile(filePath: string, token: number, videoId: string) {
+  if (token !== ytPlayToken || ytNowPlaying?.id !== videoId) return
+
+  const hadPrevStream = ytMediaStream !== null
+  const wasPlaying = (() => {
+    if (!hadPrevStream) return true
+    try { return Boolean((ytMediaStream as any)?.get_playing?.()) } catch { return true }
+  })()
+  const prevDur = readMediaDurationRaw()
+  const prevPos = readMediaTimestampRaw()
+  const prevRatio = prevDur > 0 ? Math.max(0, Math.min(1, prevPos / prevDur)) : 0
+
+  const media = Gtk.MediaFile.new_for_file(Gio.File.new_for_path(filePath))
+  media.set_muted(false)
+  ytMediaStream = media
+  ytVideo?.set_media_stream(media)
+  try { (ytMediaStream as any).play?.() } catch { /* ignore */ }
+
+  // Seek once duration becomes available on the new stream.
+  let attempts = 0
+  GLib.timeout_add(GLib.PRIORITY_DEFAULT, 120, () => {
+    if (token !== ytPlayToken || ytNowPlaying?.id !== videoId) return GLib.SOURCE_REMOVE
+    attempts++
+    const dur = readMediaDurationRaw()
+    if (dur > 0) {
+      try {
+        ;(ytMediaStream as any).seek?.(dur * prevRatio)
+        ;(ytMediaStream as any).set_playing?.(hadPrevStream ? wasPlaying : true)
+      } catch { /* ignore */ }
+      return GLib.SOURCE_REMOVE
+    }
+    return attempts < 25 ? GLib.SOURCE_CONTINUE : GLib.SOURCE_REMOVE
+  })
+}
+
+function startBackgroundUpgradeTo480(videoId: string, token: number) {
+  if (ytUpgradeInFlightFor === videoId) return
+  ytUpgradeInFlightFor = videoId
+  ytStatusMsg = "Playing 360p, upgrading to 480p..."
+
+  ensureYtFile480(videoId)
+    .then((path) => {
+      if (token !== ytPlayToken || ytNowPlaying?.id !== videoId) return
+      swapMediaToFile(path, token, videoId)
+      ytStatus = "playing"
+      ytStatusMsg = ""
+    })
+    .catch(() => {
+      // Keep current 360p playback if upgrade fails.
+      if (token === ytPlayToken && ytNowPlaying?.id === videoId) {
+        ytStatus = "playing"
+        ytStatusMsg = ""
+      }
+    })
+    .finally(() => {
+      if (ytUpgradeInFlightFor === videoId) ytUpgradeInFlightFor = null
+    })
 }
 
 async function playYtEmbedded(track: YtResult) {
   const token = ++ytPlayToken
   ytStatus = "searching"
-  ytStatusMsg = "Loading stream..."
+  ytStatusMsg = "Downloading 360p..."
   ytVideoVisible = true
+  ytUpgradeInFlightFor = null
   clearEmbeddedMedia()
   refreshTvMode()
 
-  const directUrl = await resolveYtStreamUrl(track.id)
+  const filePath = await ensureYtFile360(track.id)
   if (token !== ytPlayToken || ytNowPlaying?.id !== track.id) return
 
-  const media = Gtk.MediaFile.new_for_file(Gio.File.new_for_uri(directUrl))
-  media.set_muted(false)
-  ytMediaStream = media
-  ytVideo?.set_media_stream(media)
-
-  try {
-    ;(ytMediaStream as any).play?.()
-  } catch { /* ignore */ }
+  swapMediaToFile(filePath, token, track.id)
 
   ytVideoReady = true
   ytStatus = "playing"
-  ytStatusMsg = ""
+  ytStatusMsg = "Playing 360p, upgrading to 480p..."
   refreshTvMode()
+
+  // Upgrade quality in the background and hot-swap when ready.
+  startBackgroundUpgradeTo480(track.id, token)
 }
 
 function toggleEmbeddedVideo() {
@@ -611,6 +714,21 @@ export function MediaCenterPopover({ gdkmonitor }: { gdkmonitor: Gdk.Monitor }) 
   const statusMsgState  = createPoll("", 200, () => ytStatusMsg)
   const ytPlayingState  = createPoll(null as YtResult | null, 200, () => ytNowPlaying)
   const videoVisState   = createPoll(false, 300, () => ytVideoVisible)
+  const ytIsPlayingState = createPoll(false, 250, () => {
+    try { return Boolean((ytMediaStream as any)?.get_playing?.()) } catch { return false }
+  })
+  const ytSeekState = createPoll(0, 250, () => {
+    const durRaw = readMediaDurationRaw()
+    const posRaw = readMediaTimestampRaw()
+    if (durRaw <= 0 || posRaw < 0) return 0
+    const r = posRaw / durRaw
+    return Math.max(0, Math.min(1, r))
+  })
+  const ytTimeState = createPoll("0:00 / 0:00", 250, () => {
+    const durSec = mediaUnitsToSeconds(readMediaDurationRaw())
+    const posSec = mediaUnitsToSeconds(readMediaTimestampRaw())
+    return `${formatMediaTime(posSec)} / ${formatMediaTime(durSec)}`
+  })
 
   let win: Astal.Window | null = null
   const { TOP, LEFT, RIGHT, BOTTOM } = Astal.WindowAnchor
@@ -788,6 +906,52 @@ export function MediaCenterPopover({ gdkmonitor }: { gdkmonitor: Gdk.Monitor }) 
                 <button class="mc-stop-btn" onClicked={stopYtPlayback} tooltipText="Stop YouTube">
                   <image iconName="media-playback-stop-symbolic" pixelSize={14} />
                 </button>
+              </box>
+
+              <box
+                class="mc-tv-seek-controls"
+                spacing={8}
+                halign={Gtk.Align.FILL}
+                marginTop={6}
+                marginStart={18}
+                marginEnd={18}
+                visible={ytPlayingState((np) => np !== null)}
+              >
+                <button
+                  class="mc-stop-btn"
+                  tooltipText={ytIsPlayingState((p) => p ? "Pause" : "Play")}
+                  onClicked={() => {
+                    try {
+                      const stream = ytMediaStream as any
+                      if (!stream) return
+                      const playing = Boolean(stream.get_playing?.())
+                      stream.set_playing?.(!playing)
+                    } catch { /* ignore */ }
+                  }}
+                >
+                  <image
+                    iconName={ytIsPlayingState((p) => p ? "media-playback-pause-symbolic" : "media-playback-start-symbolic")}
+                    pixelSize={14}
+                  />
+                </button>
+
+                <slider
+                  class="mc-player-progress"
+                  hexpand
+                  value={ytSeekState}
+                  onChangeValue={({ value }) => {
+                    try {
+                      const stream = ytMediaStream as any
+                      if (!stream) return
+                      const durRaw = Number(stream.get_duration?.() || 0)
+                      if (durRaw <= 0) return
+                      const target = Math.max(0, Math.min(1, value)) * durRaw
+                      stream.seek?.(target)
+                    } catch { /* ignore */ }
+                  }}
+                />
+
+                <label class="mc-player-time" label={ytTimeState} xalign={1} />
               </box>
 
               {/* CAVA visualizer */}

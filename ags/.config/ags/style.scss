@@ -2684,6 +2684,20 @@ $dw-card-shadow: 0 12px 28px rgba(0, 0, 0, 0.34), 0 3px 8px rgba(0, 0, 0, 0.2);
     }
   }
 
+  .mc-tv-seek-controls {
+    .mc-player-time {
+      min-width: 88px;
+      font-size: 11px;
+      color: $fg-dim;
+    }
+
+    .mc-player-progress {
+      min-height: 0;
+      margin-top: 2px;
+      margin-bottom: 2px;
+    }
+  }
+
   // CAVA visualizer
   .mc-viz-row { padding: 0 14px; }
 
