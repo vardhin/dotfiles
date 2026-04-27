@@ -3,6 +3,7 @@ import Astal from "gi://Astal?version=4.0"
 import Gtk from "gi://Gtk?version=4.0"
 import Gdk from "gi://Gdk?version=4.0"
 import GLib from "gi://GLib"
+import Gio from "gi://Gio"
 import AstalMpris from "gi://AstalMpris"
 import { For, createBinding, onCleanup } from "ags"
 import { createPoll } from "ags/time"
@@ -88,95 +89,112 @@ function makeThumbnailWidget(id: string, w: number, h: number): Gtk.Widget {
   return stack
 }
 
-// ── YouTube mpv process management ─────────────────────────────────────
-let ytAudioPid: number | null = null
-let ytVideoPid: number | null = null
+// ── Embedded YouTube video state ───────────────────────────────────────
 let ytVideoVisible = false
+let ytVideoReady = false
+let ytVideo: Gtk.Video | null = null
+let ytMediaStream: Gtk.MediaFile | null = null
+let ytTvStack: Gtk.Stack | null = null
+let ytPlayToken = 0
 
-const YT_VIDEO_TITLE = "ags-yt-video"
-
-function ensureHyprFloatRule() {
-  // idempotent: registering the same rule twice is harmless
-  try {
-    GLib.spawn_command_line_async(
-      `hyprctl keyword windowrulev2 'float,title:^(${YT_VIDEO_TITLE})$'`
-    )
-    GLib.spawn_command_line_async(
-      `hyprctl keyword windowrulev2 'size 720 405,title:^(${YT_VIDEO_TITLE})$'`
-    )
-    GLib.spawn_command_line_async(
-      `hyprctl keyword windowrulev2 'center,title:^(${YT_VIDEO_TITLE})$'`
-    )
-    GLib.spawn_command_line_async(
-      `hyprctl keyword windowrulev2 'pin,title:^(${YT_VIDEO_TITLE})$'`
-    )
-  } catch { /* ignore */ }
-}
-
-function spawnMpv(args: string[]): number | null {
-  try {
-    const [ok, pid] = GLib.spawn_async(
-      null,
-      ["mpv", ...args],
-      null,
-      GLib.SpawnFlags.SEARCH_PATH | GLib.SpawnFlags.DO_NOT_REAP_CHILD,
-      null,
-    )
-    if (!ok || !pid) return null
-    GLib.child_watch_add(GLib.PRIORITY_DEFAULT, pid, () => {
-      GLib.spawn_close_pid(pid)
-    })
-    return pid
-  } catch {
-    return null
+function refreshTvMode() {
+  if (!ytTvStack) return
+  if (!ytNowPlaying) {
+    ytTvStack.set_visible_child_name("off")
+    return
   }
+  ytTvStack.set_visible_child_name(ytVideoVisible && ytVideoReady ? "video" : "thumb")
 }
 
-function killPid(pid: number) {
-  try { GLib.spawn_command_line_async(`kill -SIGTERM ${pid}`) } catch { /* ignore */ }
-  GLib.timeout_add(GLib.PRIORITY_DEFAULT, 800, () => {
-    try { GLib.spawn_command_line_async(`kill -SIGKILL ${pid}`) } catch { /* ignore */ }
-    return GLib.SOURCE_REMOVE
-  })
-}
-
-function killYtAudio() {
-  if (ytAudioPid !== null) { killPid(ytAudioPid); ytAudioPid = null }
-  try { GLib.spawn_command_line_async("pkill -SIGTERM -f 'mpv --no-video'") } catch { /* ignore */ }
-}
-
-function killYtVideo() {
-  if (ytVideoPid !== null) { killPid(ytVideoPid); ytVideoPid = null }
-  try { GLib.spawn_command_line_async(`pkill -SIGTERM -f '${YT_VIDEO_TITLE}'`) } catch { /* ignore */ }
-  ytVideoVisible = false
+function clearEmbeddedMedia() {
+  try {
+    if (ytMediaStream) {
+      ;(ytMediaStream as any).pause?.()
+    }
+  } catch { /* ignore */ }
+  ytMediaStream = null
+  ytVideoReady = false
+  try { ytVideo?.set_media_stream(null) } catch { /* ignore */ }
+  refreshTvMode()
 }
 
 function stopYtAll() {
-  killYtAudio()
-  killYtVideo()
+  clearEmbeddedMedia()
+  // Best-effort cleanup for legacy processes from previous config versions.
+  try { GLib.spawn_command_line_async("pkill -SIGTERM -f 'mpv --no-video'") } catch { /* ignore */ }
+  try { GLib.spawn_command_line_async("pkill -SIGTERM -f 'ags-yt-video'") } catch { /* ignore */ }
 }
 
-function playYtAudio(videoId: string) {
-  killYtAudio()
-  ytAudioPid = spawnMpv([
-    "--no-video",
-    "--really-quiet",
-    `--force-media-title=${ytNowPlaying?.title || "YouTube"}`,
-    `https://www.youtube.com/watch?v=${videoId}`,
-  ])
+async function resolveYtStreamUrl(videoId: string): Promise<string> {
+  const watchUrl = `https://www.youtube.com/watch?v=${videoId}`
+
+  const formats = [
+    // Prefer progressive mp4 first for best Gtk/GStreamer compatibility.
+    "best[ext=mp4][vcodec^=avc1][acodec^=mp4a]/best[ext=mp4][acodec!=none][vcodec!=none]",
+    "best[height<=1080][acodec!=none][vcodec!=none]",
+    "best",
+  ]
+
+  const commonArgs = [
+    YT_DLP,
+    "--no-warnings",
+    "--no-playlist",
+    "--no-cache-dir",
+    "--extractor-args",
+    "youtube:player_client=android",
+  ]
+
+  for (const format of formats) {
+    try {
+      const raw = await execAsync([
+        ...commonArgs,
+        "-f",
+        format,
+        "-g",
+        watchUrl,
+      ])
+      const direct = raw
+        .split("\n")
+        .map((l: string) => l.trim())
+        .find((l: string) => l.length > 0)
+      if (direct) return direct
+    } catch {
+      // Try next format fallback.
+    }
+  }
+
+  throw new Error("Could not resolve a playable stream")
 }
 
-function toggleYtVideo(videoId: string) {
-  if (ytVideoVisible) { killYtVideo(); return }
-  ensureHyprFloatRule()
-  ytVideoPid = spawnMpv([
-    "--no-audio",
-    "--really-quiet",
-    `--title=${YT_VIDEO_TITLE}`,
-    `--force-window-position=100,100`,
-    `https://www.youtube.com/watch?v=${videoId}`,
-  ])
-  ytVideoVisible = ytVideoPid !== null
+async function playYtEmbedded(track: YtResult) {
+  const token = ++ytPlayToken
+  ytStatus = "searching"
+  ytStatusMsg = "Loading stream..."
+  ytVideoVisible = true
+  clearEmbeddedMedia()
+  refreshTvMode()
+
+  const directUrl = await resolveYtStreamUrl(track.id)
+  if (token !== ytPlayToken || ytNowPlaying?.id !== track.id) return
+
+  const media = Gtk.MediaFile.new_for_file(Gio.File.new_for_uri(directUrl))
+  media.set_muted(false)
+  ytMediaStream = media
+  ytVideo?.set_media_stream(media)
+
+  try {
+    ;(ytMediaStream as any).play?.()
+  } catch { /* ignore */ }
+
+  ytVideoReady = true
+  ytStatus = "playing"
+  ytStatusMsg = ""
+  refreshTvMode()
+}
+
+function toggleEmbeddedVideo() {
+  ytVideoVisible = !ytVideoVisible
+  refreshTvMode()
 }
 
 // ── YouTube search ─────────────────────────────────────────────────────
@@ -290,7 +308,7 @@ function makeResultRow(
   return row
 }
 
-// ── TV: shows current YT thumbnail (fills when audio is playing) ──────
+// ── TV: shows current YT thumbnail and embedded video ─────────────────
 function MediaTV(): { widget: Gtk.Widget; sourceId: number } {
   const frame = new Gtk.Box()
   frame.add_css_class("mc-tv")
@@ -300,6 +318,7 @@ function MediaTV(): { widget: Gtk.Widget; sourceId: number } {
   const stack = new Gtk.Stack()
   stack.set_hexpand(true); stack.set_vexpand(true)
   stack.set_size_request(420, 236)
+  ytTvStack = stack
   frame.append(stack)
 
   // empty / off state
@@ -312,49 +331,72 @@ function MediaTV(): { widget: Gtk.Widget; sourceId: number } {
   offLbl.add_css_class("mc-tv-off-label")
   offBox.append(offIcon); offBox.append(offLbl)
   stack.add_named(offBox, "off")
+
+  const thumbHolder = new Gtk.Box()
+  thumbHolder.set_hexpand(true)
+  thumbHolder.set_vexpand(true)
+  stack.add_named(thumbHolder, "thumb")
+
+  const video = new Gtk.Video()
+  video.set_autoplay(true)
+  video.set_loop(false)
+  video.set_hexpand(true)
+  video.set_vexpand(true)
+  video.add_css_class("mc-tv-video")
+  ytVideo = video
+  stack.add_named(video, "video")
   stack.set_visible_child_name("off")
 
   let lastId = ""
+  let thumbPic: Gtk.Picture | null = null
   const sourceId = GLib.timeout_add(GLib.PRIORITY_DEFAULT, 250, () => {
     const id = ytNowPlaying?.id || ""
-    if (id === lastId) return GLib.SOURCE_CONTINUE
-    lastId = id
-
     if (!id) {
-      stack.set_visible_child_name("off")
+      lastId = ""
+      if (thumbPic) {
+        thumbHolder.remove(thumbPic)
+        thumbPic = null
+      }
+      refreshTvMode()
       return GLib.SOURCE_CONTINUE
     }
 
-    const childName = `tv-${id}`
-    if (stack.get_child_by_name(childName)) {
-      stack.set_visible_child_name(childName)
+    if (id === lastId) {
+      refreshTvMode()
       return GLib.SOURCE_CONTINUE
     }
 
-    const inner = new Gtk.Box()
-    inner.set_hexpand(true); inner.set_vexpand(true)
+    lastId = id
+    if (thumbPic) {
+      thumbHolder.remove(thumbPic)
+      thumbPic = null
+    }
+
     const dest = `${THUMB_DIR}/${id}.jpg`
     const setPic = (path: string) => {
       const pic = new Gtk.Picture()
       pic.set_filename(path)
       pic.set_content_fit(Gtk.ContentFit.COVER)
-      pic.set_hexpand(true); pic.set_vexpand(true)
+      pic.set_hexpand(true)
+      pic.set_vexpand(true)
       pic.set_size_request(420, 236)
       pic.add_css_class("mc-tv-img")
-      inner.append(pic)
+      thumbPic = pic
+      thumbHolder.append(pic)
+      refreshTvMode()
     }
+
     if (GLib.file_test(dest, GLib.FileTest.EXISTS)) {
       setPic(dest)
     } else {
-      // best-effort: fetch high-res variant
       ensureThumbDir()
       execAsync(["curl", "-sSL", "-o", dest,
         `https://img.youtube.com/vi/${id}/hqdefault.jpg`])
-        .then(() => { setPic(dest) })
-        .catch(() => { /* leave inner empty */ })
+        .then(() => { if (ytNowPlaying?.id === id) setPic(dest) })
+        .catch(() => { refreshTvMode() })
     }
-    stack.add_named(inner, childName)
-    stack.set_visible_child_name(childName)
+
+    refreshTvMode()
     return GLib.SOURCE_CONTINUE
   })
 
@@ -583,9 +625,11 @@ export function MediaCenterPopover({ gdkmonitor }: { gdkmonitor: Gdk.Monitor }) 
 
   const playYtTrack = (track: YtResult) => {
     ytNowPlaying = track
-    ytStatus = "playing"
-    ytStatusMsg = ""
-    playYtAudio(track.id)
+    playYtEmbedded(track).catch((error) => {
+      ytStatus = "error"
+      ytStatusMsg = error instanceof Error ? error.message : "Playback failed"
+      clearEmbeddedMedia()
+    })
   }
 
   function rebuildResults(tracks: YtResult[]) {
@@ -641,10 +685,13 @@ export function MediaCenterPopover({ gdkmonitor }: { gdkmonitor: Gdk.Monitor }) 
   }
 
   const stopYtPlayback = () => {
+    ytPlayToken++
     stopYtAll()
+    ytVideoVisible = false
     ytNowPlaying = null
     ytStatus = "idle"
     ytStatusMsg = ""
+    refreshTvMode()
   }
 
   return (
@@ -722,8 +769,19 @@ export function MediaCenterPopover({ gdkmonitor }: { gdkmonitor: Gdk.Monitor }) 
                 />
                 <button
                   class={videoVisState((v) => `mc-video-btn ${v ? "active" : ""}`)}
-                  tooltipText={videoVisState((v) => v ? "Close video" : "Open video window")}
-                  onClicked={() => { if (ytNowPlaying) toggleYtVideo(ytNowPlaying.id) }}
+                  tooltipText={videoVisState((v) => v ? "Show thumbnail" : "Show embedded video")}
+                  onClicked={() => {
+                    if (!ytNowPlaying) return
+                    if (!ytVideoReady) {
+                      playYtEmbedded(ytNowPlaying).catch((error) => {
+                        ytStatus = "error"
+                        ytStatusMsg = error instanceof Error ? error.message : "Playback failed"
+                        clearEmbeddedMedia()
+                      })
+                      return
+                    }
+                    toggleEmbeddedVideo()
+                  }}
                 >
                   <image iconName="camera-video-symbolic" pixelSize={14} />
                 </button>
@@ -811,7 +869,7 @@ export function MediaCenterPopover({ gdkmonitor }: { gdkmonitor: Gdk.Monitor }) 
                     <image iconName="multimedia-player-symbolic" pixelSize={36} class="yt-empty-icon" />
                     <label
                       class="yt-empty-label"
-                      label={statusState((s) => s === "searching" ? "Searching..." : "Search YouTube to play audio")}
+                      label={statusState((s) => s === "searching" ? "Searching..." : "Search YouTube to play media")}
                     />
                   </box>
                 </box>

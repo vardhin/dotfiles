@@ -2639,6 +2639,10 @@ $dw-card-shadow: 0 12px 28px rgba(0, 0, 0, 0.34), 0 3px 8px rgba(0, 0, 0, 0.2);
     }
 
     .mc-tv-img { border-radius: $radius-lg; }
+    .mc-tv-video {
+      border-radius: $radius-lg;
+      background: #000;
+    }
   }
 
   .mc-tv-controls {
@@ -2823,7 +2827,34 @@ $dw-card-shadow: 0 12px 28px rgba(0, 0, 0, 0.34), 0 3px 8px rgba(0, 0, 0, 0.2);
   }
 
   // Reuse YT styles, but scope tweaks for the embedded section
-  .mc-yt-section { padding: 0 14px; }
+  .mc-yt-section {
+    padding: 0 14px;
+
+    .yt-search-row {
+      padding: 6px 0 14px;
+
+      .yt-search-icon { color: $accent; }
+
+      .yt-search-entry {
+        background: rgba(255,255,255,0.04);
+        border: 1px solid $surface-border;
+        border-radius: 8px;
+        padding: 7px 12px;
+        color: $fg;
+        font-size: 13px;
+        caret-color: $accent;
+
+        &:focus {
+          border-color: rgba($accent, 0.35);
+          background: rgba(255,255,255,0.06);
+          outline: none;
+          box-shadow: none;
+        }
+      }
+    }
+
+    .yt-results-list { padding-top: 4px; }
+  }
 }
 
 // ━━━━━━━━━━━━━━━ SHADOWLESS MODE ━━━━━━━━━━━━━━━━━━━
