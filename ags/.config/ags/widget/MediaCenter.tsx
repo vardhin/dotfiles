@@ -17,6 +17,24 @@ interface YtResult {
   duration: string
 }
 
+interface DownloadedVideoGroup {
+  id: string
+  qualities: string[]
+}
+
+interface VideoMeta {
+  title?: string
+  channel?: string
+  duration?: string
+}
+
+interface PlaylistEntry {
+  id: string
+  name: string
+  itemIds: string[]
+  coverVideoId: string | null
+}
+
 // ── Thumbnail cache ────────────────────────────────────────────────────
 const thumbCache = new Map<string, string>()
 const thumbPending = new Set<string>()
@@ -97,10 +115,160 @@ let ytMediaStream: Gtk.MediaFile | null = null
 let ytTvStack: Gtk.Stack | null = null
 let ytPlayToken = 0
 let ytUpgradeInFlightFor: string | null = null
-const YT_MEDIA_DIR = `${GLib.get_user_cache_dir()}/ags-yt-media`
+let ytDownloadPid: number | null = null
+let ytDownloadProgress = 0
+let ytDownloadQuality: "360" | "480" | null = null
+let ytCurrentQuality: "360" | "480" | null = null
+const YT_MEDIA_DIR = `${GLib.get_home_dir()}/Video/TV`
+const YT_META_FILE = `${YT_MEDIA_DIR}/video-meta.json`
+const YT_PLAYLISTS_FILE = `${YT_MEDIA_DIR}/playlists.json`
+const ytVideoMeta = new Map<string, VideoMeta>()
+const ytMetaFetchPending = new Set<string>()
+let ytPlaylists: PlaylistEntry[] = []
+let ytPlaylistsLoaded = false
+let ytUiRefreshHook: (() => void) | null = null
+let ytActivePlaylistId: string | null = null
+let ytActivePlaylistMode: "sequential" | "shuffle" | null = null
+let ytActivePlaylistIndex = -1
+let ytActiveShuffleBag: string[] = []
+let ytLastPlaylistPlayedId: string | null = null
 
 function ensureYtMediaDir() {
   try { GLib.mkdir_with_parents(YT_MEDIA_DIR, 0o755) } catch { /* ignore */ }
+}
+
+function loadYtVideoMeta() {
+  ensureYtMediaDir()
+  try {
+    const [ok, bytes] = GLib.file_get_contents(YT_META_FILE)
+    if (!ok) return
+    const parsed = JSON.parse(new TextDecoder().decode(bytes)) as Record<string, VideoMeta>
+    for (const [id, meta] of Object.entries(parsed)) {
+      if (!id) continue
+      ytVideoMeta.set(id, {
+        title: meta.title || "",
+        channel: meta.channel || "",
+        duration: meta.duration || "",
+      })
+    }
+  } catch { /* ignore */ }
+}
+
+function saveYtVideoMeta() {
+  ensureYtMediaDir()
+  try {
+    const obj: Record<string, VideoMeta> = {}
+    for (const [id, meta] of ytVideoMeta.entries()) obj[id] = meta
+    GLib.file_set_contents(YT_META_FILE, JSON.stringify(obj, null, 2))
+  } catch { /* ignore */ }
+}
+
+function loadYtPlaylists() {
+  ensureYtMediaDir()
+  ytPlaylistsLoaded = true
+  ytPlaylists = []
+  try {
+    const [ok, bytes] = GLib.file_get_contents(YT_PLAYLISTS_FILE)
+    if (!ok) return
+    const parsed = JSON.parse(new TextDecoder().decode(bytes)) as PlaylistEntry[]
+    if (!Array.isArray(parsed)) return
+    ytPlaylists = parsed
+      .filter((p) => p && typeof p.id === "string" && typeof p.name === "string")
+      .map((p) => ({
+        id: p.id,
+        name: p.name,
+        itemIds: Array.isArray(p.itemIds) ? p.itemIds.filter((x) => typeof x === "string") : [],
+        coverVideoId: typeof p.coverVideoId === "string" ? p.coverVideoId : null,
+      }))
+  } catch { /* ignore */ }
+}
+
+function saveYtPlaylists() {
+  ensureYtMediaDir()
+  try {
+    GLib.file_set_contents(YT_PLAYLISTS_FILE, JSON.stringify(ytPlaylists, null, 2))
+  } catch { /* ignore */ }
+}
+
+function upsertVideoMeta(id: string, meta: VideoMeta) {
+  const prev = ytVideoMeta.get(id) || {}
+  ytVideoMeta.set(id, {
+    title: meta.title || prev.title || "",
+    channel: meta.channel || prev.channel || "",
+    duration: meta.duration || prev.duration || "",
+  })
+  saveYtVideoMeta()
+}
+
+function queueFetchVideoMeta(id: string) {
+  if (!id) return
+  const existing = ytVideoMeta.get(id)
+  if (existing?.title) return
+  if (ytMetaFetchPending.has(id)) return
+  ytMetaFetchPending.add(id)
+
+  const watchUrl = `https://www.youtube.com/watch?v=${id}`
+  execAsync([
+    YT_DLP,
+    "--no-warnings",
+    "--no-playlist",
+    "--extractor-args",
+    "youtube:player_client=android",
+    "--skip-download",
+    "--print",
+    "%(title)s|||%(channel)s|||%(duration_string)s",
+    watchUrl,
+  ])
+    .then((raw: string) => {
+      const line = (raw || "").trim().split("\n")[0] || ""
+      const [title, channel, duration] = line.split("|||")
+      upsertVideoMeta(id, {
+        title: (title || "").trim(),
+        channel: (channel || "").trim(),
+        duration: (duration || "").trim(),
+      })
+      ytUiRefreshHook?.()
+    })
+    .catch(() => { /* ignore */ })
+    .finally(() => {
+      ytMetaFetchPending.delete(id)
+    })
+}
+
+function getPlaylistById(id: string | null): PlaylistEntry | null {
+  if (!id) return null
+  return ytPlaylists.find((p) => p.id === id) || null
+}
+
+function makeShuffledBag(items: string[], lastPlayed: string | null): string[] {
+  const arr = [...items]
+  for (let i = arr.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1))
+    const tmp = arr[i]
+    arr[i] = arr[j]
+    arr[j] = tmp
+  }
+  if (arr.length > 1 && lastPlayed && arr[0] === lastPlayed) {
+    const tmp = arr[0]
+    arr[0] = arr[1]
+    arr[1] = tmp
+  }
+  return arr
+}
+
+function resetYtDownloadState() {
+  ytDownloadPid = null
+  ytDownloadProgress = 0
+  ytDownloadQuality = null
+}
+
+function stopYtDownloader() {
+  if (ytDownloadPid !== null) {
+    try { GLib.spawn_command_line_async(`kill -SIGTERM ${ytDownloadPid}`) } catch { /* ignore */ }
+    ytDownloadPid = null
+  }
+  ytDownloadProgress = 0
+  ytDownloadQuality = null
 }
 
 function readMediaDurationRaw(): number {
@@ -142,6 +310,7 @@ function clearEmbeddedMedia() {
 
 function stopYtAll() {
   ytUpgradeInFlightFor = null
+  stopYtDownloader()
   clearEmbeddedMedia()
   // Best-effort cleanup for legacy processes from previous config versions.
   try { GLib.spawn_command_line_async("pkill -SIGTERM -f 'mpv --no-video'") } catch { /* ignore */ }
@@ -152,7 +321,13 @@ function ytFilePath(videoId: string, quality: "360" | "480"): string {
   return `${YT_MEDIA_DIR}/${videoId}-${quality}.mp4`
 }
 
-async function downloadYtToFile(videoId: string, formats: string[], dest: string): Promise<boolean> {
+async function downloadYtToFile(
+  videoId: string,
+  formats: string[],
+  dest: string,
+  quality: "360" | "480",
+  token: number,
+): Promise<boolean> {
   const watchUrl = `https://www.youtube.com/watch?v=${videoId}`
 
   const commonArgs = [
@@ -164,18 +339,94 @@ async function downloadYtToFile(videoId: string, formats: string[], dest: string
     "youtube:player_client=android",
   ]
 
+  const runSingleDownload = (format: string): Promise<boolean> => {
+    return new Promise((resolve) => {
+      try {
+        const argv = [
+          ...commonArgs,
+          "-f",
+          format,
+          "--newline",
+          "--progress",
+          "--force-overwrites",
+          "-o",
+          dest,
+          watchUrl,
+        ]
+
+        const [ok, pid, , stdoutFd, stderrFd] = GLib.spawn_async_with_pipes(
+          null,
+          argv,
+          null,
+          GLib.SpawnFlags.SEARCH_PATH | GLib.SpawnFlags.DO_NOT_REAP_CHILD,
+          null,
+        )
+        if (!ok || !pid) { resolve(false); return }
+
+        ytDownloadPid = pid
+        ytDownloadQuality = quality
+        ytDownloadProgress = 0
+
+        const progressRegex = /(\d{1,3}(?:\.\d+)?)%/
+        const parseLine = (line: string | null) => {
+          if (!line) return
+          const m = line.match(progressRegex)
+          if (!m) return
+          const pct = Number(m[1])
+          if (!Number.isFinite(pct)) return
+          ytDownloadProgress = Math.max(0, Math.min(100, pct))
+        }
+
+        const stdoutCh = GLib.IOChannel.unix_new(stdoutFd)
+        const stderrCh = GLib.IOChannel.unix_new(stderrFd)
+        stdoutCh.set_flags(GLib.IOFlags.NONBLOCK)
+        stderrCh.set_flags(GLib.IOFlags.NONBLOCK)
+
+        const watchFn = (ch: any) => {
+          try {
+            while (true) {
+              const [status, line] = ch.read_line()
+              if (status === GLib.IOStatus.NORMAL) {
+                parseLine(line)
+                continue
+              }
+              break
+            }
+          } catch { /* ignore */ }
+          return true
+        }
+
+        const outWatch = GLib.io_add_watch(stdoutCh, GLib.PRIORITY_DEFAULT, GLib.IOCondition.IN, () => watchFn(stdoutCh))
+        const errWatch = GLib.io_add_watch(stderrCh, GLib.PRIORITY_DEFAULT, GLib.IOCondition.IN, () => watchFn(stderrCh))
+
+        GLib.child_watch_add(GLib.PRIORITY_DEFAULT, pid, () => {
+          try { GLib.source_remove(outWatch) } catch { /* ignore */ }
+          try { GLib.source_remove(errWatch) } catch { /* ignore */ }
+          try { GLib.spawn_close_pid(pid) } catch { /* ignore */ }
+          if (ytDownloadPid === pid) ytDownloadPid = null
+
+          if (token !== ytPlayToken || ytNowPlaying?.id !== videoId) {
+            resolve(false)
+            return
+          }
+
+          if (GLib.file_test(dest, GLib.FileTest.EXISTS)) {
+            ytDownloadProgress = 100
+            resolve(true)
+            return
+          }
+          resolve(false)
+        })
+      } catch {
+        resolve(false)
+      }
+    })
+  }
+
   for (const format of formats) {
     try {
-      await execAsync([
-        ...commonArgs,
-        "-f",
-        format,
-        "--force-overwrites",
-        "-o",
-        dest,
-        watchUrl,
-      ])
-      if (GLib.file_test(dest, GLib.FileTest.EXISTS)) return true
+      const ok = await runSingleDownload(format)
+      if (ok) return true
     } catch {
       // Try next format fallback.
     }
@@ -184,7 +435,7 @@ async function downloadYtToFile(videoId: string, formats: string[], dest: string
   return false
 }
 
-async function ensureYtFile360(videoId: string): Promise<string> {
+async function ensureYtFile360(videoId: string, token: number): Promise<string> {
   ensureYtMediaDir()
   const dest = ytFilePath(videoId, "360")
   if (GLib.file_test(dest, GLib.FileTest.EXISTS)) return dest
@@ -194,12 +445,12 @@ async function ensureYtFile360(videoId: string): Promise<string> {
     "18",
     "best[height<=360][acodec!=none][vcodec!=none]",
     "best[height<=480][ext=mp4][vcodec!=none][acodec!=none]",
-  ], dest)
+  ], dest, "360", token)
   if (!ok) throw new Error("Could not download startup stream")
   return dest
 }
 
-async function ensureYtFile480(videoId: string): Promise<string> {
+async function ensureYtFile480(videoId: string, token: number): Promise<string> {
   ensureYtMediaDir()
   const dest = ytFilePath(videoId, "480")
   if (GLib.file_test(dest, GLib.FileTest.EXISTS)) return dest
@@ -208,12 +459,12 @@ async function ensureYtFile480(videoId: string): Promise<string> {
     "best[height<=480][ext=mp4][vcodec!=none][acodec!=none]",
     "best[height<=480][acodec!=none][vcodec!=none]",
     "best[ext=mp4][vcodec!=none][acodec!=none]",
-  ], dest)
+  ], dest, "480", token)
   if (!ok) throw new Error("Could not download upgraded stream")
   return dest
 }
 
-function swapMediaToFile(filePath: string, token: number, videoId: string) {
+function swapMediaToFile(filePath: string, token: number, videoId: string, quality: "360" | "480") {
   if (token !== ytPlayToken || ytNowPlaying?.id !== videoId) return
 
   const hadPrevStream = ytMediaStream !== null
@@ -228,6 +479,7 @@ function swapMediaToFile(filePath: string, token: number, videoId: string) {
   const media = Gtk.MediaFile.new_for_file(Gio.File.new_for_path(filePath))
   media.set_muted(false)
   ytMediaStream = media
+  ytCurrentQuality = quality
   ytVideo?.set_media_stream(media)
   try { (ytMediaStream as any).play?.() } catch { /* ignore */ }
 
@@ -253,12 +505,13 @@ function startBackgroundUpgradeTo480(videoId: string, token: number) {
   ytUpgradeInFlightFor = videoId
   ytStatusMsg = "Playing 360p, upgrading to 480p..."
 
-  ensureYtFile480(videoId)
+  ensureYtFile480(videoId, token)
     .then((path) => {
       if (token !== ytPlayToken || ytNowPlaying?.id !== videoId) return
-      swapMediaToFile(path, token, videoId)
+      swapMediaToFile(path, token, videoId, "480")
       ytStatus = "playing"
       ytStatusMsg = ""
+      resetYtDownloadState()
     })
     .catch(() => {
       // Keep current 360p playback if upgrade fails.
@@ -274,17 +527,29 @@ function startBackgroundUpgradeTo480(videoId: string, token: number) {
 
 async function playYtEmbedded(track: YtResult) {
   const token = ++ytPlayToken
+  ytCurrentQuality = null
   ytStatus = "searching"
   ytStatusMsg = "Downloading 360p..."
   ytVideoVisible = true
   ytUpgradeInFlightFor = null
+  stopYtDownloader()
   clearEmbeddedMedia()
   refreshTvMode()
 
-  const filePath = await ensureYtFile360(track.id)
+  const cached480 = ytFilePath(track.id, "480")
+  if (GLib.file_test(cached480, GLib.FileTest.EXISTS)) {
+    swapMediaToFile(cached480, token, track.id, "480")
+    ytVideoReady = true
+    ytStatus = "playing"
+    ytStatusMsg = ""
+    refreshTvMode()
+    return
+  }
+
+  const filePath = await ensureYtFile360(track.id, token)
   if (token !== ytPlayToken || ytNowPlaying?.id !== track.id) return
 
-  swapMediaToFile(filePath, token, track.id)
+  swapMediaToFile(filePath, token, track.id, "360")
 
   ytVideoReady = true
   ytStatus = "playing"
@@ -336,6 +601,122 @@ let ytStatus: "idle" | "searching" | "playing" | "error" = "idle"
 let ytStatusMsg = ""
 let ytNowPlaying: YtResult | null = null
 let ytSearchDebounce = 0
+
+async function listDownloadedVideoGroups(): Promise<DownloadedVideoGroup[]> {
+  ensureYtMediaDir()
+  let raw = ""
+  try {
+    raw = await execAsync([
+      "find",
+      YT_MEDIA_DIR,
+      "-maxdepth",
+      "1",
+      "-type",
+      "f",
+      "-name",
+      "*.mp4",
+    ])
+  } catch {
+    return []
+  }
+
+  const groups = new Map<string, Set<string>>()
+  for (const line of raw.split("\n")) {
+    const path = line.trim()
+    if (!path) continue
+    const file = path.split("/").pop() || ""
+    const m = file.match(/^(.+)-(\d{3,4})\.mp4$/)
+    if (!m) continue
+    const id = m[1]
+    const q = m[2]
+    if (!groups.has(id)) groups.set(id, new Set<string>())
+    groups.get(id)!.add(q)
+  }
+
+  return Array.from(groups.entries())
+    .map(([id, set]) => ({
+      id,
+      qualities: Array.from(set).sort((a, b) => Number(a) - Number(b)),
+    }))
+    .sort((a, b) => a.id.localeCompare(b.id))
+}
+
+function makeDownloadedRow(
+  item: DownloadedVideoGroup,
+  onPlay: (id: string) => void,
+  onToggleInPlaylist: (id: string) => void,
+  isInActivePlaylist: (id: string) => boolean,
+  hasActivePlaylist: () => boolean,
+): Gtk.Widget {
+  const row = new Gtk.Box({ spacing: 8 })
+  row.add_css_class("mc-downloaded-row")
+
+  const playBtn = new Gtk.Button()
+  playBtn.set_tooltip_text(`Play downloaded: ${item.id}`)
+  playBtn.add_css_class("mc-downloaded-play")
+
+  const outer = new Gtk.Box({ spacing: 10 })
+  outer.set_margin_start(4); outer.set_margin_end(4)
+  outer.set_margin_top(2);   outer.set_margin_bottom(2)
+
+  const thumb = makeThumbnailWidget(item.id, 96, 54)
+  outer.append(thumb)
+
+  const textCol = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL, spacing: 3 })
+  textCol.set_hexpand(true)
+  textCol.set_valign(Gtk.Align.CENTER)
+
+  const titleLbl = new Gtk.Label({ xalign: 0 })
+  titleLbl.add_css_class("yt-result-title")
+  titleLbl.set_ellipsize(3)
+  titleLbl.set_max_width_chars(38)
+  const meta = ytVideoMeta.get(item.id)
+  titleLbl.set_label(meta?.title || `Saved video (${item.id})`)
+  if (!meta?.title) queueFetchVideoMeta(item.id)
+
+  const infoLbl = new Gtk.Label({ xalign: 0 })
+  infoLbl.add_css_class("yt-result-channel")
+  infoLbl.set_label(item.qualities.map((q) => `${q}p`).join("  •  "))
+
+  textCol.append(titleLbl)
+  textCol.append(infoLbl)
+  outer.append(textCol)
+
+  const playImg = Gtk.Image.new_from_icon_name("media-playback-start-symbolic")
+  playImg.pixel_size = 16
+  playImg.add_css_class("yt-result-icon")
+  outer.append(playImg)
+
+  playBtn.set_child(outer)
+  playBtn.connect("clicked", () => onPlay(item.id))
+  row.append(playBtn)
+
+  const listBtn = new Gtk.Button()
+  listBtn.add_css_class("mc-downloaded-add")
+  listBtn.set_tooltip_text("Add/remove in selected playlist")
+  const listIcon = Gtk.Image.new_from_icon_name("list-add-symbolic")
+  listIcon.pixel_size = 14
+  listBtn.set_child(listIcon)
+  listBtn.connect("clicked", () => onToggleInPlaylist(item.id))
+  row.append(listBtn)
+
+  GLib.timeout_add(GLib.PRIORITY_DEFAULT, 300, () => {
+    if (!row.get_parent()) return GLib.SOURCE_REMOVE
+    const hasSel = hasActivePlaylist()
+    listBtn.set_sensitive(hasSel)
+    const inPl = hasSel && isInActivePlaylist(item.id)
+    if (inPl) {
+      listBtn.add_css_class("active")
+      listIcon.icon_name = "emblem-ok-symbolic"
+    } else {
+      listBtn.remove_css_class("active")
+      listIcon.icon_name = "list-add-symbolic"
+    }
+    return GLib.SOURCE_CONTINUE
+  })
+
+  return row
+}
 
 // ── Imperative result row ─────────────────────────────────────────────
 function makeResultRow(
@@ -714,6 +1095,11 @@ export function MediaCenterPopover({ gdkmonitor }: { gdkmonitor: Gdk.Monitor }) 
   const statusMsgState  = createPoll("", 200, () => ytStatusMsg)
   const ytPlayingState  = createPoll(null as YtResult | null, 200, () => ytNowPlaying)
   const videoVisState   = createPoll(false, 300, () => ytVideoVisible)
+  const ytQualityState = createPoll("", 200, () => ytCurrentQuality ? `${ytCurrentQuality}p` : "")
+  const ytDownloadState = createPoll("", 200, () => {
+    if (!ytDownloadQuality) return ""
+    return `${ytDownloadQuality}p ${Math.round(ytDownloadProgress)}%`
+  })
   const ytIsPlayingState = createPoll(false, 250, () => {
     try { return Boolean((ytMediaStream as any)?.get_playing?.()) } catch { return false }
   })
@@ -729,6 +1115,10 @@ export function MediaCenterPopover({ gdkmonitor }: { gdkmonitor: Gdk.Monitor }) 
     const posSec = mediaUnitsToSeconds(readMediaTimestampRaw())
     return `${formatMediaTime(posSec)} / ${formatMediaTime(durSec)}`
   })
+  const activePlaylistState = createPoll("", 300, () => {
+    const p = getPlaylistById(ytActivePlaylistId)
+    return p ? `Selected: ${p.name}` : "Select playlist to add/remove tracks"
+  })
 
   let win: Astal.Window | null = null
   const { TOP, LEFT, RIGHT, BOTTOM } = Astal.WindowAnchor
@@ -740,13 +1130,202 @@ export function MediaCenterPopover({ gdkmonitor }: { gdkmonitor: Gdk.Monitor }) 
 
   let resultsList: Gtk.Box | null = null
   let emptyBox: Gtk.Widget | null = null
+  let downloadedList: Gtk.Box | null = null
+  let downloadedEmpty: Gtk.Widget | null = null
+  let downloadedSig = ""
+  let downloadedRefreshId = 0
+  let downloadedScanBusy = false
+  let playlistList: Gtk.Box | null = null
+  let playlistEmpty: Gtk.Widget | null = null
+  let playlistNameEntry: Gtk.Entry | null = null
+  let playlistAdvanceWatchId = 0
+  let playlistEndedLatch = false
+
+  if (!ytPlaylistsLoaded) loadYtPlaylists()
+  loadYtVideoMeta()
+
+  const notifyListsChanged = () => {
+    refreshDownloaded()
+    rebuildPlaylists(ytPlaylists)
+  }
+  ytUiRefreshHook = notifyListsChanged
+
+  const playNextFromActivePlaylist = () => {
+    const playlist = getPlaylistById(ytActivePlaylistId)
+    if (!playlist || playlist.itemIds.length === 0) return
+
+    if (ytActivePlaylistMode === "shuffle") {
+      if (ytActiveShuffleBag.length === 0) {
+        ytActiveShuffleBag = makeShuffledBag(playlist.itemIds, ytLastPlaylistPlayedId)
+      }
+      const nextId = ytActiveShuffleBag.shift()
+      if (!nextId) return
+      ytLastPlaylistPlayedId = nextId
+      playDownloadedTrack(nextId)
+      return
+    }
+
+    if (ytActivePlaylistIndex < 0 || ytActivePlaylistIndex >= playlist.itemIds.length) {
+      ytActivePlaylistIndex = 0
+    } else {
+      ytActivePlaylistIndex = (ytActivePlaylistIndex + 1) % playlist.itemIds.length
+    }
+    const nextId = playlist.itemIds[ytActivePlaylistIndex]
+    ytLastPlaylistPlayedId = nextId
+    playDownloadedTrack(nextId)
+  }
+
+  const startPlaylistPlayback = (playlistId: string, mode: "sequential" | "shuffle") => {
+    const playlist = getPlaylistById(playlistId)
+    if (!playlist || playlist.itemIds.length === 0) return
+
+    ytActivePlaylistId = playlistId
+    ytActivePlaylistMode = mode
+    playlistEndedLatch = false
+
+    if (mode === "shuffle") {
+      ytActiveShuffleBag = makeShuffledBag(playlist.itemIds, ytLastPlaylistPlayedId)
+      const first = ytActiveShuffleBag.shift()
+      if (!first) return
+      ytLastPlaylistPlayedId = first
+      playDownloadedTrack(first)
+      return
+    }
+
+    ytActivePlaylistIndex = 0
+    const first = playlist.itemIds[ytActivePlaylistIndex]
+    ytLastPlaylistPlayedId = first
+    playDownloadedTrack(first)
+  }
+
+  const createPlaylist = (name: string) => {
+    const trimmed = name.trim()
+    if (!trimmed) return
+    const id = GLib.uuid_string_random()
+    ytPlaylists.push({ id, name: trimmed, itemIds: [], coverVideoId: null })
+    ytActivePlaylistId = id
+    saveYtPlaylists()
+    if (playlistNameEntry) playlistNameEntry.text = ""
+    notifyListsChanged()
+  }
+
+  const selectPlaylist = (id: string) => {
+    ytActivePlaylistId = id
+    notifyListsChanged()
+  }
+
+  const toggleTrackInActivePlaylist = (videoId: string) => {
+    const playlist = getPlaylistById(ytActivePlaylistId)
+    if (!playlist) return
+    const idx = playlist.itemIds.indexOf(videoId)
+    if (idx >= 0) {
+      playlist.itemIds.splice(idx, 1)
+      if (playlist.coverVideoId === videoId) {
+        playlist.coverVideoId = playlist.itemIds[0] || null
+      }
+    } else {
+      playlist.itemIds.push(videoId)
+      if (!playlist.coverVideoId) playlist.coverVideoId = videoId
+    }
+    saveYtPlaylists()
+    notifyListsChanged()
+  }
+
+  const isTrackInActivePlaylist = (videoId: string): boolean => {
+    const playlist = getPlaylistById(ytActivePlaylistId)
+    if (!playlist) return false
+    return playlist.itemIds.includes(videoId)
+  }
+
+  function rebuildPlaylists(items: PlaylistEntry[]) {
+    if (!playlistList) return
+    let child = playlistList.get_first_child()
+    while (child) {
+      const next = child.get_next_sibling()
+      if (child !== playlistEmpty) playlistList.remove(child)
+      child = next
+    }
+
+    let prev: Gtk.Widget | null = null
+    for (const p of items) {
+      const row = new Gtk.Box({ spacing: 8 })
+      row.add_css_class("mc-playlist-row")
+
+      const selectBtn = new Gtk.Button()
+      selectBtn.add_css_class("mc-playlist-select")
+      if (ytActivePlaylistId === p.id) selectBtn.add_css_class("active")
+      selectBtn.connect("clicked", () => selectPlaylist(p.id))
+
+      const selectBody = new Gtk.Box({ spacing: 8 })
+      const coverId = p.coverVideoId || p.itemIds[0] || ""
+      if (coverId) {
+        selectBody.append(makeThumbnailWidget(coverId, 56, 32))
+      } else {
+        const ph = new Gtk.Box()
+        ph.add_css_class("mc-playlist-cover-placeholder")
+        ph.set_size_request(56, 32)
+        const phIcon = Gtk.Image.new_from_icon_name("folder-music-symbolic")
+        phIcon.pixel_size = 14
+        ph.append(phIcon)
+        selectBody.append(ph)
+      }
+
+      const labels = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL, spacing: 2 })
+      labels.set_hexpand(true)
+      const nameLbl = new Gtk.Label({ xalign: 0 })
+      nameLbl.add_css_class("mc-playlist-name")
+      nameLbl.set_label(p.name)
+      const metaLbl = new Gtk.Label({ xalign: 0 })
+      metaLbl.add_css_class("mc-playlist-meta")
+      metaLbl.set_label(`${p.itemIds.length} items`)
+      labels.append(nameLbl)
+      labels.append(metaLbl)
+      selectBody.append(labels)
+      selectBtn.set_child(selectBody)
+      row.append(selectBtn)
+
+      const seqBtn = new Gtk.Button()
+      seqBtn.add_css_class("mc-playlist-action")
+      seqBtn.set_tooltip_text("Play sequential")
+      seqBtn.connect("clicked", () => startPlaylistPlayback(p.id, "sequential"))
+      seqBtn.set_child(Gtk.Image.new_from_icon_name("media-skip-forward-symbolic"))
+      row.append(seqBtn)
+
+      const shufBtn = new Gtk.Button()
+      shufBtn.add_css_class("mc-playlist-action")
+      shufBtn.set_tooltip_text("Play true shuffle")
+      shufBtn.connect("clicked", () => startPlaylistPlayback(p.id, "shuffle"))
+      shufBtn.set_child(Gtk.Image.new_from_icon_name("media-playlist-shuffle-symbolic"))
+      row.append(shufBtn)
+
+      playlistList.insert_child_after(row, prev)
+      prev = row
+    }
+
+    if (playlistEmpty) playlistEmpty.set_visible(items.length === 0)
+  }
 
   const playYtTrack = (track: YtResult) => {
     ytNowPlaying = track
+    upsertVideoMeta(track.id, {
+      title: track.title,
+      channel: track.channel,
+      duration: track.duration,
+    })
     playYtEmbedded(track).catch((error) => {
       ytStatus = "error"
       ytStatusMsg = error instanceof Error ? error.message : "Playback failed"
       clearEmbeddedMedia()
+    })
+  }
+
+  const playDownloadedTrack = (id: string) => {
+    const meta = ytVideoMeta.get(id)
+    playYtTrack({
+      id,
+      title: meta?.title || `Saved video (${id})`,
+      channel: meta?.channel || "Saved",
+      duration: meta?.duration || "",
     })
   }
 
@@ -767,9 +1346,88 @@ export function MediaCenterPopover({ gdkmonitor }: { gdkmonitor: Gdk.Monitor }) 
     if (emptyBox) emptyBox.set_visible(tracks.length === 0)
   }
 
+  function rebuildDownloaded(items: DownloadedVideoGroup[]) {
+    if (!downloadedList) return
+    let child = downloadedList.get_first_child()
+    while (child) {
+      const next = child.get_next_sibling()
+      if (child !== downloadedEmpty) downloadedList.remove(child)
+      child = next
+    }
+    let prev: Gtk.Widget | null = null
+    for (const item of items) {
+      const row = makeDownloadedRow(
+        item,
+        playDownloadedTrack,
+        toggleTrackInActivePlaylist,
+        isTrackInActivePlaylist,
+        () => ytActivePlaylistId !== null,
+      )
+      downloadedList.insert_child_after(row, prev)
+      prev = row
+    }
+    if (downloadedEmpty) downloadedEmpty.set_visible(items.length === 0)
+  }
+
+  const refreshDownloaded = () => {
+    if (downloadedScanBusy) return
+    downloadedScanBusy = true
+    listDownloadedVideoGroups()
+      .then((items) => {
+        for (const it of items) {
+          const meta = ytVideoMeta.get(it.id)
+          if (!meta?.title) queueFetchVideoMeta(it.id)
+        }
+        const sig = items
+          .map((it) => {
+            const title = ytVideoMeta.get(it.id)?.title || ""
+            return `${it.id}:${it.qualities.join(",")}:${title}`
+          })
+          .join("|")
+        if (sig !== downloadedSig) {
+          downloadedSig = sig
+          rebuildDownloaded(items)
+        }
+      })
+      .catch(() => {
+        if (downloadedSig !== "") {
+          downloadedSig = ""
+          rebuildDownloaded([])
+        }
+      })
+      .finally(() => {
+        downloadedScanBusy = false
+      })
+  }
+
+  refreshDownloaded()
+  downloadedRefreshId = GLib.timeout_add(GLib.PRIORITY_DEFAULT, 1800, () => {
+    refreshDownloaded()
+    return GLib.SOURCE_CONTINUE
+  })
+
+  playlistAdvanceWatchId = GLib.timeout_add(GLib.PRIORITY_DEFAULT, 300, () => {
+    if (!ytActivePlaylistId || !ytActivePlaylistMode || !ytMediaStream) {
+      playlistEndedLatch = false
+      return GLib.SOURCE_CONTINUE
+    }
+    let ended = false
+    try { ended = Boolean((ytMediaStream as any).get_ended?.()) } catch { ended = false }
+    if (ended && !playlistEndedLatch) {
+      playlistEndedLatch = true
+      playNextFromActivePlaylist()
+    } else if (!ended) {
+      playlistEndedLatch = false
+    }
+    return GLib.SOURCE_CONTINUE
+  })
+
   onCleanup(() => {
     if (ytSearchDebounce) GLib.source_remove(ytSearchDebounce)
     GLib.source_remove(tvSourceId)
+    if (downloadedRefreshId) GLib.source_remove(downloadedRefreshId)
+    if (playlistAdvanceWatchId) GLib.source_remove(playlistAdvanceWatchId)
+    ytUiRefreshHook = null
     cavaCleanup()
     stopYtAll()
     win?.destroy()
@@ -805,6 +1463,7 @@ export function MediaCenterPopover({ gdkmonitor }: { gdkmonitor: Gdk.Monitor }) 
   const stopYtPlayback = () => {
     ytPlayToken++
     stopYtAll()
+    ytCurrentQuality = null
     ytVideoVisible = false
     ytNowPlaying = null
     ytStatus = "idle"
@@ -884,6 +1543,16 @@ export function MediaCenterPopover({ gdkmonitor }: { gdkmonitor: Gdk.Monitor }) 
                   maxWidthChars={42}
                   hexpand
                   xalign={0}
+                />
+                <label
+                  class="mc-tv-quality-badge"
+                  label={ytQualityState}
+                  visible={ytQualityState((q) => q.length > 0)}
+                />
+                <label
+                  class="mc-tv-download-progress"
+                  label={ytDownloadState}
+                  visible={ytDownloadState((t) => t.length > 0)}
                 />
                 <button
                   class={videoVisState((v) => `mc-video-btn ${v ? "active" : ""}`)}
@@ -1035,6 +1704,72 @@ export function MediaCenterPopover({ gdkmonitor }: { gdkmonitor: Gdk.Monitor }) 
                       class="yt-empty-label"
                       label={statusState((s) => s === "searching" ? "Searching..." : "Search YouTube to play media")}
                     />
+                  </box>
+                </box>
+
+                <box class="mc-downloaded-section" orientation={Gtk.Orientation.VERTICAL} spacing={6} marginTop={10}>
+                  <label class="mc-section-label" label="DOWNLOADED VIDEOS" xalign={0} />
+                  <label class="mc-playlist-hint" label={activePlaylistState} xalign={0} />
+                  <box
+                    class="mc-downloaded-list"
+                    orientation={Gtk.Orientation.VERTICAL}
+                    spacing={3}
+                    $={(self) => { downloadedList = self }}
+                  >
+                    <box
+                      class="mc-downloaded-empty"
+                      orientation={Gtk.Orientation.VERTICAL}
+                      spacing={6}
+                      halign={Gtk.Align.CENTER}
+                      marginTop={8}
+                      marginBottom={8}
+                      $={(self) => { downloadedEmpty = self }}
+                    >
+                      <label class="yt-empty-label" label="No downloaded videos yet" />
+                    </box>
+                  </box>
+                </box>
+
+                <box class="mc-playlists-section" orientation={Gtk.Orientation.VERTICAL} spacing={6} marginTop={10}>
+                  <label class="mc-section-label" label="PLAYLISTS" xalign={0} />
+
+                  <box class="mc-playlist-create-row" spacing={8}>
+                    <entry
+                      class="yt-search-entry"
+                      hexpand
+                      placeholderText="Create playlist..."
+                      $={(self) => { playlistNameEntry = self }}
+                      onActivate={(self) => createPlaylist(self.text || "")}
+                    />
+                    <button
+                      class="mc-video-btn"
+                      tooltipText="Create playlist"
+                      onClicked={() => createPlaylist(playlistNameEntry?.text || "")}
+                    >
+                      <image iconName="list-add-symbolic" pixelSize={14} />
+                    </button>
+                  </box>
+
+                  <box
+                    class="mc-playlist-list"
+                    orientation={Gtk.Orientation.VERTICAL}
+                    spacing={4}
+                    $={(self) => {
+                      playlistList = self
+                      rebuildPlaylists(ytPlaylists)
+                    }}
+                  >
+                    <box
+                      class="mc-playlist-empty"
+                      orientation={Gtk.Orientation.VERTICAL}
+                      spacing={6}
+                      halign={Gtk.Align.CENTER}
+                      marginTop={8}
+                      marginBottom={8}
+                      $={(self) => { playlistEmpty = self }}
+                    >
+                      <label class="yt-empty-label" label="No playlists yet" />
+                    </box>
                   </box>
                 </box>
               </box>

@@ -2682,6 +2682,28 @@ $dw-card-shadow: 0 12px 28px rgba(0, 0, 0, 0.34), 0 3px 8px rgba(0, 0, 0, 0.2);
       border-color: rgba($red, 0.3);
       image { color: $red; }
     }
+
+    .mc-tv-quality-badge,
+    .mc-tv-download-progress {
+      font-size: 10px;
+      font-weight: 700;
+      padding: 3px 7px;
+      border-radius: 999px;
+      border: 1px solid $surface-border;
+      letter-spacing: 0.4px;
+    }
+
+    .mc-tv-quality-badge {
+      color: rgba($accent, 0.95);
+      background: rgba($accent, 0.12);
+      border-color: rgba($accent, 0.28);
+    }
+
+    .mc-tv-download-progress {
+      color: $fg-dim;
+      background: rgba(255,255,255,0.06);
+      border-color: rgba(255,255,255,0.14);
+    }
   }
 
   .mc-tv-seek-controls {
@@ -2868,6 +2890,107 @@ $dw-card-shadow: 0 12px 28px rgba(0, 0, 0, 0.34), 0 3px 8px rgba(0, 0, 0, 0.2);
     }
 
     .yt-results-list { padding-top: 4px; }
+
+    .mc-downloaded-section {
+      padding: 8px 0 4px;
+
+      .mc-playlist-hint {
+        font-size: 10px;
+        color: $fg-faint;
+        padding: 0 4px;
+      }
+
+      .mc-downloaded-list {
+        padding-top: 2px;
+      }
+
+      .mc-downloaded-row {
+        .mc-downloaded-play {
+          border-radius: 10px;
+          background: rgba(255,255,255,0.025);
+          border: 1px solid rgba(255,255,255,0.05);
+          transition: all 160ms ease;
+
+          &:hover {
+            background: rgba(255,255,255,0.06);
+            border-color: rgba($accent, 0.22);
+          }
+        }
+
+        .mc-downloaded-add {
+          min-width: 32px;
+          min-height: 32px;
+          border-radius: 8px;
+          background: rgba(255,255,255,0.04);
+          border: 1px solid $surface-border;
+          image { color: $fg-dim; }
+          &:hover { background: rgba($accent, 0.12); border-color: rgba($accent, 0.28); }
+          &.active { background: rgba($accent, 0.18); border-color: rgba($accent, 0.42); image { color: $accent; } }
+        }
+      }
+
+      .mc-downloaded-empty {
+        opacity: 0.8;
+      }
+    }
+
+    .mc-playlists-section {
+      padding: 4px 0 8px;
+
+      .mc-playlist-create-row {
+        padding: 2px 0;
+      }
+
+      .mc-playlist-list {
+        padding-top: 2px;
+      }
+
+      .mc-playlist-row {
+        .mc-playlist-select {
+          border-radius: 9px;
+          background: rgba(255,255,255,0.03);
+          border: 1px solid rgba(255,255,255,0.06);
+          transition: all 160ms ease;
+
+          &.active {
+            background: rgba($accent, 0.12);
+            border-color: rgba($accent, 0.3);
+          }
+        }
+
+        .mc-playlist-cover-placeholder {
+          border-radius: 8px;
+          background: rgba(255,255,255,0.06);
+          border: 1px solid rgba(255,255,255,0.08);
+          image { color: $fg-faint; }
+        }
+
+        .mc-playlist-name {
+          font-size: 11px;
+          font-weight: 700;
+          color: $fg;
+        }
+
+        .mc-playlist-meta {
+          font-size: 10px;
+          color: $fg-faint;
+        }
+
+        .mc-playlist-action {
+          min-width: 30px;
+          min-height: 30px;
+          border-radius: 8px;
+          background: rgba(255,255,255,0.04);
+          border: 1px solid $surface-border;
+          image { color: $fg-dim; }
+          &:hover { background: rgba($accent, 0.12); border-color: rgba($accent, 0.28); image { color: $accent; } }
+        }
+      }
+
+      .mc-playlist-empty {
+        opacity: 0.8;
+      }
+    }
   }
 }
 
