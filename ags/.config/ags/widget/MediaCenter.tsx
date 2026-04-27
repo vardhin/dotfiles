@@ -33,6 +33,7 @@ interface PlaylistEntry {
   name: string
   itemIds: string[]
   coverVideoId: string | null
+  coverImagePath: string | null
 }
 
 // ── Thumbnail cache ────────────────────────────────────────────────────
@@ -132,6 +133,7 @@ let ytActivePlaylistMode: "sequential" | "shuffle" | null = null
 let ytActivePlaylistIndex = -1
 let ytActiveShuffleBag: string[] = []
 let ytLastPlaylistPlayedId: string | null = null
+let playlistDragPick: string | null = null
 
 function ensureYtMediaDir() {
   try { GLib.mkdir_with_parents(YT_MEDIA_DIR, 0o755) } catch { /* ignore */ }
@@ -179,6 +181,7 @@ function loadYtPlaylists() {
         name: p.name,
         itemIds: Array.isArray(p.itemIds) ? p.itemIds.filter((x) => typeof x === "string") : [],
         coverVideoId: typeof p.coverVideoId === "string" ? p.coverVideoId : null,
+        coverImagePath: typeof p.coverImagePath === "string" ? p.coverImagePath : null,
       }))
   } catch { /* ignore */ }
 }
@@ -321,6 +324,48 @@ function ytFilePath(videoId: string, quality: "360" | "480"): string {
   return `${YT_MEDIA_DIR}/${videoId}-${quality}.mp4`
 }
 
+function removeYtFile(videoId: string, quality: "360" | "480") {
+  const path = ytFilePath(videoId, quality)
+  try {
+    if (GLib.file_test(path, GLib.FileTest.EXISTS)) GLib.unlink(path)
+  } catch { /* ignore */ }
+}
+
+function cleanupLowQualityAfterHighQuality(videoId: string) {
+  removeYtFile(videoId, "360")
+}
+
+function removeVideoFromPlaylists(videoId: string) {
+  let changed = false
+  for (const playlist of ytPlaylists) {
+    const before = playlist.itemIds.length
+    playlist.itemIds = playlist.itemIds.filter((id) => id !== videoId)
+    if (playlist.itemIds.length !== before) changed = true
+    if (playlist.coverVideoId === videoId) {
+      playlist.coverVideoId = playlist.itemIds[0] || null
+      changed = true
+    }
+  }
+  if (changed) saveYtPlaylists()
+}
+
+function deleteDownloadedVideo(videoId: string) {
+  const wasCurrent = ytNowPlaying?.id === videoId
+  if (wasCurrent) {
+    ytPlayToken++
+    stopYtAll()
+    ytNowPlaying = null
+    ytStatus = "idle"
+    ytStatusMsg = ""
+  }
+  removeYtFile(videoId, "360")
+  removeYtFile(videoId, "480")
+  ytVideoMeta.delete(videoId)
+  saveYtVideoMeta()
+  removeVideoFromPlaylists(videoId)
+  ytUiRefreshHook?.()
+}
+
 async function downloadYtToFile(
   videoId: string,
   formats: string[],
@@ -454,13 +499,14 @@ async function ensureYtFile480(videoId: string, token: number): Promise<string> 
   ensureYtMediaDir()
   const dest = ytFilePath(videoId, "480")
   if (GLib.file_test(dest, GLib.FileTest.EXISTS)) return dest
-  const ok = await downloadYtToFile(videoId, [
+    const ok = await downloadYtToFile(videoId, [
     // 480p target path after startup playback begins.
     "best[height<=480][ext=mp4][vcodec!=none][acodec!=none]",
     "best[height<=480][acodec!=none][vcodec!=none]",
     "best[ext=mp4][vcodec!=none][acodec!=none]",
   ], dest, "480", token)
-  if (!ok) throw new Error("Could not download upgraded stream")
+    if (!ok) throw new Error("Could not download upgraded stream")
+  cleanupLowQualityAfterHighQuality(videoId)
   return dest
 }
 
@@ -538,6 +584,7 @@ async function playYtEmbedded(track: YtResult) {
 
   const cached480 = ytFilePath(track.id, "480")
   if (GLib.file_test(cached480, GLib.FileTest.EXISTS)) {
+    cleanupLowQualityAfterHighQuality(track.id)
     swapMediaToFile(cached480, token, track.id, "480")
     ytVideoReady = true
     ytStatus = "playing"
@@ -645,6 +692,7 @@ function makeDownloadedRow(
   item: DownloadedVideoGroup,
   onPlay: (id: string) => void,
   onToggleInPlaylist: (id: string) => void,
+  onDeleteVideo: (id: string) => void,
   isInActivePlaylist: (id: string) => boolean,
   hasActivePlaylist: () => boolean,
 ): Gtk.Widget {
@@ -699,6 +747,15 @@ function makeDownloadedRow(
   listBtn.set_child(listIcon)
   listBtn.connect("clicked", () => onToggleInPlaylist(item.id))
   row.append(listBtn)
+
+  const deleteBtn = new Gtk.Button()
+  deleteBtn.add_css_class("mc-downloaded-delete")
+  deleteBtn.set_tooltip_text("Delete video from disk")
+  const deleteIcon = Gtk.Image.new_from_icon_name("user-trash-symbolic")
+  deleteIcon.pixel_size = 14
+  deleteBtn.set_child(deleteIcon)
+  deleteBtn.connect("clicked", () => onDeleteVideo(item.id))
+  row.append(deleteBtn)
 
   GLib.timeout_add(GLib.PRIORITY_DEFAULT, 300, () => {
     if (!row.get_parent()) return GLib.SOURCE_REMOVE
@@ -1132,12 +1189,16 @@ export function MediaCenterPopover({ gdkmonitor }: { gdkmonitor: Gdk.Monitor }) 
   let emptyBox: Gtk.Widget | null = null
   let downloadedList: Gtk.Box | null = null
   let downloadedEmpty: Gtk.Widget | null = null
+  let downloadedItemsCache: DownloadedVideoGroup[] = []
   let downloadedSig = ""
   let downloadedRefreshId = 0
   let downloadedScanBusy = false
   let playlistList: Gtk.Box | null = null
   let playlistEmpty: Gtk.Widget | null = null
   let playlistNameEntry: Gtk.Entry | null = null
+  let playlistCoverEntry: Gtk.Entry | null = null
+  let playlistItemsList: Gtk.Box | null = null
+  let playlistItemsEmpty: Gtk.Widget | null = null
   let playlistAdvanceWatchId = 0
   let playlistEndedLatch = false
 
@@ -1147,6 +1208,7 @@ export function MediaCenterPopover({ gdkmonitor }: { gdkmonitor: Gdk.Monitor }) 
   const notifyListsChanged = () => {
     refreshDownloaded()
     rebuildPlaylists(ytPlaylists)
+    rebuildPlaylistItems()
   }
   ytUiRefreshHook = notifyListsChanged
 
@@ -1202,7 +1264,7 @@ export function MediaCenterPopover({ gdkmonitor }: { gdkmonitor: Gdk.Monitor }) 
     const trimmed = name.trim()
     if (!trimmed) return
     const id = GLib.uuid_string_random()
-    ytPlaylists.push({ id, name: trimmed, itemIds: [], coverVideoId: null })
+    ytPlaylists.push({ id, name: trimmed, itemIds: [], coverVideoId: null, coverImagePath: null })
     ytActivePlaylistId = id
     saveYtPlaylists()
     if (playlistNameEntry) playlistNameEntry.text = ""
@@ -1237,6 +1299,145 @@ export function MediaCenterPopover({ gdkmonitor }: { gdkmonitor: Gdk.Monitor }) 
     return playlist.itemIds.includes(videoId)
   }
 
+  const moveTrackInActivePlaylist = (videoId: string, delta: -1 | 1) => {
+    const playlist = getPlaylistById(ytActivePlaylistId)
+    if (!playlist) return
+    const idx = playlist.itemIds.indexOf(videoId)
+    if (idx < 0) return
+    const target = idx + delta
+    if (target < 0 || target >= playlist.itemIds.length) return
+    const tmp = playlist.itemIds[idx]
+    playlist.itemIds[idx] = playlist.itemIds[target]
+    playlist.itemIds[target] = tmp
+    saveYtPlaylists()
+    notifyListsChanged()
+  }
+
+  const removeTrackFromActivePlaylist = (videoId: string) => {
+    const playlist = getPlaylistById(ytActivePlaylistId)
+    if (!playlist) return
+    const idx = playlist.itemIds.indexOf(videoId)
+    if (idx < 0) return
+    playlist.itemIds.splice(idx, 1)
+    if (playlist.coverVideoId === videoId) playlist.coverVideoId = playlist.itemIds[0] || null
+    saveYtPlaylists()
+    notifyListsChanged()
+  }
+
+  const setCoverFromPlaylistItem = (videoId: string) => {
+    const playlist = getPlaylistById(ytActivePlaylistId)
+    if (!playlist) return
+    playlist.coverVideoId = videoId
+    playlist.coverImagePath = null
+    if (playlistCoverEntry) playlistCoverEntry.text = ""
+    saveYtPlaylists()
+    notifyListsChanged()
+  }
+
+  const setCustomCoverPathForActivePlaylist = (path: string) => {
+    const playlist = getPlaylistById(ytActivePlaylistId)
+    if (!playlist) return
+    const trimmed = path.trim()
+    if (!trimmed) {
+      playlist.coverImagePath = null
+      saveYtPlaylists()
+      notifyListsChanged()
+      return
+    }
+    if (!GLib.file_test(trimmed, GLib.FileTest.EXISTS)) {
+      ytStatus = "error"
+      ytStatusMsg = "Cover image path does not exist"
+      return
+    }
+    playlist.coverImagePath = trimmed
+    saveYtPlaylists()
+    notifyListsChanged()
+  }
+
+  const clearCustomCoverPathForActivePlaylist = () => {
+    const playlist = getPlaylistById(ytActivePlaylistId)
+    if (!playlist) return
+    playlist.coverImagePath = null
+    if (playlistCoverEntry) playlistCoverEntry.text = ""
+    saveYtPlaylists()
+    notifyListsChanged()
+  }
+
+  const openCoverFileChooser = () => {
+    if (!win) return
+    const chooser = new Gtk.FileChooserNative({
+      title: "Select cover image",
+      action: Gtk.FileChooserAction.OPEN,
+      acceptLabel: "Select",
+      cancelLabel: "Cancel",
+      transientFor: win,
+      modal: true,
+    })
+    const filter = new Gtk.FileFilter()
+    filter.set_name("Images")
+    filter.add_mime_type("image/png")
+    filter.add_mime_type("image/jpeg")
+    filter.add_mime_type("image/webp")
+    filter.add_mime_type("image/gif")
+    chooser.add_filter(filter)
+    chooser.connect("response", (_dialog: Gtk.FileChooserNative, response: Gtk.ResponseType) => {
+      if (response !== Gtk.ResponseType.ACCEPT) return
+      const file = chooser.get_file()
+      const path = file?.get_path() || ""
+      if (!path) return
+      if (playlistCoverEntry) playlistCoverEntry.text = path
+      setCustomCoverPathForActivePlaylist(path)
+    })
+    chooser.show()
+  }
+
+  const beginTrackReorder = (videoId: string) => {
+    playlistDragPick = videoId
+    ytUiRefreshHook?.()
+  }
+
+  const endTrackReorder = (videoId: string) => {
+    if (playlistDragPick === videoId) playlistDragPick = null
+    ytUiRefreshHook?.()
+  }
+
+  // Pick / drop reordering helpers (pointer-friendly via pick/drop)
+  const pickTrackForReorder = (videoId: string) => {
+    if (!ytActivePlaylistId) return
+    if (playlistDragPick === videoId) {
+      playlistDragPick = null
+    } else {
+      playlistDragPick = videoId
+    }
+    ytUiRefreshHook?.()
+  }
+
+  const dropPickedBefore = (targetId: string) => {
+    if (!ytActivePlaylistId || !playlistDragPick) return
+    if (playlistDragPick === targetId) {
+      playlistDragPick = null
+      ytUiRefreshHook?.()
+      return
+    }
+    const playlist = getPlaylistById(ytActivePlaylistId)
+    if (!playlist) return
+    const srcIdx = playlist.itemIds.indexOf(playlistDragPick)
+    const tgtIdx = playlist.itemIds.indexOf(targetId)
+    if (srcIdx < 0 || tgtIdx < 0) {
+      playlistDragPick = null
+      ytUiRefreshHook?.()
+      return
+    }
+    // remove source
+    playlist.itemIds.splice(srcIdx, 1)
+    // compute insertion index after removal
+    const insertAt = srcIdx < tgtIdx ? tgtIdx - 1 : tgtIdx
+    playlist.itemIds.splice(insertAt, 0, playlistDragPick)
+    playlistDragPick = null
+    saveYtPlaylists()
+    notifyListsChanged()
+  }
+
   function rebuildPlaylists(items: PlaylistEntry[]) {
     if (!playlistList) return
     let child = playlistList.get_first_child()
@@ -1257,17 +1458,26 @@ export function MediaCenterPopover({ gdkmonitor }: { gdkmonitor: Gdk.Monitor }) 
       selectBtn.connect("clicked", () => selectPlaylist(p.id))
 
       const selectBody = new Gtk.Box({ spacing: 8 })
-      const coverId = p.coverVideoId || p.itemIds[0] || ""
-      if (coverId) {
-        selectBody.append(makeThumbnailWidget(coverId, 56, 32))
+      if (p.coverImagePath && GLib.file_test(p.coverImagePath, GLib.FileTest.EXISTS)) {
+        const customCover = new Gtk.Picture()
+        customCover.set_filename(p.coverImagePath)
+        customCover.set_content_fit(Gtk.ContentFit.COVER)
+        customCover.set_size_request(56, 32)
+        customCover.add_css_class("mc-playlist-custom-cover")
+        selectBody.append(customCover)
       } else {
-        const ph = new Gtk.Box()
-        ph.add_css_class("mc-playlist-cover-placeholder")
-        ph.set_size_request(56, 32)
-        const phIcon = Gtk.Image.new_from_icon_name("folder-music-symbolic")
-        phIcon.pixel_size = 14
-        ph.append(phIcon)
-        selectBody.append(ph)
+        const coverId = p.coverVideoId || p.itemIds[0] || ""
+        if (coverId) {
+          selectBody.append(makeThumbnailWidget(coverId, 56, 32))
+        } else {
+          const ph = new Gtk.Box()
+          ph.add_css_class("mc-playlist-cover-placeholder")
+          ph.set_size_request(56, 32)
+          const phIcon = Gtk.Image.new_from_icon_name("folder-music-symbolic")
+          phIcon.pixel_size = 14
+          ph.append(phIcon)
+          selectBody.append(ph)
+        }
       }
 
       const labels = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL, spacing: 2 })
@@ -1277,7 +1487,8 @@ export function MediaCenterPopover({ gdkmonitor }: { gdkmonitor: Gdk.Monitor }) 
       nameLbl.set_label(p.name)
       const metaLbl = new Gtk.Label({ xalign: 0 })
       metaLbl.add_css_class("mc-playlist-meta")
-      metaLbl.set_label(`${p.itemIds.length} items`)
+      const coverTag = p.coverImagePath ? " • custom cover" : ""
+      metaLbl.set_label(`${p.itemIds.length} items${coverTag}`)
       labels.append(nameLbl)
       labels.append(metaLbl)
       selectBody.append(labels)
@@ -1305,6 +1516,100 @@ export function MediaCenterPopover({ gdkmonitor }: { gdkmonitor: Gdk.Monitor }) 
     if (playlistEmpty) playlistEmpty.set_visible(items.length === 0)
   }
 
+  function rebuildPlaylistItems() {
+    if (!playlistItemsList) return
+    const playlist = getPlaylistById(ytActivePlaylistId)
+    if (playlistCoverEntry) playlistCoverEntry.text = playlist?.coverImagePath || ""
+
+    let child = playlistItemsList.get_first_child()
+    while (child) {
+      const next = child.get_next_sibling()
+      if (child !== playlistItemsEmpty) playlistItemsList.remove(child)
+      child = next
+    }
+
+    const ids = playlist?.itemIds || []
+    let prev: Gtk.Widget | null = null
+    ids.forEach((id, idx) => {
+      const row = new Gtk.Box({ spacing: 6 })
+      row.add_css_class("mc-playlist-item-row")
+      if (playlistDragPick === id) row.add_css_class("picked")
+
+      const motion = new Gtk.EventControllerMotion()
+      motion.connect("enter", () => {
+        if (playlistDragPick && playlistDragPick !== id) {
+          dropPickedBefore(id)
+        }
+      })
+      row.add_controller(motion)
+
+      const playBtn = new Gtk.Button()
+      playBtn.add_css_class("mc-playlist-item-play")
+      playBtn.connect("clicked", () => playDownloadedTrack(id))
+      const playBody = new Gtk.Box({ spacing: 8 })
+      playBody.append(makeThumbnailWidget(id, 48, 28))
+      const meta = ytVideoMeta.get(id)
+      const lbl = new Gtk.Label({ xalign: 0 })
+      lbl.add_css_class("mc-playlist-item-title")
+      lbl.set_ellipsize(3)
+      lbl.set_max_width_chars(28)
+      lbl.set_label(meta?.title || `Saved video (${id})`)
+      if (!meta?.title) queueFetchVideoMeta(id)
+      playBody.append(lbl)
+      playBtn.set_child(playBody)
+      row.append(playBtn)
+
+      const upBtn = new Gtk.Button()
+      upBtn.add_css_class("mc-playlist-item-action")
+      upBtn.set_tooltip_text("Move up")
+      upBtn.set_sensitive(idx > 0)
+      upBtn.connect("clicked", () => moveTrackInActivePlaylist(id, -1))
+      upBtn.set_child(Gtk.Image.new_from_icon_name("go-up-symbolic"))
+      row.append(upBtn)
+
+      const downBtn = new Gtk.Button()
+      downBtn.add_css_class("mc-playlist-item-action")
+      downBtn.set_tooltip_text("Move down")
+      downBtn.set_sensitive(idx < ids.length - 1)
+      downBtn.connect("clicked", () => moveTrackInActivePlaylist(id, 1))
+      downBtn.set_child(Gtk.Image.new_from_icon_name("go-down-symbolic"))
+      row.append(downBtn)
+
+      const coverBtn = new Gtk.Button()
+      coverBtn.add_css_class("mc-playlist-item-action")
+      if (playlist?.coverVideoId === id && !playlist?.coverImagePath) coverBtn.add_css_class("active")
+      coverBtn.set_tooltip_text("Use as album cover")
+      coverBtn.connect("clicked", () => setCoverFromPlaylistItem(id))
+      coverBtn.set_child(Gtk.Image.new_from_icon_name("emblem-photos-symbolic"))
+      row.append(coverBtn)
+
+      const dragBtn = new Gtk.Button()
+      dragBtn.add_css_class("mc-playlist-item-action")
+      dragBtn.add_css_class("mc-playlist-item-drag-handle")
+      dragBtn.set_tooltip_text(playlistDragPick === id ? "Release to cancel" : "Hold and drag to reorder")
+      const dragGesture = new Gtk.GestureClick()
+      dragGesture.connect("pressed", () => beginTrackReorder(id))
+      dragGesture.connect("released", () => endTrackReorder(id))
+      dragBtn.add_controller(dragGesture)
+      const dragIcon = Gtk.Image.new_from_icon_name("transform-move-symbolic")
+      dragIcon.pixel_size = 14
+      dragBtn.set_child(dragIcon)
+      row.append(dragBtn)
+
+      const removeBtn = new Gtk.Button()
+      removeBtn.add_css_class("mc-playlist-item-action")
+      removeBtn.set_tooltip_text("Remove from playlist")
+      removeBtn.connect("clicked", () => removeTrackFromActivePlaylist(id))
+      removeBtn.set_child(Gtk.Image.new_from_icon_name("user-trash-symbolic"))
+      row.append(removeBtn)
+
+      playlistItemsList.insert_child_after(row, prev)
+      prev = row
+    })
+
+    if (playlistItemsEmpty) playlistItemsEmpty.set_visible(ids.length === 0)
+  }
+
   const playYtTrack = (track: YtResult) => {
     ytNowPlaying = track
     upsertVideoMeta(track.id, {
@@ -1329,6 +1634,14 @@ export function MediaCenterPopover({ gdkmonitor }: { gdkmonitor: Gdk.Monitor }) 
     })
   }
 
+  const deleteDownloadedTrack = (id: string) => {
+    deleteDownloadedVideo(id)
+    downloadedItemsCache = downloadedItemsCache.filter((item) => item.id !== id)
+    rebuildDownloaded(downloadedItemsCache)
+    rebuildPlaylists(ytPlaylists)
+    rebuildPlaylistItems()
+  }
+
   function rebuildResults(tracks: YtResult[]) {
     if (!resultsList) return
     let child = resultsList.get_first_child()
@@ -1348,6 +1661,7 @@ export function MediaCenterPopover({ gdkmonitor }: { gdkmonitor: Gdk.Monitor }) 
 
   function rebuildDownloaded(items: DownloadedVideoGroup[]) {
     if (!downloadedList) return
+    downloadedItemsCache = items
     let child = downloadedList.get_first_child()
     while (child) {
       const next = child.get_next_sibling()
@@ -1360,6 +1674,7 @@ export function MediaCenterPopover({ gdkmonitor }: { gdkmonitor: Gdk.Monitor }) 
         item,
         playDownloadedTrack,
         toggleTrackInActivePlaylist,
+        deleteDownloadedTrack,
         isTrackInActivePlaylist,
         () => ytActivePlaylistId !== null,
       )
@@ -1769,6 +2084,63 @@ export function MediaCenterPopover({ gdkmonitor }: { gdkmonitor: Gdk.Monitor }) 
                       $={(self) => { playlistEmpty = self }}
                     >
                       <label class="yt-empty-label" label="No playlists yet" />
+                    </box>
+                  </box>
+
+                  <box class="mc-playlist-cover-row" spacing={8}>
+                    <entry
+                      class="yt-search-entry"
+                      hexpand
+                      placeholderText="Custom cover image path..."
+                      $={(self) => { playlistCoverEntry = self }}
+                      onActivate={(self) => setCustomCoverPathForActivePlaylist(self.text || "")}
+                    />
+                    <button
+                      class="mc-video-btn"
+                      tooltipText="Browse for cover image"
+                      onClicked={() => openCoverFileChooser()}
+                    >
+                      <image iconName="folder-open-symbolic" pixelSize={14} />
+                    </button>
+                    <button
+                      class="mc-video-btn"
+                      tooltipText="Apply custom cover image"
+                      onClicked={() => setCustomCoverPathForActivePlaylist(playlistCoverEntry?.text || "")}
+                    >
+                      <image iconName="emblem-photos-symbolic" pixelSize={14} />
+                    </button>
+                    <button
+                      class="mc-stop-btn"
+                      tooltipText="Clear custom cover"
+                      onClicked={() => clearCustomCoverPathForActivePlaylist()}
+                    >
+                      <image iconName="edit-clear-symbolic" pixelSize={14} />
+                    </button>
+                  </box>
+
+                  <box class="mc-playlist-item-label-row" orientation={Gtk.Orientation.VERTICAL}>
+                    <label class="mc-playlist-hint" xalign={0} label="Playlist items (hold the move handle, then hover another row to drop)" />
+                  </box>
+
+                  <box
+                    class="mc-playlist-items-list"
+                    orientation={Gtk.Orientation.VERTICAL}
+                    spacing={4}
+                    $={(self) => {
+                      playlistItemsList = self
+                      rebuildPlaylistItems()
+                    }}
+                  >
+                    <box
+                      class="mc-playlist-items-empty"
+                      orientation={Gtk.Orientation.VERTICAL}
+                      spacing={6}
+                      halign={Gtk.Align.CENTER}
+                      marginTop={8}
+                      marginBottom={8}
+                      $={(self) => { playlistItemsEmpty = self }}
+                    >
+                      <label class="yt-empty-label" label="Select a playlist and add tracks from downloaded videos" />
                     </box>
                   </box>
                 </box>

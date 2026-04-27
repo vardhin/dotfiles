@@ -2958,6 +2958,10 @@ $dw-card-shadow: 0 12px 28px rgba(0, 0, 0, 0.34), 0 3px 8px rgba(0, 0, 0, 0.2);
           }
         }
 
+        .mc-playlist-custom-cover {
+          border-radius: 8px;
+        }
+
         .mc-playlist-cover-placeholder {
           border-radius: 8px;
           background: rgba(255,255,255,0.06);
@@ -2987,7 +2991,75 @@ $dw-card-shadow: 0 12px 28px rgba(0, 0, 0, 0.34), 0 3px 8px rgba(0, 0, 0, 0.2);
         }
       }
 
+      .mc-playlist-cover-row {
+        padding-top: 4px;
+      }
+
+      .mc-playlist-item-label-row {
+        padding-top: 2px;
+      }
+
+      .mc-playlist-items-list {
+        padding-top: 2px;
+      }
+
+      .mc-playlist-item-row {
+        &.picked {
+          outline: 1px solid rgba($accent, 0.35);
+          outline-offset: 2px;
+          border-radius: 10px;
+          background: rgba($accent, 0.08);
+        }
+
+        .mc-playlist-item-play {
+          border-radius: 9px;
+          background: rgba(255,255,255,0.03);
+          border: 1px solid rgba(255,255,255,0.06);
+          transition: all 160ms ease;
+          &:hover {
+            background: rgba(255,255,255,0.06);
+            border-color: rgba($accent, 0.22);
+          }
+        }
+
+        .mc-playlist-item-title {
+          font-size: 11px;
+          color: $fg;
+          font-weight: 600;
+        }
+
+        .mc-playlist-item-action {
+          min-width: 28px;
+          min-height: 28px;
+          border-radius: 8px;
+          background: rgba(255,255,255,0.04);
+          border: 1px solid $surface-border;
+          image { color: $fg-dim; }
+          &:hover { background: rgba($accent, 0.12); border-color: rgba($accent, 0.28); image { color: $accent; } }
+          &.active { background: rgba($accent, 0.18); border-color: rgba($accent, 0.42); image { color: $accent; } }
+        }
+        .mc-playlist-item-drag-handle {
+          cursor: grab;
+        }
+        .mc-playlist-item-action[tooltip="Pick to move"] { cursor: grab; }
+        .mc-playlist-item-action[tooltip="Cancel pick"] { cursor: pointer; box-shadow: 0 0 0 2px rgba($accent,0.12); }
+      }
+
+      .mc-downloaded-delete {
+        min-width: 30px;
+        min-height: 30px;
+        border-radius: 8px;
+        background: rgba(255,255,255,0.04);
+        border: 1px solid $surface-border;
+        image { color: $fg-dim; }
+        &:hover { background: rgba($red, 0.16); border-color: rgba($red, 0.34); image { color: $red; } }
+      }
+
       .mc-playlist-empty {
+        opacity: 0.8;
+      }
+
+      .mc-playlist-items-empty {
         opacity: 0.8;
       }
     }
