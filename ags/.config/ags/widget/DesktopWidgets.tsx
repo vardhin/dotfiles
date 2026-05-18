@@ -4,8 +4,10 @@ import Astal from "gi://Astal?version=4.0"
 import Gtk from "gi://Gtk?version=4.0"
 import Gdk from "gi://Gdk?version=4.0"
 import AstalMpris from "gi://AstalMpris"
+import Gio from "gi://Gio"
 import { onCleanup, createBinding, For } from "ags"
 import { createPoll } from "ags/time"
+import { getMediaCenterDesktopVideoState } from "./MediaCenter"
 
 interface CpuSample {
   total: number
@@ -256,6 +258,112 @@ function NowPlaying() {
   )
 }
 
+// ━━━━━━━━━━━━━━━ AMBIENT MEDIA VIDEO ━━━━━━━━━━━━━━
+
+function AmbientMediaVideo() {
+  let card: Gtk.Box | null = null
+  let video: Gtk.Video | null = null
+  let scrim: Gtk.Box | null = null
+  let media: Gtk.MediaFile | null = null
+  let lastFilePath = ""
+  let lastVisible = false
+
+  const setVisible = (visible: boolean) => {
+    if (card) card.visible = visible
+    if (video) video.visible = visible
+    if (scrim) scrim.visible = visible
+    lastVisible = visible
+  }
+
+  const syncVideo = () => {
+    const state = getMediaCenterDesktopVideoState()
+    const mediaCenterVisible = Boolean(app.get_window("media-center")?.visible)
+    const shouldShow = state.ready && state.playing && !mediaCenterVisible
+
+    if (!shouldShow) {
+      if (lastVisible) {
+        try { (media as any)?.pause?.() } catch {}
+        setVisible(false)
+      }
+      return
+    }
+
+    if (state.filePath !== lastFilePath) {
+      lastFilePath = state.filePath
+      media = Gtk.MediaFile.new_for_file(Gio.File.new_for_path(state.filePath))
+      media.set_muted(true)
+      video?.set_media_stream(media)
+    }
+
+    if (!lastVisible) setVisible(true)
+
+    try {
+      const stream = media as any
+      const current = Number(stream?.get_timestamp?.() || 0)
+      const syncThreshold = state.duration > 10_000_000 ? 1_500_000 : 1.5
+      if (state.duration > 0 && Math.abs(current - state.position) > syncThreshold) {
+        stream?.seek?.(state.position)
+      }
+      stream?.set_playing?.(true)
+    } catch {}
+  }
+
+  const sourceId = GLib.timeout_add(GLib.PRIORITY_DEFAULT, 500, () => {
+    syncVideo()
+    return GLib.SOURCE_CONTINUE
+  })
+
+  onCleanup(() => {
+    GLib.source_remove(sourceId)
+    try { (media as any)?.pause?.() } catch {}
+    media = null
+  })
+
+  return (
+    <box
+      $={(self) => {
+        card = self
+        self.visible = false
+      }}
+      class="dw-video-card"
+      orientation={Gtk.Orientation.VERTICAL}
+      spacing={8}
+    >
+      <box class="dw-video-header" spacing={6}>
+        <image iconName="camera-video-symbolic" pixelSize={14} class="dw-video-header-icon" />
+        <label label="VIDEO" class="dw-video-header-label" />
+      </box>
+      <overlay class="dw-video-frame" hexpand>
+        <box
+          $={(self) => {
+            const vid = new Gtk.Video()
+            vid.add_css_class("dw-video-player")
+            vid.visible = false
+            vid.set_autoplay(true)
+            vid.set_loop(false)
+            vid.set_hexpand(true)
+            vid.set_vexpand(true)
+            video = vid
+            self.append(vid)
+          }}
+          hexpand
+          vexpand
+        />
+        <box
+          $type="overlay"
+          $={(self) => {
+            scrim = self
+            self.visible = false
+          }}
+          class="dw-video-scrim"
+          hexpand
+          vexpand
+        />
+      </overlay>
+    </box>
+  )
+}
+
 // ━━━━━━━━━━━━━━━ MAIN WIDGET ━━━━━━━━━━━━━━━━━━━━━━━
 
 export function DesktopWidgets({ gdkmonitor }: { gdkmonitor: Gdk.Monitor }) {
@@ -360,6 +468,9 @@ export function DesktopWidgets({ gdkmonitor }: { gdkmonitor: Gdk.Monitor }) {
           halign={Gtk.Align.END}
           class="dw-col-right"
         >
+          {/* Media Center video mirror */}
+          <AmbientMediaVideo />
+
           {/* Now Playing */}
           <NowPlaying />
 

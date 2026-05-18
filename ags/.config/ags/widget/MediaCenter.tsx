@@ -120,6 +120,7 @@ let ytDownloadPid: number | null = null
 let ytDownloadProgress = 0
 let ytDownloadQuality: "360" | "480" | null = null
 let ytCurrentQuality: "360" | "480" | null = null
+let ytCurrentFilePath: string | null = null
 const YT_MEDIA_DIR = `${GLib.get_home_dir()}/Video/TV`
 const YT_META_FILE = `${YT_MEDIA_DIR}/video-meta.json`
 const YT_PLAYLISTS_FILE = `${YT_MEDIA_DIR}/playlists.json`
@@ -307,6 +308,7 @@ function clearEmbeddedMedia() {
   } catch { /* ignore */ }
   ytMediaStream = null
   ytVideoReady = false
+  ytCurrentFilePath = null
   try { ytVideo?.set_media_stream(null) } catch { /* ignore */ }
   refreshTvMode()
 }
@@ -526,6 +528,7 @@ function swapMediaToFile(filePath: string, token: number, videoId: string, quali
   media.set_muted(false)
   ytMediaStream = media
   ytCurrentQuality = quality
+  ytCurrentFilePath = filePath
   ytVideo?.set_media_stream(media)
   try { (ytMediaStream as any).play?.() } catch { /* ignore */ }
 
@@ -610,6 +613,23 @@ async function playYtEmbedded(track: YtResult) {
 function toggleEmbeddedVideo() {
   ytVideoVisible = !ytVideoVisible
   refreshTvMode()
+}
+
+export function getMediaCenterDesktopVideoState() {
+  const stream = ytMediaStream as any
+  const filePath = ytCurrentFilePath
+  const ready = Boolean(ytNowPlaying && ytVideoReady && filePath && GLib.file_test(filePath, GLib.FileTest.EXISTS))
+
+  return {
+    id: ytNowPlaying?.id || "",
+    title: ytNowPlaying?.title || "",
+    filePath: ready && filePath ? filePath : "",
+    ready,
+    playing: ready ? Boolean(stream?.get_playing?.()) : false,
+    position: ready ? readMediaTimestampRaw() : 0,
+    duration: ready ? readMediaDurationRaw() : 0,
+    quality: ytCurrentQuality,
+  }
 }
 
 // ── YouTube search ─────────────────────────────────────────────────────

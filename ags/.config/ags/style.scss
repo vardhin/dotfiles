@@ -1820,6 +1820,47 @@ $dw-card-shadow: 0 12px 28px rgba(0, 0, 0, 0.34), 0 3px 8px rgba(0, 0, 0, 0.2);
   }
 }
 
+// ━━━━━━━━━━━━━━━ MEDIA VIDEO ━━━━━━━━━━━━━━━━━━━━━━━
+.dw-video-card {
+  background: $dw-card-bg;
+  border: 1px solid $dw-card-border;
+  border-radius: $radius-xl;
+  padding: 14px;
+  box-shadow: none;
+  min-width: 240px;
+}
+
+.dw-video-header {
+  padding: 0 4px 2px;
+}
+
+.dw-video-header-icon {
+  color: $accent;
+}
+
+.dw-video-header-label {
+  font-size: 10px;
+  font-weight: 700;
+  color: $fg-dim;
+  letter-spacing: 2px;
+}
+
+.dw-video-frame {
+  background: rgba(0, 0, 0, 0.24);
+  border-radius: $radius;
+  min-width: 240px;
+  min-height: 135px;
+}
+
+.dw-video-player {
+  border-radius: $radius;
+}
+
+.dw-video-scrim {
+  background: rgba(0, 0, 0, 0.08);
+  border-radius: $radius;
+}
+
 // ━━━━━━━━━━━━━━━ NOW PLAYING ━━━━━━━━━━━━━━━━━━━━━━━
 .dw-np-card {
   background: $dw-card-bg;
