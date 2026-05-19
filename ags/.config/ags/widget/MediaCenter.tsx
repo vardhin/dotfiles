@@ -530,7 +530,7 @@ function swapMediaToFile(filePath: string, token: number, videoId: string, quali
   ytCurrentQuality = quality
   ytCurrentFilePath = filePath
   ytVideo?.set_media_stream(media)
-  try { (ytMediaStream as any).play?.() } catch { /* ignore */ }
+  try { (ytMediaStream as any).set_playing?.(true) } catch { /* ignore */ }
 
   // Seek once duration becomes available on the new stream.
   let attempts = 0

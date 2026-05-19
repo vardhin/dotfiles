@@ -281,8 +281,9 @@ function AmbientMediaVideo() {
     const shouldShow = state.ready && state.playing && !mediaCenterVisible
 
     if (!shouldShow) {
+      try { (media as any)?.set_muted?.(true) } catch {}
       if (lastVisible) {
-        try { (media as any)?.pause?.() } catch {}
+        try { (media as any)?.set_playing?.(false) } catch {}
         setVisible(false)
       }
       return
@@ -291,11 +292,13 @@ function AmbientMediaVideo() {
     if (state.filePath !== lastFilePath) {
       lastFilePath = state.filePath
       media = Gtk.MediaFile.new_for_file(Gio.File.new_for_path(state.filePath))
-      media.set_muted(true)
       video?.set_media_stream(media)
     }
 
-    if (!lastVisible) setVisible(true)
+    try { (media as any)?.set_muted?.(false) } catch {}
+    if (!lastVisible) {
+      setVisible(true)
+    }
 
     try {
       const stream = media as any
@@ -315,7 +318,7 @@ function AmbientMediaVideo() {
 
   onCleanup(() => {
     GLib.source_remove(sourceId)
-    try { (media as any)?.pause?.() } catch {}
+    try { (media as any)?.set_playing?.(false) } catch {}
     media = null
   })
 
