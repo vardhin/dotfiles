@@ -303,7 +303,7 @@ function refreshTvMode() {
 function clearEmbeddedMedia() {
   try {
     if (ytMediaStream) {
-      ;(ytMediaStream as any).pause?.()
+      ;(ytMediaStream as any).set_playing?.(false)
     }
   } catch { /* ignore */ }
   ytMediaStream = null
@@ -531,6 +531,19 @@ function swapMediaToFile(filePath: string, token: number, videoId: string, quali
   ytCurrentFilePath = filePath
   ytVideo?.set_media_stream(media)
   try { (ytMediaStream as any).set_playing?.(true) } catch { /* ignore */ }
+  // PipeWire/PulseAudio may restore gjs streams as muted+0% — force unmute repeatedly until the stream is active.
+  const unmutePactl = () => execAsync(["bash", "-c",
+    "pactl list sink-inputs | awk '/Sink Input/{id=$3} /application.name.*=.*\"gjs\"/{print id}'" +
+    " | tr -d '#' | while read sid; do pactl set-sink-input-mute \"$sid\" 0; pactl set-sink-input-volume \"$sid\" 100%; done"
+  ]).catch(() => { /* ignore */ })
+  let unmuteAttempts = 0
+  const unmuteToken = token
+  GLib.timeout_add(GLib.PRIORITY_DEFAULT, 200, () => {
+    if (unmuteToken !== ytPlayToken) return GLib.SOURCE_REMOVE
+    unmutePactl()
+    unmuteAttempts++
+    return unmuteAttempts < 8 ? GLib.SOURCE_CONTINUE : GLib.SOURCE_REMOVE
+  })
 
   // Seek once duration becomes available on the new stream.
   let attempts = 0

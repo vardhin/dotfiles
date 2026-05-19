@@ -295,7 +295,8 @@ function AmbientMediaVideo() {
       video?.set_media_stream(media)
     }
 
-    try { (media as any)?.set_muted?.(false) } catch {}
+    // Desktop ambient video is always muted — audio comes from the media center only.
+    try { (media as any)?.set_muted?.(true) } catch {}
     if (!lastVisible) {
       setVisible(true)
     }
