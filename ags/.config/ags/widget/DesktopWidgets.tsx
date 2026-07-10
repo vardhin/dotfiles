@@ -4,7 +4,6 @@ import Astal from "gi://Astal?version=4.0"
 import Gtk from "gi://Gtk?version=4.0"
 import Gdk from "gi://Gdk?version=4.0"
 import AstalMpris from "gi://AstalMpris"
-import Gio from "gi://Gio"
 import { onCleanup, createBinding, For } from "ags"
 import { createPoll } from "ags/time"
 import { getMediaCenterDesktopVideoState } from "./MediaCenter"
@@ -264,8 +263,7 @@ function AmbientMediaVideo() {
   let card: Gtk.Box | null = null
   let video: Gtk.Video | null = null
   let scrim: Gtk.Box | null = null
-  let media: Gtk.MediaFile | null = null
-  let lastFilePath = ""
+  let media: Gtk.MediaStream | null = null
   let lastVisible = false
 
   const setVisible = (visible: boolean) => {
@@ -280,36 +278,23 @@ function AmbientMediaVideo() {
     const mediaCenterVisible = Boolean(app.get_window("media-center")?.visible)
     const shouldShow = state.ready && state.playing && !mediaCenterVisible
 
+    // Reuse MediaCenter's stream. Creating a second Gtk.MediaFile here starts a
+    // second GStreamer audio pipeline whenever the popover is hidden.
+    if (state.mediaStream !== media) {
+      media = state.mediaStream
+      video?.set_media_stream(media)
+    }
+
     if (!shouldShow) {
-      try { (media as any)?.set_muted?.(true) } catch {}
       if (lastVisible) {
-        try { (media as any)?.set_playing?.(false) } catch {}
         setVisible(false)
       }
       return
     }
 
-    if (state.filePath !== lastFilePath) {
-      lastFilePath = state.filePath
-      media = Gtk.MediaFile.new_for_file(Gio.File.new_for_path(state.filePath))
-      video?.set_media_stream(media)
-    }
-
-    // Desktop ambient video is always muted — audio comes from the media center only.
-    try { (media as any)?.set_muted?.(true) } catch {}
     if (!lastVisible) {
       setVisible(true)
     }
-
-    try {
-      const stream = media as any
-      const current = Number(stream?.get_timestamp?.() || 0)
-      const syncThreshold = state.duration > 10_000_000 ? 1_500_000 : 1.5
-      if (state.duration > 0 && Math.abs(current - state.position) > syncThreshold) {
-        stream?.seek?.(state.position)
-      }
-      stream?.set_playing?.(true)
-    } catch {}
   }
 
   const sourceId = GLib.timeout_add(GLib.PRIORITY_DEFAULT, 500, () => {
@@ -319,7 +304,7 @@ function AmbientMediaVideo() {
 
   onCleanup(() => {
     GLib.source_remove(sourceId)
-    try { (media as any)?.set_playing?.(false) } catch {}
+    video?.set_media_stream(null)
     media = null
   })
 

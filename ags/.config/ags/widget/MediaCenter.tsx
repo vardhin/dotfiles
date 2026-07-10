@@ -20,7 +20,11 @@ interface YtResult {
 interface DownloadedVideoGroup {
   id: string
   qualities: string[]
+  addedAt: number
 }
+
+type DownloadedSortKey = "views" | "name" | "newest" | "oldest"
+type DownloadedSortDir = "asc" | "desc"
 
 interface VideoMeta {
   title?: string
@@ -124,7 +128,10 @@ let ytCurrentFilePath: string | null = null
 const YT_MEDIA_DIR = `${GLib.get_home_dir()}/Video/TV`
 const YT_META_FILE = `${YT_MEDIA_DIR}/video-meta.json`
 const YT_PLAYLISTS_FILE = `${YT_MEDIA_DIR}/playlists.json`
+const YT_PLAYCOUNTS_FILE = `${YT_MEDIA_DIR}/play-counts.json`
 const ytVideoMeta = new Map<string, VideoMeta>()
+const ytPlayCounts = new Map<string, number>()
+let ytPlayCountsLoaded = false
 const ytMetaFetchPending = new Set<string>()
 let ytPlaylists: PlaylistEntry[] = []
 let ytPlaylistsLoaded = false
@@ -135,6 +142,49 @@ let ytActivePlaylistIndex = -1
 let ytActiveShuffleBag: string[] = []
 let ytLastPlaylistPlayedId: string | null = null
 let playlistDragPick: string | null = null
+
+// ── Play queue ─────────────────────────────────────────────────────────
+// Up-next list, independent of playlists. When the current track ends the
+// queue is consulted first; if empty, the active playlist (if any) advances.
+let ytQueue: YtResult[] = []
+let ytQueueRefreshHook: (() => void) | null = null
+let ytBarNextHook: (() => void) | null = null
+
+function notifyQueueChanged() {
+  ytQueueRefreshHook?.()
+}
+
+function enqueueTrack(track: YtResult) {
+  if (!track?.id) return
+  ytQueue.push(track)
+  notifyQueueChanged()
+}
+
+function dequeueNextTrack(): YtResult | null {
+  return ytQueue.shift() || null
+}
+
+function removeFromQueueAt(index: number) {
+  if (index < 0 || index >= ytQueue.length) return
+  ytQueue.splice(index, 1)
+  notifyQueueChanged()
+}
+
+function moveInQueue(index: number, delta: -1 | 1) {
+  const target = index + delta
+  if (index < 0 || index >= ytQueue.length) return
+  if (target < 0 || target >= ytQueue.length) return
+  const tmp = ytQueue[index]
+  ytQueue[index] = ytQueue[target]
+  ytQueue[target] = tmp
+  notifyQueueChanged()
+}
+
+function clearQueue() {
+  if (ytQueue.length === 0) return
+  ytQueue = []
+  notifyQueueChanged()
+}
 
 function ensureYtMediaDir() {
   try { GLib.mkdir_with_parents(YT_MEDIA_DIR, 0o755) } catch { /* ignore */ }
@@ -192,6 +242,41 @@ function saveYtPlaylists() {
   try {
     GLib.file_set_contents(YT_PLAYLISTS_FILE, JSON.stringify(ytPlaylists, null, 2))
   } catch { /* ignore */ }
+}
+
+function loadYtPlayCounts() {
+  ensureYtMediaDir()
+  ytPlayCountsLoaded = true
+  ytPlayCounts.clear()
+  try {
+    const [ok, bytes] = GLib.file_get_contents(YT_PLAYCOUNTS_FILE)
+    if (!ok) return
+    const parsed = JSON.parse(new TextDecoder().decode(bytes)) as Record<string, number>
+    for (const [id, count] of Object.entries(parsed)) {
+      if (!id) continue
+      const n = Number(count)
+      if (Number.isFinite(n) && n > 0) ytPlayCounts.set(id, Math.floor(n))
+    }
+  } catch { /* ignore */ }
+}
+
+function saveYtPlayCounts() {
+  ensureYtMediaDir()
+  try {
+    const obj: Record<string, number> = {}
+    for (const [id, count] of ytPlayCounts.entries()) obj[id] = count
+    GLib.file_set_contents(YT_PLAYCOUNTS_FILE, JSON.stringify(obj, null, 2))
+  } catch { /* ignore */ }
+}
+
+function getPlayCount(id: string): number {
+  return ytPlayCounts.get(id) || 0
+}
+
+function incrementPlayCount(id: string) {
+  if (!id) return
+  ytPlayCounts.set(id, getPlayCount(id) + 1)
+  saveYtPlayCounts()
 }
 
 function upsertVideoMeta(id: string, meta: VideoMeta) {
@@ -301,11 +386,13 @@ function refreshTvMode() {
 }
 
 function clearEmbeddedMedia() {
-  try {
-    if (ytMediaStream) {
-      ;(ytMediaStream as any).set_playing?.(false)
-    }
-  } catch { /* ignore */ }
+  const prev = ytMediaStream
+  if (prev) {
+    try { (prev as any).set_playing?.(false) } catch { /* ignore */ }
+    try { (prev as any).set_muted?.(true) } catch { /* ignore */ }
+    try { (prev as any).set_volume?.(0) } catch { /* ignore */ }
+    try { (prev as any).stream_unprepared?.() } catch { /* ignore */ }
+  }
   ytMediaStream = null
   ytVideoReady = false
   ytCurrentFilePath = null
@@ -515,14 +602,25 @@ async function ensureYtFile480(videoId: string, token: number): Promise<string> 
 function swapMediaToFile(filePath: string, token: number, videoId: string, quality: "360" | "480") {
   if (token !== ytPlayToken || ytNowPlaying?.id !== videoId) return
 
-  const hadPrevStream = ytMediaStream !== null
+  const prevStream = ytMediaStream
+  const hadPrevStream = prevStream !== null
   const wasPlaying = (() => {
     if (!hadPrevStream) return true
-    try { return Boolean((ytMediaStream as any)?.get_playing?.()) } catch { return true }
+    try { return Boolean((prevStream as any)?.get_playing?.()) } catch { return true }
   })()
   const prevDur = readMediaDurationRaw()
   const prevPos = readMediaTimestampRaw()
   const prevRatio = prevDur > 0 ? Math.max(0, Math.min(1, prevPos / prevDur)) : 0
+
+  // Tear down the previous stream BEFORE wiring up the new one. Leaving the old
+  // Gtk.MediaFile alive keeps its GStreamer pipeline decoding audio, which is the
+  // "double audio" symptom during a 360p->480p hot-swap.
+  if (prevStream) {
+    try { (prevStream as any).set_playing?.(false) } catch { /* ignore */ }
+    try { (prevStream as any).set_muted?.(true) } catch { /* ignore */ }
+    try { (prevStream as any).set_volume?.(0) } catch { /* ignore */ }
+    try { (prevStream as any).stream_unprepared?.() } catch { /* ignore */ }
+  }
 
   const media = Gtk.MediaFile.new_for_file(Gio.File.new_for_path(filePath))
   media.set_muted(false)
@@ -637,6 +735,7 @@ export function getMediaCenterDesktopVideoState() {
     id: ytNowPlaying?.id || "",
     title: ytNowPlaying?.title || "",
     filePath: ready && filePath ? filePath : "",
+    mediaStream: ready ? ytMediaStream : null,
     ready,
     playing: ready ? Boolean(stream?.get_playing?.()) : false,
     position: ready ? readMediaTimestampRaw() : 0,
@@ -695,28 +794,36 @@ async function listDownloadedVideoGroups(): Promise<DownloadedVideoGroup[]> {
       "f",
       "-name",
       "*.mp4",
+      "-printf",
+      "%T@\t%f\n",
     ])
   } catch {
     return []
   }
 
   const groups = new Map<string, Set<string>>()
+  // Track the earliest mtime per id as its "added" timestamp.
+  const addedAt = new Map<string, number>()
   for (const line of raw.split("\n")) {
-    const path = line.trim()
-    if (!path) continue
-    const file = path.split("/").pop() || ""
-    const m = file.match(/^(.+)-(\d{3,4})\.mp4$/)
+    if (!line.trim()) continue
+    const [mtimeStr, file] = line.split("\t")
+    if (!file) continue
+    const m = file.trim().match(/^(.+)-(\d{3,4})\.mp4$/)
     if (!m) continue
     const id = m[1]
     const q = m[2]
     if (!groups.has(id)) groups.set(id, new Set<string>())
     groups.get(id)!.add(q)
+    const mtime = Number(mtimeStr) || 0
+    const prev = addedAt.get(id)
+    if (prev === undefined || mtime < prev) addedAt.set(id, mtime)
   }
 
   return Array.from(groups.entries())
     .map(([id, set]) => ({
       id,
       qualities: Array.from(set).sort((a, b) => Number(a) - Number(b)),
+      addedAt: addedAt.get(id) || 0,
     }))
     .sort((a, b) => a.id.localeCompare(b.id))
 }
@@ -724,6 +831,7 @@ async function listDownloadedVideoGroups(): Promise<DownloadedVideoGroup[]> {
 function makeDownloadedRow(
   item: DownloadedVideoGroup,
   onPlay: (id: string) => void,
+  onQueue: (id: string) => void,
   onToggleInPlaylist: (id: string) => void,
   onDeleteVideo: (id: string) => void,
   isInActivePlaylist: (id: string) => boolean,
@@ -757,7 +865,9 @@ function makeDownloadedRow(
 
   const infoLbl = new Gtk.Label({ xalign: 0 })
   infoLbl.add_css_class("yt-result-channel")
-  infoLbl.set_label(item.qualities.map((q) => `${q}p`).join("  •  "))
+  const plays = getPlayCount(item.id)
+  const playsTag = `${plays} play${plays === 1 ? "" : "s"}`
+  infoLbl.set_label([item.qualities.map((q) => `${q}p`).join(" "), playsTag].join("  •  "))
 
   textCol.append(titleLbl)
   textCol.append(infoLbl)
@@ -780,6 +890,15 @@ function makeDownloadedRow(
   listBtn.set_child(listIcon)
   listBtn.connect("clicked", () => onToggleInPlaylist(item.id))
   row.append(listBtn)
+
+  const queueBtn = new Gtk.Button()
+  queueBtn.add_css_class("mc-downloaded-add")
+  queueBtn.set_tooltip_text("Add to queue")
+  const queueIcon = Gtk.Image.new_from_icon_name("media-playlist-consecutive-symbolic")
+  queueIcon.pixel_size = 14
+  queueBtn.set_child(queueIcon)
+  queueBtn.connect("clicked", () => onQueue(item.id))
+  row.append(queueBtn)
 
   const deleteBtn = new Gtk.Button()
   deleteBtn.add_css_class("mc-downloaded-delete")
@@ -812,9 +931,14 @@ function makeDownloadedRow(
 function makeResultRow(
   track: YtResult,
   onPlay: (t: YtResult) => void,
+  onQueue: (t: YtResult) => void,
 ): Gtk.Widget {
+  const wrap = new Gtk.Box({ spacing: 4 })
+  wrap.add_css_class("yt-result-wrap")
+
   const row = new Gtk.Button()
   row.add_css_class("yt-result-row")
+  row.set_hexpand(true)
   row.set_tooltip_text(`Play: ${track.title}`)
 
   const outer = new Gtk.Box({ spacing: 10 })
@@ -863,7 +987,7 @@ function makeResultRow(
 
   let wasPlaying = false
   GLib.timeout_add(GLib.PRIORITY_DEFAULT, 200, () => {
-    if (!row.get_parent()) return GLib.SOURCE_REMOVE
+    if (!wrap.get_parent()) return GLib.SOURCE_REMOVE
     const isPlaying = ytNowPlaying?.id === track.id
     if (isPlaying !== wasPlaying) {
       wasPlaying = isPlaying
@@ -879,7 +1003,17 @@ function makeResultRow(
   })
 
   row.connect("clicked", () => onPlay(track))
-  return row
+  wrap.append(row)
+
+  const queueBtn = new Gtk.Button()
+  queueBtn.add_css_class("yt-result-queue")
+  queueBtn.set_valign(Gtk.Align.CENTER)
+  queueBtn.set_tooltip_text("Add to queue")
+  queueBtn.set_child(Gtk.Image.new_from_icon_name("list-add-symbolic"))
+  queueBtn.connect("clicked", () => onQueue(track))
+  wrap.append(queueBtn)
+
+  return wrap
 }
 
 // ── TV: shows current YT thumbnail and embedded video ─────────────────
@@ -1209,6 +1343,7 @@ export function MediaCenterPopover({ gdkmonitor }: { gdkmonitor: Gdk.Monitor }) 
     const p = getPlaylistById(ytActivePlaylistId)
     return p ? `Selected: ${p.name}` : "Select playlist to add/remove tracks"
   })
+  const queueCountState = createPoll(0, 300, () => ytQueue.length)
 
   let win: Astal.Window | null = null
   const { TOP, LEFT, RIGHT, BOTTOM } = Astal.WindowAnchor
@@ -1226,6 +1361,10 @@ export function MediaCenterPopover({ gdkmonitor }: { gdkmonitor: Gdk.Monitor }) 
   let downloadedSig = ""
   let downloadedRefreshId = 0
   let downloadedScanBusy = false
+  let downloadedFilterEntry: Gtk.Entry | null = null
+  let downloadedFilter = ""
+  let downloadedSortKey: DownloadedSortKey = "newest"
+  let downloadedSortDir: DownloadedSortDir = "desc"
   let playlistList: Gtk.Box | null = null
   let playlistEmpty: Gtk.Widget | null = null
   let playlistNameEntry: Gtk.Entry | null = null
@@ -1234,8 +1373,11 @@ export function MediaCenterPopover({ gdkmonitor }: { gdkmonitor: Gdk.Monitor }) 
   let playlistItemsEmpty: Gtk.Widget | null = null
   let playlistAdvanceWatchId = 0
   let playlistEndedLatch = false
+  let queueList: Gtk.Box | null = null
+  let queueEmpty: Gtk.Widget | null = null
 
   if (!ytPlaylistsLoaded) loadYtPlaylists()
+  if (!ytPlayCountsLoaded) loadYtPlayCounts()
   loadYtVideoMeta()
 
   const notifyListsChanged = () => {
@@ -1645,11 +1787,13 @@ export function MediaCenterPopover({ gdkmonitor }: { gdkmonitor: Gdk.Monitor }) 
 
   const playYtTrack = (track: YtResult) => {
     ytNowPlaying = track
+    incrementPlayCount(track.id)
     upsertVideoMeta(track.id, {
       title: track.title,
       channel: track.channel,
       duration: track.duration,
     })
+    refreshDownloaded()
     playYtEmbedded(track).catch((error) => {
       ytStatus = "error"
       ytStatusMsg = error instanceof Error ? error.message : "Playback failed"
@@ -1675,6 +1819,115 @@ export function MediaCenterPopover({ gdkmonitor }: { gdkmonitor: Gdk.Monitor }) 
     rebuildPlaylistItems()
   }
 
+  const trackFromId = (id: string): YtResult => {
+    const meta = ytVideoMeta.get(id)
+    return {
+      id,
+      title: meta?.title || `Saved video (${id})`,
+      channel: meta?.channel || "Saved",
+      duration: meta?.duration || "",
+    }
+  }
+
+  const enqueueById = (id: string) => {
+    enqueueTrack(trackFromId(id))
+  }
+
+  // Pull the next track from the queue first; fall back to the active playlist.
+  const advanceToNext = () => {
+    const next = dequeueNextTrack()
+    if (next) {
+      // Manual queue takes over: detach any playlist auto-advance.
+      ytActivePlaylistMode = null
+      notifyQueueChanged()
+      playYtTrack(next)
+      return
+    }
+    playNextFromActivePlaylist()
+  }
+  ytBarNextHook = advanceToNext
+
+  // Play right now and push whatever is playing nowhere — used by "play next".
+  const playFromQueueNow = (index: number) => {
+    if (index < 0 || index >= ytQueue.length) return
+    const track = ytQueue.splice(index, 1)[0]
+    ytActivePlaylistMode = null
+    notifyQueueChanged()
+    playYtTrack(track)
+  }
+
+  const rebuildQueue = () => {
+    if (!queueList) return
+    let child = queueList.get_first_child()
+    while (child) {
+      const next = child.get_next_sibling()
+      if (child !== queueEmpty) queueList.remove(child)
+      child = next
+    }
+
+    let prev: Gtk.Widget | null = null
+    ytQueue.forEach((track, index) => {
+      const row = new Gtk.Box({ spacing: 8 })
+      row.add_css_class("mc-queue-row")
+
+      const posLbl = new Gtk.Label({ label: `${index + 1}` })
+      posLbl.add_css_class("mc-queue-pos")
+      row.append(posLbl)
+
+      const playBtn = new Gtk.Button()
+      playBtn.add_css_class("mc-queue-play")
+      playBtn.set_hexpand(true)
+      playBtn.set_tooltip_text(`Play now: ${track.title}`)
+
+      const inner = new Gtk.Box({ spacing: 8 })
+      inner.set_hexpand(true)
+      const titleLbl = new Gtk.Label({ xalign: 0 })
+      titleLbl.add_css_class("yt-result-title")
+      titleLbl.set_ellipsize(3)
+      titleLbl.set_max_width_chars(34)
+      titleLbl.set_hexpand(true)
+      titleLbl.set_label(track.title)
+      inner.append(titleLbl)
+      if (track.duration) {
+        const durLbl = new Gtk.Label({ label: track.duration })
+        durLbl.add_css_class("yt-result-duration")
+        inner.append(durLbl)
+      }
+      playBtn.set_child(inner)
+      playBtn.connect("clicked", () => playFromQueueNow(index))
+      row.append(playBtn)
+
+      const upBtn = new Gtk.Button()
+      upBtn.add_css_class("mc-queue-action")
+      upBtn.set_tooltip_text("Move up")
+      upBtn.set_child(Gtk.Image.new_from_icon_name("go-up-symbolic"))
+      upBtn.set_sensitive(index > 0)
+      upBtn.connect("clicked", () => moveInQueue(index, -1))
+      row.append(upBtn)
+
+      const downBtn = new Gtk.Button()
+      downBtn.add_css_class("mc-queue-action")
+      downBtn.set_tooltip_text("Move down")
+      downBtn.set_child(Gtk.Image.new_from_icon_name("go-down-symbolic"))
+      downBtn.set_sensitive(index < ytQueue.length - 1)
+      downBtn.connect("clicked", () => moveInQueue(index, 1))
+      row.append(downBtn)
+
+      const removeBtn = new Gtk.Button()
+      removeBtn.add_css_class("mc-queue-action")
+      removeBtn.set_tooltip_text("Remove from queue")
+      removeBtn.set_child(Gtk.Image.new_from_icon_name("list-remove-symbolic"))
+      removeBtn.connect("clicked", () => removeFromQueueAt(index))
+      row.append(removeBtn)
+
+      queueList!.insert_child_after(row, prev)
+      prev = row
+    })
+
+    if (queueEmpty) queueEmpty.set_visible(ytQueue.length === 0)
+  }
+  ytQueueRefreshHook = rebuildQueue
+
   function rebuildResults(tracks: YtResult[]) {
     if (!resultsList) return
     let child = resultsList.get_first_child()
@@ -1685,11 +1938,113 @@ export function MediaCenterPopover({ gdkmonitor }: { gdkmonitor: Gdk.Monitor }) 
     }
     let prev: Gtk.Widget | null = null
     for (const track of tracks) {
-      const row = makeResultRow(track, playYtTrack)
+      const row = makeResultRow(track, playYtTrack, enqueueTrack)
       resultsList.insert_child_after(row, prev)
       prev = row
     }
     if (emptyBox) emptyBox.set_visible(tracks.length === 0)
+  }
+
+  const downloadedMatchesFilter = (item: DownloadedVideoGroup): boolean => {
+    const q = downloadedFilter.trim().toLowerCase()
+    if (!q) return true
+    const title = (ytVideoMeta.get(item.id)?.title || "").toLowerCase()
+    const channel = (ytVideoMeta.get(item.id)?.channel || "").toLowerCase()
+    return title.includes(q) || channel.includes(q) || item.id.toLowerCase().includes(q)
+  }
+
+  let downloadedSortLabel: Gtk.Label | null = null
+
+  const sortKeyText = (key: DownloadedSortKey): string => {
+    switch (key) {
+      case "views": return "Views"
+      case "name": return "Name"
+      case "newest": return "Newest"
+      case "oldest": return "Oldest"
+    }
+  }
+
+  const refreshSortLabel = () => {
+    if (!downloadedSortLabel) return
+    const arrow = downloadedSortDir === "asc" ? "↑" : "↓"
+    downloadedSortLabel.set_label(`${sortKeyText(downloadedSortKey)} ${arrow}`)
+  }
+
+  const setDownloadedSort = (key: DownloadedSortKey, dir: DownloadedSortDir) => {
+    downloadedSortKey = key
+    downloadedSortDir = dir
+    refreshSortLabel()
+    rebuildDownloaded(downloadedItemsCache)
+  }
+
+  const makeSortMenuButton = (): Gtk.Widget => {
+    const menuBtn = new Gtk.MenuButton()
+    menuBtn.add_css_class("mc-sort-btn")
+    menuBtn.set_tooltip_text("Sort downloaded videos")
+
+    const btnBody = new Gtk.Box({ spacing: 6 })
+    const sortIcon = Gtk.Image.new_from_icon_name("view-sort-descending-symbolic")
+    sortIcon.pixel_size = 14
+    btnBody.append(sortIcon)
+    const lbl = new Gtk.Label()
+    lbl.add_css_class("mc-sort-label")
+    downloadedSortLabel = lbl
+    btnBody.append(lbl)
+    menuBtn.set_child(btnBody)
+    refreshSortLabel()
+
+    const popover = new Gtk.Popover()
+    popover.add_css_class("mc-sort-popover")
+    const menu = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL, spacing: 2 })
+
+    const options: { key: DownloadedSortKey; dir: DownloadedSortDir; label: string }[] = [
+      { key: "views", dir: "desc", label: "Most played" },
+      { key: "views", dir: "asc", label: "Least played" },
+      { key: "name", dir: "asc", label: "Name (A→Z)" },
+      { key: "name", dir: "desc", label: "Name (Z→A)" },
+      { key: "newest", dir: "desc", label: "Newest first" },
+      { key: "oldest", dir: "asc", label: "Oldest first" },
+    ]
+
+    for (const opt of options) {
+      const item = new Gtk.Button()
+      item.add_css_class("mc-sort-option")
+      item.set_label(opt.label)
+      item.connect("clicked", () => {
+        setDownloadedSort(opt.key, opt.dir)
+        popover.popdown()
+      })
+      menu.append(item)
+    }
+
+    popover.set_child(menu)
+    menuBtn.set_popover(popover)
+    return menuBtn
+  }
+
+  const downloadedTitle = (item: DownloadedVideoGroup): string =>
+    (ytVideoMeta.get(item.id)?.title || `Saved video (${item.id})`).toLowerCase()
+
+  // Sort respects the active key; direction flips the comparison. For "newest"
+  // and "oldest" the key already fixes the natural order, and direction still
+  // flips it so the toggle stays meaningful.
+  const compareDownloaded = (a: DownloadedVideoGroup, b: DownloadedVideoGroup): number => {
+    let cmp = 0
+    switch (downloadedSortKey) {
+      case "views":
+        cmp = getPlayCount(a.id) - getPlayCount(b.id)
+        break
+      case "name":
+        cmp = downloadedTitle(a).localeCompare(downloadedTitle(b))
+        break
+      case "newest":
+      case "oldest":
+        cmp = a.addedAt - b.addedAt
+        break
+    }
+    // Stable tie-break by id so equal keys keep a deterministic order.
+    if (cmp === 0) cmp = a.id.localeCompare(b.id)
+    return downloadedSortDir === "asc" ? cmp : -cmp
   }
 
   function rebuildDownloaded(items: DownloadedVideoGroup[]) {
@@ -1701,11 +2056,13 @@ export function MediaCenterPopover({ gdkmonitor }: { gdkmonitor: Gdk.Monitor }) 
       if (child !== downloadedEmpty) downloadedList.remove(child)
       child = next
     }
+    const visible = items.filter(downloadedMatchesFilter).sort(compareDownloaded)
     let prev: Gtk.Widget | null = null
-    for (const item of items) {
+    for (const item of visible) {
       const row = makeDownloadedRow(
         item,
         playDownloadedTrack,
+        enqueueById,
         toggleTrackInActivePlaylist,
         deleteDownloadedTrack,
         isTrackInActivePlaylist,
@@ -1714,7 +2071,24 @@ export function MediaCenterPopover({ gdkmonitor }: { gdkmonitor: Gdk.Monitor }) 
       downloadedList.insert_child_after(row, prev)
       prev = row
     }
-    if (downloadedEmpty) downloadedEmpty.set_visible(items.length === 0)
+    if (downloadedEmpty) {
+      downloadedEmpty.set_visible(visible.length === 0)
+      const lbl = downloadedEmpty.get_first_child() as Gtk.Label | null
+      if (lbl && typeof (lbl as any).set_label === "function") {
+        lbl.set_label(
+          items.length > 0 && visible.length === 0
+            ? "No downloads match your search"
+            : "No downloaded videos yet",
+        )
+      }
+    }
+  }
+
+  // Re-render the already-scanned list against the current filter without a
+  // disk rescan. Used by the downloaded-search box.
+  const applyDownloadedFilter = (query: string) => {
+    downloadedFilter = query
+    rebuildDownloaded(downloadedItemsCache)
   }
 
   const refreshDownloaded = () => {
@@ -1755,7 +2129,10 @@ export function MediaCenterPopover({ gdkmonitor }: { gdkmonitor: Gdk.Monitor }) 
   })
 
   playlistAdvanceWatchId = GLib.timeout_add(GLib.PRIORITY_DEFAULT, 300, () => {
-    if (!ytActivePlaylistId || !ytActivePlaylistMode || !ytMediaStream) {
+    // Advance when either the queue has something up next, or a playlist is
+    // running on auto-advance. Without a current stream there's nothing to watch.
+    const hasNext = ytQueue.length > 0 || Boolean(ytActivePlaylistId && ytActivePlaylistMode)
+    if (!hasNext || !ytMediaStream) {
       playlistEndedLatch = false
       return GLib.SOURCE_CONTINUE
     }
@@ -1763,7 +2140,7 @@ export function MediaCenterPopover({ gdkmonitor }: { gdkmonitor: Gdk.Monitor }) 
     try { ended = Boolean((ytMediaStream as any).get_ended?.()) } catch { ended = false }
     if (ended && !playlistEndedLatch) {
       playlistEndedLatch = true
-      playNextFromActivePlaylist()
+      advanceToNext()
     } else if (!ended) {
       playlistEndedLatch = false
     }
@@ -1776,6 +2153,8 @@ export function MediaCenterPopover({ gdkmonitor }: { gdkmonitor: Gdk.Monitor }) 
     if (downloadedRefreshId) GLib.source_remove(downloadedRefreshId)
     if (playlistAdvanceWatchId) GLib.source_remove(playlistAdvanceWatchId)
     ytUiRefreshHook = null
+    ytQueueRefreshHook = null
+    if (ytBarNextHook === advanceToNext) ytBarNextHook = null
     cavaCleanup()
     stopYtAll()
     win?.destroy()
@@ -1952,6 +2331,14 @@ export function MediaCenterPopover({ gdkmonitor }: { gdkmonitor: Gdk.Monitor }) 
                   />
                 </button>
 
+                <button
+                  class="mc-stop-btn"
+                  tooltipText="Skip to next in queue/playlist"
+                  onClicked={() => advanceToNext()}
+                >
+                  <image iconName="media-skip-forward-symbolic" pixelSize={14} />
+                </button>
+
                 <slider
                   class="mc-player-progress"
                   hexpand
@@ -1969,6 +2356,52 @@ export function MediaCenterPopover({ gdkmonitor }: { gdkmonitor: Gdk.Monitor }) 
                 />
 
                 <label class="mc-player-time" label={ytTimeState} xalign={1} />
+              </box>
+
+              {/* Up-next queue */}
+              <box
+                class="mc-queue-section"
+                orientation={Gtk.Orientation.VERTICAL}
+                spacing={6}
+                marginTop={10}
+                marginStart={18}
+                marginEnd={18}
+                visible={queueCountState((n) => n > 0)}
+              >
+                <box class="mc-queue-header" spacing={8}>
+                  <label
+                    class="mc-section-label"
+                    label={queueCountState((n) => `UP NEXT · ${n}`)}
+                    hexpand
+                    xalign={0}
+                  />
+                  <button
+                    class="mc-stop-btn"
+                    tooltipText="Clear queue"
+                    onClicked={() => clearQueue()}
+                  >
+                    <image iconName="edit-clear-all-symbolic" pixelSize={14} />
+                  </button>
+                </box>
+                <box
+                  class="mc-queue-list"
+                  orientation={Gtk.Orientation.VERTICAL}
+                  spacing={3}
+                  $={(self) => {
+                    queueList = self
+                    rebuildQueue()
+                  }}
+                >
+                  <box
+                    class="mc-queue-empty"
+                    halign={Gtk.Align.CENTER}
+                    marginTop={6}
+                    marginBottom={6}
+                    $={(self) => { queueEmpty = self }}
+                  >
+                    <label class="yt-empty-label" label="Queue is empty" />
+                  </box>
+                </box>
               </box>
 
               {/* CAVA visualizer */}
@@ -2058,6 +2491,36 @@ export function MediaCenterPopover({ gdkmonitor }: { gdkmonitor: Gdk.Monitor }) 
                 <box class="mc-downloaded-section" orientation={Gtk.Orientation.VERTICAL} spacing={6} marginTop={10}>
                   <label class="mc-section-label" label="DOWNLOADED VIDEOS" xalign={0} />
                   <label class="mc-playlist-hint" label={activePlaylistState} xalign={0} />
+                  <box class="yt-search-row mc-downloaded-search" spacing={8}>
+                    <image iconName="system-search-symbolic" pixelSize={14} class="yt-search-icon" />
+                    <entry
+                      class="yt-search-entry"
+                      hexpand
+                      placeholderText="Filter downloaded videos..."
+                      $={(self) => { downloadedFilterEntry = self }}
+                      onChanged={(self) => applyDownloadedFilter(self.text)}
+                    />
+                    <button
+                      class="mc-stop-btn"
+                      tooltipText="Clear filter"
+                      visible={false}
+                      $={(self) => {
+                        // Show the clear button only when there's text to clear.
+                        GLib.timeout_add(GLib.PRIORITY_DEFAULT, 200, () => {
+                          if (!self.get_parent()) return GLib.SOURCE_REMOVE
+                          self.set_visible((downloadedFilterEntry?.text || "").length > 0)
+                          return GLib.SOURCE_CONTINUE
+                        })
+                      }}
+                      onClicked={() => {
+                        if (downloadedFilterEntry) downloadedFilterEntry.text = ""
+                        applyDownloadedFilter("")
+                      }}
+                    >
+                      <image iconName="edit-clear-symbolic" pixelSize={13} />
+                    </button>
+                    <box $={(self) => { self.append(makeSortMenuButton()) }} />
+                  </box>
                   <box
                     class="mc-downloaded-list"
                     orientation={Gtk.Orientation.VERTICAL}
@@ -2189,35 +2652,78 @@ export function MediaCenterPopover({ gdkmonitor }: { gdkmonitor: Gdk.Monitor }) 
 // ── Bar button ────────────────────────────────────────────────────────
 export function MediaCenterButton() {
   const mpris = AstalMpris.get_default()
-  const players = createBinding(mpris, "players")
+  const currentMprisPlayer = (): AstalMpris.Player | null => {
+    const list = mpris.players || []
+    return list.find((p) => p.playbackStatus === AstalMpris.PlaybackStatus.PLAYING)
+      || list[0]
+      || null
+  }
 
-  // active player = first PLAYING; fallback to first player
-  const activePlayer = players((list) => {
-    if (list.length === 0) return null
-    const playing = list.find((p) =>
-      p.playbackStatus === AstalMpris.PlaybackStatus.PLAYING
-    )
-    return playing || list[0]
+  const activeTitle = (): string => {
+    if (ytNowPlaying) return ytNowPlaying.title || "Media Center"
+    const player = currentMprisPlayer()
+    return player?.title || player?.identity || "Media Center"
+  }
+
+  let marqueeTitle = ""
+  let marqueeOffset = 0
+  const marqueeState = createPoll("Media Center", 350, () => {
+    const title = activeTitle().trim() || "Media Center"
+    if (title !== marqueeTitle) {
+      marqueeTitle = title
+      marqueeOffset = 0
+    }
+    const width = 26
+    if (title.length <= width) return title
+    const loop = `${title}   •   `
+    const doubled = loop + loop
+    const visible = doubled.slice(marqueeOffset, marqueeOffset + width)
+    marqueeOffset = (marqueeOffset + 1) % loop.length
+    return visible
   })
 
-  // re-bind title/status when the active player changes
-  const labelBinding = activePlayer((p) => {
-    if (!p) return "MEDIA"
-    const t = p.title || ""
-    if (!t) return p.identity || "MEDIA"
-    return t.length > 24 ? t.substring(0, 21) + "..." : t
+  const hasMediaState = createPoll(false, 250, () =>
+    Boolean(ytNowPlaying || currentMprisPlayer()),
+  )
+  const canToggleState = createPoll(false, 250, () =>
+    ytNowPlaying ? Boolean(ytMediaStream) : Boolean(currentMprisPlayer()?.canControl),
+  )
+  const canNextState = createPoll(false, 250, () =>
+    ytNowPlaying
+      ? Boolean(ytBarNextHook && (ytQueue.length > 0 || (ytActivePlaylistId && ytActivePlaylistMode)))
+      : Boolean(currentMprisPlayer()?.canGoNext),
+  )
+  const isPlayingState = createPoll(false, 200, () => {
+    if (ytNowPlaying) {
+      try { return Boolean((ytMediaStream as any)?.get_playing?.()) } catch { return false }
+    }
+    return currentMprisPlayer()?.playbackStatus === AstalMpris.PlaybackStatus.PLAYING
   })
 
-  const iconBinding = activePlayer((p) => {
-    if (!p) return "multimedia-player-symbolic"
-    return p.playbackStatus === AstalMpris.PlaybackStatus.PLAYING
-      ? "media-playback-start-symbolic"
-      : "media-playback-pause-symbolic"
-  })
+  const togglePlayback = () => {
+    if (ytNowPlaying) {
+      try {
+        const stream = ytMediaStream as any
+        if (stream) stream.set_playing?.(!Boolean(stream.get_playing?.()))
+      } catch { /* ignore */ }
+      return
+    }
+    currentMprisPlayer()?.play_pause()
+  }
+
+  const playNext = () => {
+    if (ytNowPlaying) {
+      ytBarNextHook?.()
+      return
+    }
+    const player = currentMprisPlayer()
+    if (player?.canGoNext) player.next()
+  }
 
   return (
-    <box class="mc-bar-btn">
+    <box class="mc-bar-btn" spacing={2}>
       <button
+        class="mc-bar-title-btn"
         onClicked={() => {
           const win = app.get_window("media-center")
           if (win) win.visible = !win.visible
@@ -2225,9 +2731,32 @@ export function MediaCenterButton() {
         tooltipText="Media Center"
       >
         <box spacing={6}>
-          <image iconName={iconBinding} pixelSize={14} />
-          <label class="mc-bar-label" label={labelBinding} />
+          <image iconName="multimedia-player-symbolic" pixelSize={14} />
+          <label class="mc-bar-label" label={marqueeState} widthChars={26} maxWidthChars={26} xalign={0} />
         </box>
+      </button>
+      <button
+        class="mc-bar-control"
+        visible={hasMediaState}
+        sensitive={canToggleState}
+        tooltipText={isPlayingState((playing) => playing ? "Pause" : "Play")}
+        onClicked={togglePlayback}
+      >
+        <image
+          iconName={isPlayingState((playing) => playing
+            ? "media-playback-pause-symbolic"
+            : "media-playback-start-symbolic")}
+          pixelSize={13}
+        />
+      </button>
+      <button
+        class="mc-bar-control"
+        visible={hasMediaState}
+        sensitive={canNextState}
+        tooltipText="Next"
+        onClicked={playNext}
+      >
+        <image iconName="media-skip-forward-symbolic" pixelSize={13} />
       </button>
     </box>
   )

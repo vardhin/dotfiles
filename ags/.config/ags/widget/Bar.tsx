@@ -180,11 +180,12 @@ export function toggleDropdownCli() {
   hideDropdownCli()
 }
 
-type BarPopoverKind = "clock" | "media" | "volume" | "brightness" | "wifi" | "bluetooth" | "battery"
+type BarPopoverKind = "clock" | "media" | "shortcuts" | "volume" | "brightness" | "wifi" | "bluetooth" | "battery"
 
 const BAR_POPOVER_KINDS: BarPopoverKind[] = [
   "clock",
   "media",
+  "shortcuts",
   "volume",
   "brightness",
   "wifi",
@@ -193,7 +194,7 @@ const BAR_POPOVER_KINDS: BarPopoverKind[] = [
 ]
 
 const BAR_POPOVER_TOP_MARGIN = 50
-const BAR_POPOVER_RIGHT_MARGIN: Record<Exclude<BarPopoverKind, "clock" | "media">, number> = {
+const BAR_POPOVER_RIGHT_MARGIN: Record<Exclude<BarPopoverKind, "clock" | "media" | "shortcuts">, number> = {
   volume: 188,
   brightness: 140,
   wifi: 92,
@@ -1284,6 +1285,382 @@ export function WifiPopover({ gdkmonitor }: { gdkmonitor: Gdk.Monitor }) {
   )
 }
 
+// ━━━━━━━━━━━━━━━━━ SHORTCUTS ━━━━━━━━━━━━━━━━━━━━━━━━━━
+// Reads the *live* Hyprland keybinds via `hyprctl -j binds` and presents
+// them grouped by function. Because it queries the running compositor, it
+// reflects whatever is currently configured (including sourced files).
+
+interface HyprBind {
+  modmask: number
+  key: string
+  keycode: number
+  mouse: boolean
+  dispatcher: string
+  arg: string
+  description?: string
+}
+
+interface ShortcutEntry {
+  combo: string   // e.g. "Super + Shift + P"
+  action: string  // human readable function
+  group: string
+}
+
+// Hyprland modmask bits (from <linux/input-event-codes> / wlroots modifiers)
+const MOD_BITS: Array<[number, string]> = [
+  [1, "Shift"],
+  [4, "Ctrl"],
+  [8, "Alt"],
+  [64, "Super"],
+]
+
+function formatMods(modmask: number): string[] {
+  return MOD_BITS.filter(([bit]) => (modmask & bit) !== 0).map(([, name]) => name)
+}
+
+function prettyKey(bind: HyprBind): string {
+  if (bind.mouse) {
+    // arg/key may look like "mouse:272"; map common buttons
+    const raw = bind.key || ""
+    if (raw === "272" || raw.endsWith("272")) return "LMB"
+    if (raw === "273" || raw.endsWith("273")) return "RMB"
+    if (raw === "274" || raw.endsWith("274")) return "MMB"
+    if (raw === "mouse_down") return "Scroll Down"
+    if (raw === "mouse_up") return "Scroll Up"
+    return raw || "Mouse"
+  }
+  const k = bind.key || (bind.keycode ? `code:${bind.keycode}` : "")
+  const map: Record<string, string> = {
+    grave: "`",
+    equal: "=",
+    minus: "-",
+    space: "Space",
+    Return: "Enter",
+    Print: "PrtSc",
+    Backspace: "Backspace",
+    KP_ADD: "Numpad +",
+    KP_SUBTRACT: "Numpad -",
+    XF86AudioRaiseVolume: "Vol +",
+    XF86AudioLowerVolume: "Vol -",
+    XF86AudioMute: "Mute",
+    XF86AudioPlay: "Play/Pause",
+    XF86AudioNext: "Next Track",
+    XF86AudioPrev: "Prev Track",
+    XF86MonBrightnessUp: "Brightness +",
+    XF86MonBrightnessDown: "Brightness -",
+    XF86PowerOff: "Power",
+    Caps_Lock: "Caps Lock",
+    Tab: "Tab",
+  }
+  if (map[k]) return map[k]
+  if (k.startsWith("mouse:")) {
+    const n = k.slice(6)
+    if (n === "272") return "LMB"
+    if (n === "273") return "RMB"
+    if (n === "274") return "MMB"
+  }
+  return k
+}
+
+function formatCombo(bind: HyprBind): string {
+  const parts = [...formatMods(bind.modmask), prettyKey(bind)]
+  return parts.filter(Boolean).join(" + ")
+}
+
+// Derive a friendly function label + group from a bind.
+function describeBind(bind: HyprBind): ShortcutEntry {
+  const combo = formatCombo(bind)
+  const arg = (bind.arg || "").trim()
+
+  // If the user wrote a trailing `# comment` description in the config,
+  // hyprctl exposes it as `description`. Prefer it when present.
+  if (bind.description && bind.description.trim()) {
+    return { combo, action: bind.description.trim(), group: groupFor(bind, bind.description.trim()) }
+  }
+
+  let action = ""
+  switch (bind.dispatcher) {
+    case "exec":
+      action = describeExec(arg)
+      break
+    case "workspace":
+      action = arg === "previous" ? "Previous workspace"
+        : arg === "empty" ? "First empty workspace"
+        : arg === "e+1" ? "Next workspace"
+        : arg === "e-1" ? "Previous workspace (scroll)"
+        : `Go to workspace ${arg}`
+      break
+    case "movetoworkspace":
+      action = `Move window to workspace ${arg}`
+      break
+    case "movetoworkspacesilent":
+      action = `Move window to workspace ${arg} (silent)`
+      break
+    case "movefocus":
+      action = `Focus ${{ l: "left", r: "right", u: "up", d: "down" }[arg] || arg}`
+      break
+    case "movewindow":
+      action = "Move window (drag)"
+      break
+    case "resizewindow":
+      action = "Resize window (drag)"
+      break
+    case "killactive":
+      action = "Close active window"
+      break
+    case "fullscreen":
+      action = "Toggle fullscreen"
+      break
+    case "togglefloating":
+      action = "Toggle floating"
+      break
+    case "togglesplit":
+      action = "Toggle split direction"
+      break
+    case "togglegroup":
+      action = "Toggle window group"
+      break
+    default:
+      action = `${bind.dispatcher}${arg ? ` ${arg}` : ""}`
+  }
+
+  return { combo, action, group: groupFor(bind, action) }
+}
+
+function describeExec(arg: string): string {
+  const a = arg.toLowerCase()
+  if (a.includes("screenshot.sh")) {
+    if (a.includes("fullscreen")) return "Screenshot: full screen"
+    if (a.includes("interactive")) return "Screenshot: interactive menu"
+    if (a.includes("edit")) return "Screenshot: edit area"
+    if (a.includes("area")) return "Screenshot: area"
+    return "Screenshot"
+  }
+  if (a.includes("hyprlock")) return a.includes("suspend") ? "Lock & suspend" : "Lock screen"
+  if (a.includes("hyprsunset")) return "Toggle night light"
+  if (a.includes("hyprpicker")) return "Pick color"
+  if (a.includes("ags toggle applauncher")) return "App launcher"
+  if (a.includes("ags toggle session")) return "Session / power menu"
+  if (a.includes("ags toggle notification")) return "Notification center"
+  if (a.includes("ags toggle theme")) return "Theme switcher"
+  if (a.includes("ags toggle bar")) return "Toggle top bar"
+  if (a.includes("ags request") && a.includes("dropdown")) return "Dropdown terminal"
+  if (a.includes("ags quit")) return "Restart shell"
+  if (a.includes("zoom_factor")) {
+    if (a.includes("1.1")) return "Zoom in (cursor)"
+    if (a.includes("0.9")) return "Zoom out (cursor)"
+    return "Toggle cursor zoom"
+  }
+  if (a.includes("pactl") || a.includes("set-sink-volume")) {
+    if (a.includes("+5")) return "Volume up"
+    if (a.includes("-5")) return "Volume down"
+    if (a.includes("mute")) return "Toggle mute"
+  }
+  if (a.includes("brightnessctl")) {
+    if (a.includes("+")) return "Brightness up"
+    return "Brightness down"
+  }
+  if (a.includes("playerctl")) {
+    if (a.includes("play-pause")) return "Play / pause"
+    if (a.includes("next")) return "Next track"
+    if (a.includes("previous")) return "Previous track"
+  }
+  if (a.includes("poweroff")) return "Power off"
+  if (a.includes("reboot")) return "Reboot"
+  if (a.includes("suspend")) return "Suspend"
+  if (a.includes("lexicon")) return "Lexicon overlay"
+  // Fall back to the basename of the command.
+  const cmd = arg.split(/\s+/)[0] || arg
+  const base = cmd.split("/").pop() || cmd
+  return `Launch ${base}`
+}
+
+function groupFor(bind: HyprBind, action: string): string {
+  const a = action.toLowerCase()
+  const d = bind.dispatcher
+  if (/workspace/.test(d)) return "Workspaces"
+  if (["movefocus", "movewindow", "resizewindow", "killactive", "fullscreen", "togglefloating", "togglesplit", "togglegroup"].includes(d))
+    return "Windows"
+  if (a.includes("volume") || a.includes("mute") || a.includes("brightness") || a.includes("night light"))
+    return "Audio & Display"
+  if (a.includes("track") || a.includes("play") || a.includes("pause") || a.includes("media"))
+    return "Media"
+  if (a.includes("screenshot")) return "Screen Capture"
+  if (a.includes("zoom")) return "Accessibility"
+  if (a.includes("lock") || a.includes("suspend") || a.includes("power off") || a.includes("reboot") || a.includes("session"))
+    return "Power & Lock"
+  if (a.includes("launcher") || a.includes("launch") || a.includes("terminal") || a.includes("notification") || a.includes("theme") || a.includes("bar") || a.includes("shell") || a.includes("overlay"))
+    return "Apps & Shell"
+  return "Other"
+}
+
+const SHORTCUT_GROUP_ORDER = [
+  "Apps & Shell",
+  "Windows",
+  "Workspaces",
+  "Media",
+  "Audio & Display",
+  "Screen Capture",
+  "Power & Lock",
+  "Accessibility",
+  "Other",
+]
+
+function pollShortcuts(): ShortcutEntry[] {
+  try {
+    const out = GLib.spawn_command_line_sync("hyprctl -j binds")[1]
+    const parsed = JSON.parse(decodeBytes(out)) as HyprBind[]
+    if (!Array.isArray(parsed)) return []
+    const seen = new Set<string>()
+    const entries: ShortcutEntry[] = []
+    for (const bind of parsed) {
+      const entry = describeBind(bind)
+      if (!entry.combo) continue
+      const dedupe = `${entry.combo}|${entry.action}`
+      if (seen.has(dedupe)) continue
+      seen.add(dedupe)
+      entries.push(entry)
+    }
+    return entries
+  } catch {
+    return []
+  }
+}
+
+let shortcutsState: ReturnType<typeof createPoll<ShortcutEntry[]>> | null = null
+function getShortcutsState() {
+  if (!shortcutsState) shortcutsState = createPoll([] as ShortcutEntry[], 10000, pollShortcuts)
+  return shortcutsState
+}
+
+function Shortcuts({ gdkmonitor }: { gdkmonitor: Gdk.Monitor }) {
+  return (
+    <box class="shortcuts">
+      <button onClicked={() => toggleBarPopover("shortcuts", gdkmonitor)} tooltipText="Keyboard & mouse shortcuts">
+        <image iconName={svgIcon("keyboard")} />
+      </button>
+    </box>
+  )
+}
+
+export function ShortcutsPopover({ gdkmonitor }: { gdkmonitor: Gdk.Monitor }) {
+  const shortcuts = getShortcutsState()
+  const popupName = barPopoverName("shortcuts", gdkmonitor)
+
+  let win: Astal.Window | null = null
+  const { TOP, LEFT, RIGHT, BOTTOM } = Astal.WindowAnchor
+
+  const hide = () => {
+    if (win) win.visible = false
+  }
+
+  // Build an ordered list of [group, entries] for rendering.
+  const grouped = shortcuts((entries) => {
+    const byGroup = new Map<string, ShortcutEntry[]>()
+    for (const e of entries) {
+      if (!byGroup.has(e.group)) byGroup.set(e.group, [])
+      byGroup.get(e.group)!.push(e)
+    }
+    const ordered: Array<{ group: string; items: ShortcutEntry[] }> = []
+    for (const group of SHORTCUT_GROUP_ORDER) {
+      const items = byGroup.get(group)
+      if (items && items.length) {
+        items.sort((a, b) => a.action.localeCompare(b.action))
+        ordered.push({ group, items })
+      }
+    }
+    // Any groups not in the predefined order (shouldn't happen, but safe).
+    for (const [group, items] of byGroup) {
+      if (!SHORTCUT_GROUP_ORDER.includes(group)) ordered.push({ group, items })
+    }
+    return ordered
+  })
+
+  onCleanup(() => {
+    win?.destroy()
+  })
+
+  return (
+    <window
+      $={(self) => {
+        win = self
+        const keyCtrl = new Gtk.EventControllerKey()
+        keyCtrl.connect("key-pressed", (_ctrl, keyval) => {
+          if (keyval === Gdk.KEY_Escape) hide()
+        })
+        self.add_controller(keyCtrl)
+      }}
+      visible={false}
+      namespace="ags-bar-popover"
+      name={popupName}
+      gdkmonitor={gdkmonitor}
+      exclusivity={Astal.Exclusivity.IGNORE}
+      keymode={Astal.Keymode.ON_DEMAND}
+      layer={Astal.Layer.OVERLAY}
+      anchor={TOP | LEFT | BOTTOM | RIGHT}
+      application={app}
+    >
+      <overlay>
+        <button class="popover-backdrop" hexpand vexpand onClicked={hide}>
+          <box />
+        </button>
+
+        <box
+          $type="overlay"
+          class="bar-popup-window shortcuts-popup-window"
+          orientation={Gtk.Orientation.VERTICAL}
+          halign={Gtk.Align.CENTER}
+          valign={Gtk.Align.START}
+          marginTop={BAR_POPOVER_TOP_MARGIN}
+        >
+          <box class="shortcuts-popup" orientation={Gtk.Orientation.VERTICAL} spacing={10} widthRequest={460}>
+            <box class="shortcuts-header" spacing={10}>
+              <image iconName={svgIcon("keyboard")} pixelSize={20} class="shortcuts-header-icon" />
+              <label class="shortcuts-title" label="Keyboard & Mouse Shortcuts" hexpand xalign={0} />
+              <label
+                class="shortcuts-count"
+                label={shortcuts((e) => `${e.length}`)}
+              />
+            </box>
+
+            <box class="shortcuts-separator" />
+
+            <Gtk.ScrolledWindow
+              hscrollbarPolicy={Gtk.PolicyType.NEVER}
+              vscrollbarPolicy={Gtk.PolicyType.AUTOMATIC}
+              heightRequest={520}
+              propagateNaturalHeight
+            >
+              <box orientation={Gtk.Orientation.VERTICAL} spacing={12}>
+                <For each={grouped}>
+                  {(section) => (
+                    <box class="shortcuts-group" orientation={Gtk.Orientation.VERTICAL} spacing={4}>
+                      <label class="shortcuts-group-title" label={section.group} xalign={0} />
+                      {section.items.map((item) => (
+                        <box class="shortcuts-row" spacing={8}>
+                          <label class="shortcuts-action" label={item.action} hexpand xalign={0} />
+                          <label class="shortcuts-combo" label={item.combo} xalign={1} />
+                        </box>
+                      ))}
+                    </box>
+                  )}
+                </For>
+
+                <label
+                  class="shortcuts-empty"
+                  visible={shortcuts((e) => e.length === 0)}
+                  label="No shortcuts found"
+                  xalign={0.5}
+                />
+              </box>
+            </Gtk.ScrolledWindow>
+          </box>
+        </box>
+      </overlay>
+    </window>
+  )
+}
+
 // ━━━━━━━━━━━━━━━━━ VOLUME ━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 function createAudioSharedState() {
   const wp = AstalWp.get_default()!
@@ -1943,6 +2320,121 @@ function ThemeButton() {
   )
 }
 
+// ━━━━━━━━━━━━━━━ CAFFEINE (KEEP SCREEN AWAKE) ━━━━━━━━━━━━━━━
+// Toggling caffeine ON stops `hypridle` so no idle timeout (dim / lock /
+// dpms off) ever fires — the screen stays awake forever. The catch: we must
+// still turn the screen off if the laptop lid is closed. systemd-logind is
+// configured with HandleLidSwitch=ignore, so nothing else does this for us.
+// While caffeine is on we poll the ACPI lid state and drive dpms manually.
+
+const LID_STATE_PATH = "/proc/acpi/button/lid/LID/state"
+
+let caffeineEnabledState: ReturnType<typeof createPoll<boolean>> | null = null
+let lidWatchSource = 0
+let lidWasClosed = false
+
+function isHypridleRunning(): boolean {
+  try {
+    const out = GLib.spawn_command_line_sync("pgrep -x hypridle")[1]
+    return new TextDecoder().decode(out).trim().length > 0
+  } catch {
+    return false
+  }
+}
+
+// Caffeine is "on" precisely when hypridle is NOT running.
+function isCaffeineEnabled(): boolean {
+  return !isHypridleRunning()
+}
+
+function getCaffeineEnabled() {
+  if (!caffeineEnabledState) {
+    caffeineEnabledState = createPoll(isCaffeineEnabled(), 2000, isCaffeineEnabled)
+  }
+  return caffeineEnabledState
+}
+
+function isLidClosed(): boolean {
+  try {
+    const [ok, contents] = GLib.file_get_contents(LID_STATE_PATH)
+    if (!ok) return false
+    return /closed/i.test(new TextDecoder().decode(contents))
+  } catch {
+    return false
+  }
+}
+
+function startLidWatch() {
+  if (lidWatchSource !== 0) return
+  lidWasClosed = isLidClosed()
+  lidWatchSource = GLib.timeout_add(GLib.PRIORITY_DEFAULT, 1000, () => {
+    const closed = isLidClosed()
+    if (closed && !lidWasClosed) {
+      execAsync(["hyprctl", "dispatch", "dpms", "off"]).catch(console.error)
+    } else if (!closed && lidWasClosed) {
+      execAsync(["hyprctl", "dispatch", "dpms", "on"]).catch(console.error)
+    }
+    lidWasClosed = closed
+    return GLib.SOURCE_CONTINUE
+  })
+}
+
+function stopLidWatch() {
+  if (lidWatchSource === 0) return
+  GLib.source_remove(lidWatchSource)
+  lidWatchSource = 0
+}
+
+function setCaffeine(enable: boolean) {
+  if (enable) {
+    // Stop hypridle so nothing dims/locks/blanks the screen, and restore any
+    // brightness hypridle may have dimmed before we killed it.
+    execAsync(["bash", "-c", "pkill -x hypridle; brightnessctl -r 2>/dev/null"])
+      .catch(console.error)
+    startLidWatch()
+  } else {
+    stopLidWatch()
+    // Relaunch hypridle to restore normal idle behaviour.
+    execAsync(["bash", "-c", "pidof hypridle || hypridle"]).catch(console.error)
+  }
+
+  notify({
+    summary: enable ? "Caffeine on" : "Caffeine off",
+    body: enable ? "Screen will stay awake (closes on lid shut)" : "Normal idle behaviour restored",
+    urgency: "low",
+    appName: "ags-caffeine",
+    expireTime: 1800,
+    replaceTag: "ags-caffeine",
+    icon: enable ? svgIcon("coffee") : svgIcon("coffee-off"),
+  })
+}
+
+function Caffeine() {
+  const enabled = getCaffeineEnabled()
+
+  // If caffeine somehow got enabled (hypridle not running) but no lid watch is
+  // active — e.g. across an AGS restart — make sure the lid still blanks.
+  enabled.subscribe(() => {
+    if (enabled.get()) startLidWatch()
+    else stopLidWatch()
+  })
+  if (enabled.get()) startLidWatch()
+
+  return (
+    <box class="caffeine">
+      <button
+        class={enabled((on) => `caffeine-toggle ${on ? "active" : ""}`)}
+        onClicked={() => setCaffeine(!enabled.get())}
+        tooltipText={enabled((on) =>
+          on ? "Caffeine on — screen stays awake (click to disable)"
+             : "Caffeine off — click to keep screen awake")}
+      >
+        <image iconName={enabled((on) => on ? svgIcon("coffee") : svgIcon("coffee-off"))} />
+      </button>
+    </box>
+  )
+}
+
 // ━━━━━━━━━━━━━━━━━━ BAR ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 export default function Bar({ gdkmonitor }: { gdkmonitor: Gdk.Monitor }) {
   let win: Astal.Window
@@ -1984,6 +2476,7 @@ export default function Bar({ gdkmonitor }: { gdkmonitor: Gdk.Monitor }) {
         <box class="bar-lane bar-lane-right" spacing={6} halign={Gtk.Align.END}>
           <box class="bar-cluster bar-cluster-tray" spacing={4}>
             <Tray />
+            <Caffeine />
             <ThemeButton />
             <NotificationButton />
           </box>
@@ -1991,6 +2484,7 @@ export default function Bar({ gdkmonitor }: { gdkmonitor: Gdk.Monitor }) {
           <box class="bar-divider" />
 
           <box class="bar-cluster bar-cluster-status" spacing={2}>
+            <Shortcuts gdkmonitor={gdkmonitor} />
             <AudioOutput gdkmonitor={gdkmonitor} />
             <Brightness gdkmonitor={gdkmonitor} />
             <WiFi gdkmonitor={gdkmonitor} />

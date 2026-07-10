@@ -438,6 +438,90 @@ menubutton button {
   border-radius: $radius-lg;
 }
 
+// ━━━━━━━━━━━━━ SHORTCUTS WIDGET ━━━━━━━━━━━━━━━━━━
+.shortcuts {
+  > button {
+    @include bar-btn-hover;
+  }
+
+  > button image {
+    color: $fg;
+  }
+}
+
+.shortcuts-popup {
+  padding: 16px 18px;
+
+  .shortcuts-header {
+    padding-bottom: 10px;
+    border-bottom: 1px solid $surface-border-soft;
+  }
+
+  .shortcuts-header-icon {
+    color: $accent;
+  }
+
+  .shortcuts-title {
+    font-size: 14px;
+    font-weight: bold;
+    color: $fg;
+  }
+
+  .shortcuts-count {
+    font-size: 11px;
+    font-weight: 600;
+    color: $fg-faint;
+    padding: 2px 8px;
+    border-radius: 999px;
+    background: rgba($accent, 0.12);
+  }
+
+  .shortcuts-separator {
+    min-height: 1px;
+    background: $surface-border-soft;
+    margin: 2px 0;
+  }
+
+  .shortcuts-group-title {
+    font-size: 11px;
+    font-weight: 600;
+    color: $fg-faint;
+    letter-spacing: 0.5px;
+    margin-bottom: 2px;
+    margin-top: 2px;
+  }
+
+  .shortcuts-row {
+    padding: 5px 10px;
+    border-radius: 8px;
+    background: $surface-soft;
+    border: 1px solid transparent;
+    transition: all 160ms ease;
+
+    &:hover {
+      border-color: rgba($accent, 0.2);
+    }
+  }
+
+  .shortcuts-action {
+    font-size: 12px;
+    color: $fg;
+  }
+
+  .shortcuts-combo {
+    font-size: 11px;
+    font-weight: 600;
+    color: $accent;
+    font-family: monospace;
+  }
+
+  .shortcuts-empty {
+    font-size: 12px;
+    color: $fg-dim;
+    padding: 20px 0;
+  }
+}
+
 // ━━━━━━━━━━━━━ WIFI WIDGET ━━━━━━━━━━━━━━━━━━━━━━━
 .wifi {
   menubutton button,
@@ -1141,6 +1225,24 @@ menubutton button {
     min-width: 16px;
     min-height: 16px;
     padding: 0 4px;
+  }
+}
+
+.caffeine {
+  button {
+    @include bar-btn-hover;
+  }
+
+  > button image {
+    color: $fg;
+  }
+
+  .caffeine-toggle.active {
+    background: rgba($accent, 0.18);
+
+    image {
+      color: $accent;
+    }
   }
 }
 
@@ -2529,6 +2631,18 @@ $dw-card-shadow: 0 12px 28px rgba(0, 0, 0, 0.34), 0 3px 8px rgba(0, 0, 0, 0.2);
     padding: 4px 10px 6px;
   }
 
+  .yt-result-wrap {
+    .yt-result-queue {
+      min-width: 32px;
+      min-height: 32px;
+      border-radius: 8px;
+      background: rgba(255,255,255,0.04);
+      border: 1px solid $surface-border;
+      image { color: $fg-dim; }
+      &:hover { background: rgba($accent, 0.12); border-color: rgba($accent, 0.28); image { color: $accent; } }
+    }
+  }
+
   .yt-result-row {
     padding: 9px 12px;
     border-radius: 9px;
@@ -2597,6 +2711,21 @@ $dw-card-shadow: 0 12px 28px rgba(0, 0, 0, 0.34), 0 3px 8px rgba(0, 0, 0, 0.2);
 // ━━━━━━━━━━━━━━━ MEDIA CENTER (combined widget) ━━━━━━━━━━━━━━━━━━━
 .mc-bar-btn {
   button { @include bar-btn-hover; }
+
+  .mc-bar-title-btn { padding-right: 7px; }
+
+  .mc-bar-control {
+    padding: 3px 6px;
+
+    image { color: $fg-dim; }
+
+    &:hover image { color: $accent; }
+
+    &:disabled {
+      opacity: 0.35;
+    }
+  }
+
   .mc-bar-label {
     font-size: 10px;
     font-weight: 700;
@@ -2935,6 +3064,43 @@ $dw-card-shadow: 0 12px 28px rgba(0, 0, 0, 0.34), 0 3px 8px rgba(0, 0, 0, 0.2);
     .mc-downloaded-section {
       padding: 8px 0 4px;
 
+      .mc-downloaded-search {
+        padding: 2px 0 4px;
+      }
+
+      .mc-sort-btn {
+        border-radius: 10px;
+        padding: 4px 10px;
+        background: rgba(255,255,255,0.03);
+        border: 1px solid rgba(255,255,255,0.07);
+        transition: all 160ms ease;
+
+        .mc-sort-label {
+          font-size: 11px;
+          color: $fg-faint;
+        }
+
+        &:hover {
+          background: rgba(255,255,255,0.07);
+          border-color: rgba($accent, 0.3);
+          .mc-sort-label { color: $fg; }
+        }
+      }
+
+      .mc-sort-popover {
+        .mc-sort-option {
+          border-radius: 8px;
+          padding: 6px 12px;
+          background: transparent;
+          border: none;
+          font-size: 12px;
+
+          &:hover {
+            background: rgba($accent, 0.18);
+          }
+        }
+      }
+
       .mc-playlist-hint {
         font-size: 10px;
         color: $fg-faint;
@@ -3104,6 +3270,56 @@ $dw-card-shadow: 0 12px 28px rgba(0, 0, 0, 0.34), 0 3px 8px rgba(0, 0, 0, 0.2);
         opacity: 0.8;
       }
     }
+  }
+
+  .mc-queue-section {
+    padding: 4px 0;
+
+    .mc-queue-header {
+      align-items: center;
+    }
+
+    .mc-queue-list {
+      padding-top: 2px;
+    }
+
+    .mc-queue-row {
+      .mc-queue-pos {
+        min-width: 18px;
+        font-size: 10px;
+        font-weight: 700;
+        color: $fg-faint;
+      }
+
+      .mc-queue-play {
+        border-radius: 9px;
+        background: rgba(255,255,255,0.025);
+        border: 1px solid rgba(255,255,255,0.05);
+        padding: 6px 10px;
+        transition: all 160ms ease;
+
+        .yt-result-title { font-size: 12px; font-weight: 600; color: $fg; }
+        .yt-result-duration { font-size: 10px; color: $fg-faint; }
+
+        &:hover {
+          background: rgba($accent, 0.08);
+          border-color: rgba($accent, 0.22);
+        }
+      }
+
+      .mc-queue-action {
+        min-width: 30px;
+        min-height: 30px;
+        border-radius: 8px;
+        background: rgba(255,255,255,0.04);
+        border: 1px solid $surface-border;
+        image { color: $fg-dim; }
+        &:hover { background: rgba($accent, 0.12); border-color: rgba($accent, 0.28); }
+        &:disabled { opacity: 0.35; }
+      }
+    }
+
+    .mc-queue-empty { opacity: 0.7; }
   }
 }
 

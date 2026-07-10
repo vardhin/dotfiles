@@ -6,6 +6,7 @@ import Bar, {
   BluetoothPopover,
   BrightnessPopover,
   ClockPopover,
+  ShortcutsPopover,
   VolumePopover,
   WifiPopover,
   toggleDropdownCli,
@@ -99,6 +100,7 @@ app.start({
             <This this={app}>
               <Bar gdkmonitor={monitor} />
               <ClockPopover gdkmonitor={monitor} />
+              <ShortcutsPopover gdkmonitor={monitor} />
               <VolumePopover gdkmonitor={monitor} />
               <BrightnessPopover gdkmonitor={monitor} />
               <WifiPopover gdkmonitor={monitor} />
