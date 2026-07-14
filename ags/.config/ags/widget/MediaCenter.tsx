@@ -4,6 +4,8 @@ import Gtk from "gi://Gtk?version=4.0"
 import Gdk from "gi://Gdk?version=4.0"
 import GLib from "gi://GLib"
 import Gio from "gi://Gio"
+import Gst from "gi://Gst?version=1.0"
+import GstApp from "gi://GstApp?version=1.0"
 import AstalMpris from "gi://AstalMpris"
 import { For, createBinding, onCleanup } from "ags"
 import { createPoll } from "ags/time"
@@ -40,9 +42,41 @@ interface PlaylistEntry {
   coverImagePath: string | null
 }
 
+type VideoColorMode = "original" | "mono" | "rgb332" | "rgb565" | "full"
+
+interface VideoEffectSettings {
+  fps: number
+  blockSize: number
+  cellSize: number
+  gap: number
+  colorMode: VideoColorMode
+  threshold: number
+  diffuser: boolean
+  thickness: number
+  diffusion: number
+  glow: number
+}
+
+interface VideoEffectPreset {
+  id: string
+  name: string
+  settings: VideoEffectSettings
+  custom: boolean
+}
+
+export interface MediaCenterNowPlayingState {
+  available: boolean
+  title: string
+  artist: string
+  playing: boolean
+  source: "youtube" | "mpris" | "none"
+}
+
 // ── Thumbnail cache ────────────────────────────────────────────────────
 const thumbCache = new Map<string, string>()
+const thumbTextureCache = new Map<string, Gdk.Texture>()
 const thumbPending = new Set<string>()
+const thumbWaiters = new Map<string, Set<(path: string) => void>>()
 const THUMB_DIR = `${GLib.get_user_cache_dir()}/ags-yt-thumbs`
 const YT_DLP = GLib.find_program_in_path("yt-dlp") || "/usr/bin/yt-dlp"
 
@@ -52,22 +86,52 @@ function ensureThumbDir() {
 
 function fetchThumbnail(id: string, onDone: (path: string) => void) {
   if (thumbCache.has(id)) { onDone(thumbCache.get(id)!); return }
+
+  let waiters = thumbWaiters.get(id)
+  if (!waiters) {
+    waiters = new Set()
+    thumbWaiters.set(id, waiters)
+  }
+  waiters.add(onDone)
   if (thumbPending.has(id)) return
   thumbPending.add(id)
   ensureThumbDir()
 
+  const finish = (path: string) => {
+    thumbCache.set(id, path)
+    thumbPending.delete(id)
+    const pending = thumbWaiters.get(id)
+    thumbWaiters.delete(id)
+    for (const callback of pending || []) callback(path)
+  }
+
+  const fail = () => {
+    thumbPending.delete(id)
+    thumbWaiters.delete(id)
+  }
+
   const dest = `${THUMB_DIR}/${id}.jpg`
   if (GLib.file_test(dest, GLib.FileTest.EXISTS)) {
-    thumbCache.set(id, dest)
-    thumbPending.delete(id)
-    onDone(dest)
+    finish(dest)
     return
   }
 
   execAsync(["curl", "-sSL", "-o", dest,
     `https://img.youtube.com/vi/${id}/mqdefault.jpg`])
-    .then(() => { thumbCache.set(id, dest); thumbPending.delete(id); onDone(dest) })
-    .catch(() => { thumbPending.delete(id) })
+    .then(() => finish(dest))
+    .catch(fail)
+}
+
+function thumbnailTexture(id: string, path: string): Gdk.Texture | null {
+  const cached = thumbTextureCache.get(id)
+  if (cached) return cached
+  try {
+    const texture = Gdk.Texture.new_from_file(Gio.File.new_for_path(path))
+    thumbTextureCache.set(id, texture)
+    return texture
+  } catch {
+    return null
+  }
 }
 
 function makeThumbnailWidget(id: string, w: number, h: number): Gtk.Widget {
@@ -85,18 +149,17 @@ function makeThumbnailWidget(id: string, w: number, h: number): Gtk.Widget {
   stack.add_named(placeholder, "placeholder")
   stack.set_visible_child_name("placeholder")
 
+  const pic = new Gtk.Picture()
+  pic.set_content_fit(Gtk.ContentFit.COVER)
+  pic.set_size_request(w, h)
+  pic.add_css_class("yt-thumb-img")
+  stack.add_named(pic, "image")
+
   const tryLoad = (path: string) => {
     try {
-      if (stack.get_child_by_name("image")) {
-        stack.set_visible_child_name("image")
-        return
-      }
-      const pic = new Gtk.Picture()
-      pic.set_filename(path)
-      pic.set_content_fit(Gtk.ContentFit.COVER)
-      pic.set_size_request(w, h)
-      pic.add_css_class("yt-thumb-img")
-      stack.add_named(pic, "image")
+      const texture = thumbnailTexture(id, path)
+      if (texture) pic.set_paintable(texture)
+      else pic.set_filename(path)
       stack.set_visible_child_name("image")
     } catch { /* keep placeholder */ }
   }
@@ -118,6 +181,7 @@ let ytVideoReady = false
 let ytVideo: Gtk.Video | null = null
 let ytMediaStream: Gtk.MediaFile | null = null
 let ytTvStack: Gtk.Stack | null = null
+let ytTvRefreshHook: (() => void) | null = null
 let ytPlayToken = 0
 let ytUpgradeInFlightFor: string | null = null
 let ytDownloadPid: number | null = null
@@ -125,6 +189,23 @@ let ytDownloadProgress = 0
 let ytDownloadQuality: "360" | "480" | null = null
 let ytCurrentQuality: "360" | "480" | null = null
 let ytCurrentFilePath: string | null = null
+let ytFilteredPipeline: Gst.Element | null = null
+let ytFilteredSink: GstApp.AppSink | null = null
+let ytFilteredPaintable: Gdk.Paintable | null = null
+let ytFilteredLastPlaying: boolean | null = null
+let ytFilteredObservedStream: Gtk.MediaStream | null = null
+let ytFilteredPlayingSignalId = 0
+let ytFilteredFrameTimerId = 0
+let ytFilteredSourceFrame: Uint8Array | null = null
+let ytFilteredSourceStride = 0
+const FILTERED_FRAME_WIDTH = 420
+const FILTERED_FRAME_HEIGHT = 236
+const FILTERED_OPAQUE_BLACK = (() => {
+  const pixels = new Uint8Array(FILTERED_FRAME_WIDTH * FILTERED_FRAME_HEIGHT * 4)
+  for (let offset = 3; offset < pixels.length; offset += 4) pixels[offset] = 255
+  return pixels
+})()
+const ytVideoSurfaceListeners = new Set<() => void>()
 const YT_MEDIA_DIR = `${GLib.get_home_dir()}/Video/TV`
 const YT_META_FILE = `${YT_MEDIA_DIR}/video-meta.json`
 const YT_PLAYLISTS_FILE = `${YT_MEDIA_DIR}/playlists.json`
@@ -142,6 +223,181 @@ let ytActivePlaylistIndex = -1
 let ytActiveShuffleBag: string[] = []
 let ytLastPlaylistPlayedId: string | null = null
 let playlistDragPick: string | null = null
+
+function notifyVideoSurfacesChanged() {
+  for (const listener of ytVideoSurfaceListeners) listener()
+}
+
+export function subscribeMediaCenterVideoSurface(listener: () => void): () => void {
+  ytVideoSurfaceListeners.add(listener)
+  return () => ytVideoSurfaceListeners.delete(listener)
+}
+
+try { Gst.init(null) } catch { /* Gtk.Video remains available as fallback */ }
+
+const DEFAULT_VIDEO_EFFECTS: VideoEffectSettings = {
+  fps: 30,
+  blockSize: 5,
+  cellSize: 16,
+  gap: 1,
+  colorMode: "rgb332",
+  threshold: 128,
+  diffuser: false,
+  thickness: 40,
+  diffusion: 45,
+  glow: 20,
+}
+const VIDEO_BLOCK_SIZES = [2, 3, 4, 5, 6, 8, 10, 12, 15, 16, 20, 24, 30, 40]
+
+const videoEffects: VideoEffectSettings = { ...DEFAULT_VIDEO_EFFECTS }
+const videoEffectsListeners = new Set<() => void>()
+const videoPresetListeners = new Set<() => void>()
+const VIDEO_PRESETS_FILE = `${GLib.get_user_config_dir()}/ags/video-effect-presets.json`
+
+const makePresetSettings = (patch: Partial<VideoEffectSettings>): VideoEffectSettings => ({
+  ...DEFAULT_VIDEO_EFFECTS,
+  ...patch,
+})
+
+const BUILTIN_VIDEO_PRESETS: VideoEffectPreset[] = [
+  {
+    id: "builtin:reference-8bit",
+    name: "Reference · 8-bit",
+    settings: makePresetSettings({}),
+    custom: false,
+  },
+  {
+    id: "builtin:original",
+    name: "Original video",
+    settings: makePresetSettings({ colorMode: "original", gap: 0 }),
+    custom: false,
+  },
+  {
+    id: "builtin:mono-checkbox",
+    name: "Mono checkbox",
+    settings: makePresetSettings({ colorMode: "mono", threshold: 128 }),
+    custom: false,
+  },
+  {
+    id: "builtin:16bit-crisp",
+    name: "16-bit crisp",
+    settings: makePresetSettings({ colorMode: "rgb565", blockSize: 4, cellSize: 14, gap: 0 }),
+    custom: false,
+  },
+  {
+    id: "builtin:full-mosaic",
+    name: "Full-color mosaic",
+    settings: makePresetSettings({ colorMode: "full", blockSize: 5, cellSize: 16, gap: 1 }),
+    custom: false,
+  },
+  {
+    id: "builtin:diffused-glow",
+    name: "Diffused glow",
+    settings: makePresetSettings({
+      colorMode: "rgb332",
+      blockSize: 8,
+      cellSize: 18,
+      gap: 1,
+      diffuser: true,
+      thickness: 40,
+      diffusion: 45,
+      glow: 28,
+    }),
+    custom: false,
+  },
+]
+
+let customVideoPresets: VideoEffectPreset[] = []
+
+function normalizeVideoEffectSettings(raw: any): VideoEffectSettings | null {
+  if (!raw || typeof raw !== "object") return null
+  const colorModes: VideoColorMode[] = ["original", "mono", "rgb332", "rgb565", "full"]
+  const colorMode = colorModes.includes(raw.colorMode) ? raw.colorMode as VideoColorMode : null
+  if (!colorMode) return null
+
+  const numberInRange = (value: any, min: number, max: number): number | null => {
+    const n = Number(value)
+    return Number.isFinite(n) ? Math.max(min, Math.min(max, Math.round(n))) : null
+  }
+  const fps = numberInRange(raw.fps, 1, 60)
+  const blockSize = numberInRange(raw.blockSize, 2, 40)
+  const cellSize = numberInRange(raw.cellSize, 10, 40)
+  const gap = numberInRange(raw.gap, 0, 6)
+  const threshold = numberInRange(raw.threshold, 1, 254)
+  const thickness = numberInRange(raw.thickness, 0, 100)
+  const diffusion = numberInRange(raw.diffusion, 0, 100)
+  const glow = numberInRange(raw.glow, 0, 100)
+  if ([fps, blockSize, cellSize, gap, threshold, thickness, diffusion, glow].some((n) => n === null)) return null
+  if (!VIDEO_BLOCK_SIZES.includes(blockSize!)) return null
+
+  return {
+    fps: fps!,
+    blockSize: blockSize!,
+    cellSize: cellSize!,
+    gap: gap!,
+    colorMode,
+    threshold: threshold!,
+    diffuser: Boolean(raw.diffuser),
+    thickness: thickness!,
+    diffusion: diffusion!,
+    glow: glow!,
+  }
+}
+
+function loadCustomVideoPresets() {
+  customVideoPresets = []
+  try {
+    const [ok, bytes] = GLib.file_get_contents(VIDEO_PRESETS_FILE)
+    if (!ok) return
+    const parsed = JSON.parse(new TextDecoder().decode(bytes)) as any[]
+    if (!Array.isArray(parsed)) return
+    customVideoPresets = parsed.flatMap((entry): VideoEffectPreset[] => {
+      const name = typeof entry?.name === "string" ? entry.name.trim() : ""
+      const settings = normalizeVideoEffectSettings(entry?.settings)
+      if (!name || !settings) return []
+      return [{
+        id: typeof entry.id === "string" && entry.id ? entry.id : `custom:${GLib.uuid_string_random()}`,
+        name: name.slice(0, 48),
+        settings,
+        custom: true,
+      }]
+    })
+  } catch { /* malformed preset file starts with an empty custom list */ }
+}
+
+function saveCustomVideoPresets(): boolean {
+  try {
+    GLib.mkdir_with_parents(`${GLib.get_user_config_dir()}/ags`, 0o755)
+    GLib.file_set_contents(VIDEO_PRESETS_FILE, JSON.stringify(
+      customVideoPresets.map(({ id, name, settings }) => ({ id, name, settings })),
+      null,
+      2,
+    ))
+    return true
+  } catch (error) {
+    console.error("Could not save video presets:", error)
+    return false
+  }
+}
+
+function allVideoPresets(): VideoEffectPreset[] {
+  return [...BUILTIN_VIDEO_PRESETS, ...customVideoPresets]
+}
+
+function videoEffectSettingsEqual(a: VideoEffectSettings, b: VideoEffectSettings): boolean {
+  return a.fps === b.fps
+    && a.blockSize === b.blockSize
+    && a.cellSize === b.cellSize
+    && a.gap === b.gap
+    && a.colorMode === b.colorMode
+    && a.threshold === b.threshold
+    && a.diffuser === b.diffuser
+    && a.thickness === b.thickness
+    && a.diffusion === b.diffusion
+    && a.glow === b.glow
+}
+
+loadCustomVideoPresets()
 
 // ── Play queue ─────────────────────────────────────────────────────────
 // Up-next list, independent of playlists. When the current track ends the
@@ -370,22 +626,371 @@ function readMediaTimestampRaw(): number {
 
 function mediaUnitsToSeconds(raw: number): number {
   if (!raw || raw <= 0) return 0
-  // Gtk/GStreamer time can be ns or us depending on backend layers.
-  if (raw > 10_000_000_000) return raw / 1_000_000_000
-  if (raw > 10_000_000) return raw / 1_000_000
-  return raw
+  // Gtk.MediaStream exposes duration/timestamp in microseconds. Keeping this
+  // conversion explicit also makes the first ten seconds seek correctly.
+  return raw / 1_000_000
+}
+
+function quantizeChannel(value: number, levels: number): number {
+  return Math.round(Math.round(value * levels / 255) * 255 / levels)
+}
+
+function renderFilteredFrame(source: Uint8Array, sourceStride: number): Uint8Array {
+  const width = FILTERED_FRAME_WIDTH
+  const height = FILTERED_FRAME_HEIGHT
+  const rowBytes = width * 4
+  const output = videoEffects.colorMode === "original"
+    ? new Uint8Array(rowBytes * height)
+    : FILTERED_OPAQUE_BLACK.slice()
+
+  if (videoEffects.colorMode === "original") {
+    for (let y = 0; y < height; y++) {
+      const sourceStart = y * sourceStride
+      output.set(source.subarray(sourceStart, sourceStart + rowBytes), y * rowBytes)
+    }
+    return output
+  }
+
+  // The old shader divided fractional UV coordinates, which rounded
+  // differently on alternating rows. Every boundary here is an integer pixel:
+  // the same pitch and the same literal gap are used across the whole frame.
+  const pitch = Math.max(
+    videoEffects.gap + 1,
+    Math.round(videoEffects.blockSize * videoEffects.cellSize / 16),
+  )
+  const gap = Math.max(0, Math.min(pitch - 1, Math.round(videoEffects.gap)))
+  const contentSize = pitch - gap
+
+  const sample = (x: number, y: number): [number, number, number] => {
+    const sx = Math.max(0, Math.min(width - 1, Math.round(x)))
+    const sy = Math.max(0, Math.min(height - 1, Math.round(y)))
+    const offset = sy * sourceStride + sx * 4
+    return [source[offset] || 0, source[offset + 1] || 0, source[offset + 2] || 0]
+  }
+
+  const setPixel = (x: number, y: number, r: number, g: number, b: number) => {
+    if (x < 0 || y < 0 || x >= width || y >= height) return
+    const offset = (y * width + x) * 4
+    output[offset] = r
+    output[offset + 1] = g
+    output[offset + 2] = b
+    output[offset + 3] = 255
+  }
+
+  const drawTickLine = (x1: number, y1: number, x2: number, y2: number) => {
+    const dx = x2 - x1
+    const dy = y2 - y1
+    const steps = Math.max(1, Math.abs(dx), Math.abs(dy))
+    for (let step = 0; step <= steps; step++) {
+      const x = Math.round(x1 + dx * step / steps)
+      const y = Math.round(y1 + dy * step / steps)
+      setPixel(x, y, 245, 245, 245)
+      if (contentSize >= 8) setPixel(x, y + 1, 245, 245, 245)
+    }
+  }
+
+  for (let cellY = 0; cellY < height; cellY += pitch) {
+    for (let cellX = 0; cellX < width; cellX += pitch) {
+      const centerX = cellX + (contentSize - 1) / 2
+      const centerY = cellY + (contentSize - 1) / 2
+      let [red, green, blue] = sample(centerX, centerY)
+
+      if (videoEffects.diffuser) {
+        const radius = pitch * Math.max(1, Math.round(videoEffects.diffusion / 34))
+        let redTotal = red * 4
+        let greenTotal = green * 4
+        let blueTotal = blue * 4
+        let weight = 4
+        for (const [dx, dy] of [
+          [-radius, 0], [radius, 0], [0, -radius], [0, radius],
+          [-radius, -radius], [radius, -radius], [-radius, radius], [radius, radius],
+        ]) {
+          const [nearRed, nearGreen, nearBlue] = sample(centerX + dx, centerY + dy)
+          redTotal += nearRed
+          greenTotal += nearGreen
+          blueTotal += nearBlue
+          weight++
+        }
+        const glowScale = 1 + videoEffects.glow / 100
+        const whiteMix = videoEffects.thickness / 300
+        red = Math.min(255, redTotal / weight * glowScale * (1 - whiteMix) + 235 * whiteMix)
+        green = Math.min(255, greenTotal / weight * glowScale * (1 - whiteMix) + 240 * whiteMix)
+        blue = Math.min(255, blueTotal / weight * glowScale * (1 - whiteMix) + 248 * whiteMix)
+      }
+
+      let checked = false
+      if (videoEffects.colorMode === "mono") {
+        const luma = red * 0.299 + green * 0.587 + blue * 0.114
+        checked = luma < videoEffects.threshold
+        red = green = blue = checked ? 0 : 240
+      } else if (videoEffects.colorMode === "rgb332") {
+        red = quantizeChannel(red, 7)
+        green = quantizeChannel(green, 7)
+        blue = quantizeChannel(blue, 3)
+      } else if (videoEffects.colorMode === "rgb565") {
+        red = quantizeChannel(red, 31)
+        green = quantizeChannel(green, 63)
+        blue = quantizeChannel(blue, 31)
+      }
+
+      const contentRight = Math.min(width, cellX + contentSize)
+      const contentBottom = Math.min(height, cellY + contentSize)
+      for (let y = cellY; y < contentBottom; y++) {
+        let offset = (y * width + cellX) * 4
+        for (let x = cellX; x < contentRight; x++) {
+          output[offset] = red
+          output[offset + 1] = green
+          output[offset + 2] = blue
+          offset += 4
+        }
+      }
+
+      if (checked && contentSize >= 4) {
+        const left = cellX
+        const top = cellY
+        drawTickLine(
+          Math.round(left + contentSize * 0.20),
+          Math.round(top + contentSize * 0.52),
+          Math.round(left + contentSize * 0.42),
+          Math.round(top + contentSize * 0.72),
+        )
+        drawTickLine(
+          Math.round(left + contentSize * 0.42),
+          Math.round(top + contentSize * 0.72),
+          Math.round(left + contentSize * 0.80),
+          Math.round(top + contentSize * 0.28),
+        )
+      }
+    }
+  }
+
+  return output
+}
+
+function publishFilteredSourceFrame() {
+  if (!ytFilteredSourceFrame || ytFilteredSourceStride < FILTERED_FRAME_WIDTH * 4) return
+  try {
+    const pixels = renderFilteredFrame(ytFilteredSourceFrame, ytFilteredSourceStride)
+    const bytes = new GLib.Bytes(pixels)
+    ytFilteredPaintable = Gdk.MemoryTexture.new(
+      FILTERED_FRAME_WIDTH,
+      FILTERED_FRAME_HEIGHT,
+      Gdk.MemoryFormat.R8G8B8A8,
+      bytes,
+      FILTERED_FRAME_WIDTH * 4,
+    )
+    notifyVideoSurfacesChanged()
+  } catch (error) {
+    console.error("Could not publish Media Center video frame:", error)
+  }
+}
+
+function pullFilteredVideoFrame(): boolean {
+  const sink = ytFilteredSink
+  if (!sink) return false
+  try {
+    const sample = sink.try_pull_sample(0) || sink.try_pull_preroll(0)
+    if (!sample) return false
+    const buffer = sample.get_buffer()
+    if (!buffer) return false
+    const [mapped, info] = buffer.map(Gst.MapFlags.READ)
+    if (!mapped) return false
+    try {
+      ytFilteredSourceFrame = new Uint8Array(info.data)
+      ytFilteredSourceStride = Math.floor(info.data.length / FILTERED_FRAME_HEIGHT)
+    } finally {
+      buffer.unmap(info)
+    }
+    publishFilteredSourceFrame()
+    return true
+  } catch (error) {
+    console.error("Could not read Media Center video frame:", error)
+    return false
+  }
+}
+
+function restartFilteredFrameTimer() {
+  if (ytFilteredFrameTimerId) {
+    GLib.source_remove(ytFilteredFrameTimerId)
+    ytFilteredFrameTimerId = 0
+  }
+  if (!ytFilteredSink) return
+  const interval = Math.max(16, Math.round(1000 / Math.max(1, videoEffects.fps)))
+  ytFilteredFrameTimerId = GLib.timeout_add(GLib.PRIORITY_DEFAULT, interval, () => {
+    if (!ytFilteredSink) {
+      ytFilteredFrameTimerId = 0
+      return GLib.SOURCE_REMOVE
+    }
+    pullFilteredVideoFrame()
+    return GLib.SOURCE_CONTINUE
+  })
+}
+
+function applyVideoEffectsToRenderer() {
+  restartFilteredFrameTimer()
+  // Re-render the last decoded frame immediately, including while paused.
+  publishFilteredSourceFrame()
+}
+
+function updateVideoEffects(patch: Partial<VideoEffectSettings>) {
+  let changed = false
+  for (const [key, value] of Object.entries(patch) as [keyof VideoEffectSettings, any][]) {
+    if (videoEffects[key] === value) continue
+    ;(videoEffects as any)[key] = value
+    changed = true
+  }
+  if (!changed) return
+  applyVideoEffectsToRenderer()
+  for (const listener of videoEffectsListeners) listener()
+}
+
+function stopFilteredVideoRenderer() {
+  if (ytFilteredObservedStream && ytFilteredPlayingSignalId) {
+    try { ytFilteredObservedStream.disconnect(ytFilteredPlayingSignalId) } catch { /* ignore */ }
+  }
+  ytFilteredObservedStream = null
+  ytFilteredPlayingSignalId = 0
+  if (ytFilteredFrameTimerId) {
+    GLib.source_remove(ytFilteredFrameTimerId)
+    ytFilteredFrameTimerId = 0
+  }
+  const pipeline = ytFilteredPipeline
+  ytFilteredPipeline = null
+  ytFilteredSink = null
+  ytFilteredPaintable = null
+  ytFilteredSourceFrame = null
+  ytFilteredSourceStride = 0
+  ytFilteredLastPlaying = null
+  // Drop the paintable from every UI surface before shutting down its pipeline.
+  notifyVideoSurfacesChanged()
+  if (pipeline) {
+    try { pipeline.get_bus()?.remove_signal_watch() } catch { /* ignore */ }
+    try { pipeline.set_state(Gst.State.NULL) } catch { /* ignore */ }
+  }
+}
+
+function rawMediaTimeToGstNs(raw: number): number {
+  return Math.max(0, Math.round(mediaUnitsToSeconds(raw) * 1_000_000_000))
+}
+
+function syncFilteredVideoRenderer() {
+  const pipeline = ytFilteredPipeline
+  const stream = ytMediaStream as any
+  if (!pipeline || !stream) return
+
+  const playing = Boolean(stream.get_playing?.())
+  if (ytFilteredLastPlaying !== playing) {
+    ytFilteredLastPlaying = playing
+    try { pipeline.set_state(playing ? Gst.State.PLAYING : Gst.State.PAUSED) } catch { /* ignore */ }
+  }
+}
+
+function seekFilteredVideoRenderer(rawTimestamp: number) {
+  const pipeline = ytFilteredPipeline
+  if (!pipeline) return
+  try {
+    pipeline.seek_simple(
+      Gst.Format.TIME,
+      Gst.SeekFlags.FLUSH | Gst.SeekFlags.ACCURATE,
+      rawMediaTimeToGstNs(rawTimestamp),
+    )
+  } catch { /* leave the renderer at its current position */ }
+}
+
+function startFilteredVideoRenderer(filePath: string) {
+  stopFilteredVideoRenderer()
+
+  try {
+    const renderBin = Gst.parse_bin_from_description(
+      // Keep GStreamer GL completely out of this process. On this Mesa stack
+      // libgstgl crashes its render thread, which restarts AGS and looks like
+      // full-screen blinking. Appsink retains only the newest CPU frame.
+      "videoconvert ! videoscale method=0 ! " +
+      `video/x-raw,format=RGBA,width=${FILTERED_FRAME_WIDTH},height=${FILTERED_FRAME_HEIGHT},pixel-aspect-ratio=1/1 ! ` +
+      "appsink name=ags_video_sink max-buffers=1 drop=true sync=true",
+      true,
+    ) as Gst.Bin
+    const sink = renderBin.get_by_name("ags_video_sink") as GstApp.AppSink | null
+    const playbin = Gst.ElementFactory.make("playbin", "ags_filtered_video")
+    if (!sink || !playbin) throw new Error("Required GStreamer CPU video elements are unavailable")
+
+    ;(playbin as any).video_sink = renderBin
+    ;(playbin as any).flags = Number((playbin as any).flags) & ~0x06 // video only: no duplicate audio/subtitles
+    ;(playbin as any).uri = Gio.File.new_for_path(filePath).get_uri()
+
+    ytFilteredPipeline = playbin
+    ytFilteredSink = sink
+    ytFilteredLastPlaying = null
+    restartFilteredFrameTimer()
+
+    const stream = ytMediaStream
+    if (stream) {
+      ytFilteredObservedStream = stream
+      ytFilteredPlayingSignalId = stream.connect("notify::playing", () => {
+        if (ytFilteredObservedStream === stream) syncFilteredVideoRenderer()
+      })
+    }
+
+    const bus = playbin.get_bus()
+    bus?.add_signal_watch()
+    bus?.connect("message::error", (_bus, message) => {
+      if (ytFilteredPipeline !== playbin) return
+      try {
+        const [error, debug] = message.parse_error()
+        console.error("Media Center CPU video renderer failed:", error.message, debug || "")
+      } catch { /* ignore malformed error message */ }
+      GLib.idle_add(GLib.PRIORITY_DEFAULT_IDLE, () => {
+        if (ytFilteredPipeline === playbin) stopFilteredVideoRenderer()
+        return GLib.SOURCE_REMOVE
+      })
+    })
+
+    playbin.set_state(Gst.State.PAUSED)
+    // Synchronize once when the source is loaded, then react only to explicit
+    // seeks and play-state notifications. A manual FLUSH keeps the previous
+    // immutable texture visible until the first post-seek frame is published.
+    seekFilteredVideoRenderer(readMediaTimestampRaw())
+    syncFilteredVideoRenderer()
+  } catch (error) {
+    console.error("Falling back to Gtk.Video:", error)
+    stopFilteredVideoRenderer()
+  }
+}
+
+export function toggleMediaCenterVideoPlayback() {
+  try {
+    const stream = ytMediaStream as any
+    if (!stream) return
+    stream.set_playing?.(!Boolean(stream.get_playing?.()))
+    syncFilteredVideoRenderer()
+  } catch { /* ignore */ }
+}
+
+export function seekMediaCenterVideo(ratio: number) {
+  try {
+    const stream = ytMediaStream as any
+    if (!stream) return
+    const duration = Number(stream.get_duration?.() || 0)
+    if (duration <= 0) return
+    const target = Math.max(0, Math.min(1, ratio)) * duration
+    stream.seek?.(target)
+    seekFilteredVideoRenderer(target)
+  } catch { /* ignore */ }
 }
 
 function refreshTvMode() {
-  if (!ytTvStack) return
-  if (!ytNowPlaying) {
-    ytTvStack.set_visible_child_name("off")
-    return
+  if (ytTvStack) {
+    const desired = !ytNowPlaying
+      ? "off"
+      : ytVideoVisible && ytVideoReady ? "video" : "thumb"
+    if (ytTvStack.get_visible_child_name() !== desired) ytTvStack.set_visible_child_name(desired)
   }
-  ytTvStack.set_visible_child_name(ytVideoVisible && ytVideoReady ? "video" : "thumb")
+  ytTvRefreshHook?.()
+  notifyVideoSurfacesChanged()
 }
 
 function clearEmbeddedMedia() {
+  stopFilteredVideoRenderer()
   const prev = ytMediaStream
   if (prev) {
     try { (prev as any).set_playing?.(false) } catch { /* ignore */ }
@@ -446,6 +1051,7 @@ function deleteDownloadedVideo(videoId: string) {
     ytNowPlaying = null
     ytStatus = "idle"
     ytStatusMsg = ""
+    refreshTvMode()
   }
   removeYtFile(videoId, "360")
   removeYtFile(videoId, "480")
@@ -627,7 +1233,7 @@ function swapMediaToFile(filePath: string, token: number, videoId: string, quali
   ytMediaStream = media
   ytCurrentQuality = quality
   ytCurrentFilePath = filePath
-  ytVideo?.set_media_stream(media)
+  startFilteredVideoRenderer(filePath)
   try { (ytMediaStream as any).set_playing?.(true) } catch { /* ignore */ }
   // PipeWire/PulseAudio may restore gjs streams as muted+0% — force unmute repeatedly until the stream is active.
   const unmutePactl = () => execAsync(["bash", "-c",
@@ -651,7 +1257,9 @@ function swapMediaToFile(filePath: string, token: number, videoId: string, quali
     const dur = readMediaDurationRaw()
     if (dur > 0) {
       try {
-        ;(ytMediaStream as any).seek?.(dur * prevRatio)
+        const target = dur * prevRatio
+        ;(ytMediaStream as any).seek?.(target)
+        seekFilteredVideoRenderer(target)
         ;(ytMediaStream as any).set_playing?.(hadPrevStream ? wasPlaying : true)
       } catch { /* ignore */ }
       return GLib.SOURCE_REMOVE
@@ -736,11 +1344,45 @@ export function getMediaCenterDesktopVideoState() {
     title: ytNowPlaying?.title || "",
     filePath: ready && filePath ? filePath : "",
     mediaStream: ready ? ytMediaStream : null,
+    paintable: ready ? ytFilteredPaintable : null,
     ready,
     playing: ready ? Boolean(stream?.get_playing?.()) : false,
     position: ready ? readMediaTimestampRaw() : 0,
     duration: ready ? readMediaDurationRaw() : 0,
+    positionSeconds: ready ? mediaUnitsToSeconds(readMediaTimestampRaw()) : 0,
+    durationSeconds: ready ? mediaUnitsToSeconds(readMediaDurationRaw()) : 0,
     quality: ytCurrentQuality,
+    effectMode: videoEffects.colorMode,
+  }
+}
+
+export function getMediaCenterNowPlayingState(): MediaCenterNowPlayingState {
+  if (ytNowPlaying) {
+    let playing = false
+    try { playing = Boolean((ytMediaStream as any)?.get_playing?.()) } catch { /* ignore */ }
+    return {
+      available: true,
+      title: ytNowPlaying.title || "Unknown",
+      artist: ytNowPlaying.channel || "Unknown channel",
+      playing,
+      source: "youtube",
+    }
+  }
+
+  const mpris = AstalMpris.get_default()
+  const players = mpris.players || []
+  const player = players.find((p) => p.playbackStatus === AstalMpris.PlaybackStatus.PLAYING)
+    || players[0]
+    || null
+  if (!player) {
+    return { available: false, title: "", artist: "", playing: false, source: "none" }
+  }
+  return {
+    available: true,
+    title: player.title || player.identity || "Unknown",
+    artist: player.artist || player.identity || "Unknown artist",
+    playing: player.playbackStatus === AstalMpris.PlaybackStatus.PLAYING,
+    source: "mpris",
   }
 }
 
@@ -828,6 +1470,11 @@ async function listDownloadedVideoGroups(): Promise<DownloadedVideoGroup[]> {
     .sort((a, b) => a.id.localeCompare(b.id))
 }
 
+interface DownloadedRowView {
+  widget: Gtk.Widget
+  update: (item: DownloadedVideoGroup) => void
+}
+
 function makeDownloadedRow(
   item: DownloadedVideoGroup,
   onPlay: (id: string) => void,
@@ -836,7 +1483,7 @@ function makeDownloadedRow(
   onDeleteVideo: (id: string) => void,
   isInActivePlaylist: (id: string) => boolean,
   hasActivePlaylist: () => boolean,
-): Gtk.Widget {
+): DownloadedRowView {
   const row = new Gtk.Box({ spacing: 8 })
   row.add_css_class("mc-downloaded-row")
 
@@ -859,15 +1506,9 @@ function makeDownloadedRow(
   titleLbl.add_css_class("yt-result-title")
   titleLbl.set_ellipsize(3)
   titleLbl.set_max_width_chars(38)
-  const meta = ytVideoMeta.get(item.id)
-  titleLbl.set_label(meta?.title || `Saved video (${item.id})`)
-  if (!meta?.title) queueFetchVideoMeta(item.id)
 
   const infoLbl = new Gtk.Label({ xalign: 0 })
   infoLbl.add_css_class("yt-result-channel")
-  const plays = getPlayCount(item.id)
-  const playsTag = `${plays} play${plays === 1 ? "" : "s"}`
-  infoLbl.set_label([item.qualities.map((q) => `${q}p`).join(" "), playsTag].join("  •  "))
 
   textCol.append(titleLbl)
   textCol.append(infoLbl)
@@ -909,11 +1550,17 @@ function makeDownloadedRow(
   deleteBtn.connect("clicked", () => onDeleteVideo(item.id))
   row.append(deleteBtn)
 
-  GLib.timeout_add(GLib.PRIORITY_DEFAULT, 300, () => {
-    if (!row.get_parent()) return GLib.SOURCE_REMOVE
+  let lastHasSelection: boolean | null = null
+  let lastInPlaylist: boolean | null = null
+  const refreshPlaylistAction = () => {
     const hasSel = hasActivePlaylist()
-    listBtn.set_sensitive(hasSel)
     const inPl = hasSel && isInActivePlaylist(item.id)
+    if (hasSel !== lastHasSelection) {
+      lastHasSelection = hasSel
+      listBtn.set_sensitive(hasSel)
+    }
+    if (inPl === lastInPlaylist) return
+    lastInPlaylist = inPl
     if (inPl) {
       listBtn.add_css_class("active")
       listIcon.icon_name = "emblem-ok-symbolic"
@@ -921,25 +1568,41 @@ function makeDownloadedRow(
       listBtn.remove_css_class("active")
       listIcon.icon_name = "list-add-symbolic"
     }
-    return GLib.SOURCE_CONTINUE
-  })
+  }
 
-  return row
+  const update = (next: DownloadedVideoGroup) => {
+    if (next.id !== item.id) return
+    const meta = ytVideoMeta.get(next.id)
+    titleLbl.set_label(meta?.title || `Saved video (${next.id})`)
+    if (!meta?.title) queueFetchVideoMeta(next.id)
+    const plays = getPlayCount(next.id)
+    const playsTag = `${plays} play${plays === 1 ? "" : "s"}`
+    infoLbl.set_label([next.qualities.map((q) => `${q}p`).join(" "), playsTag].join("  •  "))
+    refreshPlaylistAction()
+  }
+
+  update(item)
+  return { widget: row, update }
 }
 
 // ── Imperative result row ─────────────────────────────────────────────
+interface ResultRowView {
+  widget: Gtk.Widget
+  update: (track: YtResult) => void
+}
+
 function makeResultRow(
   track: YtResult,
   onPlay: (t: YtResult) => void,
   onQueue: (t: YtResult) => void,
-): Gtk.Widget {
+): ResultRowView {
+  let currentTrack = track
   const wrap = new Gtk.Box({ spacing: 4 })
   wrap.add_css_class("yt-result-wrap")
 
   const row = new Gtk.Button()
   row.add_css_class("yt-result-row")
   row.set_hexpand(true)
-  row.set_tooltip_text(`Play: ${track.title}`)
 
   const outer = new Gtk.Box({ spacing: 10 })
   outer.set_margin_start(4); outer.set_margin_end(4)
@@ -956,11 +1619,9 @@ function makeResultRow(
   titleLbl.add_css_class("yt-result-title")
   titleLbl.set_ellipsize(3)
   titleLbl.set_max_width_chars(38)
-  titleLbl.set_label(track.title)
 
   const chanLbl = new Gtk.Label({ xalign: 0 })
   chanLbl.add_css_class("yt-result-channel")
-  chanLbl.set_label(track.channel)
 
   textCol.append(titleLbl)
   textCol.append(chanLbl)
@@ -975,12 +1636,9 @@ function makeResultRow(
   playImg.add_css_class("yt-result-icon")
   rightCol.append(playImg)
 
-  if (track.duration) {
-    const durLbl = new Gtk.Label()
-    durLbl.add_css_class("yt-result-duration")
-    durLbl.set_label(track.duration)
-    rightCol.append(durLbl)
-  }
+  const durLbl = new Gtk.Label()
+  durLbl.add_css_class("yt-result-duration")
+  rightCol.append(durLbl)
 
   outer.append(rightCol)
   row.set_child(outer)
@@ -988,7 +1646,7 @@ function makeResultRow(
   let wasPlaying = false
   GLib.timeout_add(GLib.PRIORITY_DEFAULT, 200, () => {
     if (!wrap.get_parent()) return GLib.SOURCE_REMOVE
-    const isPlaying = ytNowPlaying?.id === track.id
+    const isPlaying = ytNowPlaying?.id === currentTrack.id
     if (isPlaying !== wasPlaying) {
       wasPlaying = isPlaying
       if (isPlaying) {
@@ -1002,7 +1660,7 @@ function makeResultRow(
     return GLib.SOURCE_CONTINUE
   })
 
-  row.connect("clicked", () => onPlay(track))
+  row.connect("clicked", () => onPlay(currentTrack))
   wrap.append(row)
 
   const queueBtn = new Gtk.Button()
@@ -1010,14 +1668,310 @@ function makeResultRow(
   queueBtn.set_valign(Gtk.Align.CENTER)
   queueBtn.set_tooltip_text("Add to queue")
   queueBtn.set_child(Gtk.Image.new_from_icon_name("list-add-symbolic"))
-  queueBtn.connect("clicked", () => onQueue(track))
+  queueBtn.connect("clicked", () => onQueue(currentTrack))
   wrap.append(queueBtn)
 
-  return wrap
+  const update = (next: YtResult) => {
+    currentTrack = next
+    row.set_tooltip_text(`Play: ${next.title}`)
+    titleLbl.set_label(next.title)
+    chanLbl.set_label(next.channel)
+    durLbl.set_label(next.duration)
+    durLbl.set_visible(Boolean(next.duration))
+  }
+
+  update(track)
+  return { widget: wrap, update }
+}
+
+// ── Shared video-effects controls ─────────────────────────────────────
+export function makeMediaCenterVideoSettingsButton(cssClass = "mc-video-settings-btn"): Gtk.MenuButton {
+  const button = new Gtk.MenuButton()
+  button.add_css_class("video-fx-button")
+  button.add_css_class(cssClass)
+  button.set_tooltip_text("Video effects and display settings")
+  const buttonIcon = Gtk.Image.new_from_icon_name("emblem-system-symbolic")
+  buttonIcon.pixel_size = 14
+  button.set_child(buttonIcon)
+
+  const popover = new Gtk.Popover()
+  popover.add_css_class("video-fx-popover")
+  const root = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL, spacing: 10 })
+  root.add_css_class("video-fx-panel")
+
+  const header = new Gtk.Box({ spacing: 8 })
+  const headerText = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL, spacing: 1 })
+  headerText.set_hexpand(true)
+  const title = new Gtk.Label({ label: "VIDEO DISPLAY", xalign: 0 })
+  title.add_css_class("video-fx-title")
+  const subtitle = new Gtk.Label({ label: "Checkbox grid · stable CPU renderer", xalign: 0 })
+  subtitle.add_css_class("video-fx-subtitle")
+  headerText.append(title)
+  headerText.append(subtitle)
+  header.append(headerText)
+  const reset = new Gtk.Button({ label: "Reset" })
+  reset.add_css_class("video-fx-reset")
+  reset.connect("clicked", () => updateVideoEffects({ ...DEFAULT_VIDEO_EFFECTS }))
+  header.append(reset)
+  root.append(header)
+
+  const presetSection = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL, spacing: 6 })
+  presetSection.add_css_class("video-fx-presets")
+  const presetTitle = new Gtk.Label({ label: "PRESETS", xalign: 0 })
+  presetTitle.add_css_class("video-fx-section-label")
+  presetSection.append(presetTitle)
+
+  const presetSelectRow = new Gtk.Box({ spacing: 7 })
+  const presetSelect = Gtk.DropDown.new_from_strings(["Custom / unsaved"])
+  presetSelect.add_css_class("video-fx-select")
+  presetSelect.add_css_class("video-fx-preset-select")
+  presetSelect.set_hexpand(true)
+  presetSelectRow.append(presetSelect)
+  const deletePreset = new Gtk.Button()
+  deletePreset.add_css_class("video-fx-preset-delete")
+  deletePreset.set_tooltip_text("Delete selected custom preset")
+  const deletePresetIcon = Gtk.Image.new_from_icon_name("user-trash-symbolic")
+  deletePresetIcon.pixel_size = 13
+  deletePreset.set_child(deletePresetIcon)
+  presetSelectRow.append(deletePreset)
+  presetSection.append(presetSelectRow)
+
+  const savePresetRow = new Gtk.Box({ spacing: 7 })
+  const presetName = new Gtk.Entry()
+  presetName.add_css_class("video-fx-preset-name")
+  presetName.set_placeholder_text("Preset name…")
+  presetName.set_max_length(48)
+  presetName.set_hexpand(true)
+  savePresetRow.append(presetName)
+  const savePreset = new Gtk.Button({ label: "Save current" })
+  savePreset.add_css_class("video-fx-preset-save")
+  savePresetRow.append(savePreset)
+  presetSection.append(savePresetRow)
+
+  const presetStatus = new Gtk.Label({ xalign: 0 })
+  presetStatus.add_css_class("video-fx-preset-status")
+  presetStatus.set_visible(false)
+  presetSection.append(presetStatus)
+  root.append(presetSection)
+
+  let presetOptions: (VideoEffectPreset | null)[] = []
+  let syncingPreset = false
+  const syncPresetSelection = () => {
+    const index = presetOptions.findIndex((preset) =>
+      preset !== null && videoEffectSettingsEqual(preset.settings, videoEffects))
+    const selected = index >= 0 ? index : 0
+    syncingPreset = true
+    if (presetSelect.selected !== selected) presetSelect.selected = selected
+    syncingPreset = false
+    deletePreset.sensitive = Boolean(presetOptions[selected]?.custom)
+  }
+  const refreshPresetList = () => {
+    presetOptions = [null, ...allVideoPresets()]
+    const labels = presetOptions.map((preset) => {
+      if (!preset) return "Custom / unsaved"
+      return preset.custom ? `${preset.name} · saved` : preset.name
+    })
+    syncingPreset = true
+    presetSelect.model = Gtk.StringList.new(labels)
+    syncingPreset = false
+    syncPresetSelection()
+  }
+  const setPresetStatus = (message: string, error = false) => {
+    presetStatus.set_label(message)
+    presetStatus.set_visible(Boolean(message))
+    if (error) presetStatus.add_css_class("error")
+    else presetStatus.remove_css_class("error")
+  }
+
+  presetSelect.connect("notify::selected", () => {
+    if (syncingPreset) return
+    const preset = presetOptions[presetSelect.selected]
+    deletePreset.sensitive = Boolean(preset?.custom)
+    if (!preset) return
+    presetName.text = preset.custom ? preset.name : ""
+    updateVideoEffects({ ...preset.settings })
+    setPresetStatus(`Loaded “${preset.name}”`)
+  })
+
+  const saveCurrentPreset = () => {
+    const name = presetName.text.trim()
+    if (!name) {
+      setPresetStatus("Enter a name before saving.", true)
+      return
+    }
+    if (BUILTIN_VIDEO_PRESETS.some((preset) => preset.name.toLowerCase() === name.toLowerCase())) {
+      setPresetStatus("That name belongs to a built-in preset.", true)
+      return
+    }
+
+    const previousPresets = customVideoPresets.map((preset) => ({
+      ...preset,
+      settings: { ...preset.settings },
+    }))
+    const existing = customVideoPresets.find((preset) => preset.name.toLowerCase() === name.toLowerCase())
+    if (existing) {
+      existing.name = name
+      existing.settings = { ...videoEffects }
+    } else {
+      customVideoPresets.push({
+        id: `custom:${GLib.uuid_string_random()}`,
+        name,
+        settings: { ...videoEffects },
+        custom: true,
+      })
+    }
+    if (!saveCustomVideoPresets()) {
+      customVideoPresets = previousPresets
+      setPresetStatus("Could not write the preset file.", true)
+      return
+    }
+    presetName.text = name
+    setPresetStatus(existing ? `Updated “${name}”` : `Saved “${name}”`)
+    for (const listener of videoPresetListeners) listener()
+  }
+  savePreset.connect("clicked", saveCurrentPreset)
+  presetName.connect("activate", saveCurrentPreset)
+
+  deletePreset.connect("clicked", () => {
+    const preset = presetOptions[presetSelect.selected]
+    if (!preset?.custom) return
+    const previousPresets = customVideoPresets
+    customVideoPresets = customVideoPresets.filter((item) => item.id !== preset.id)
+    if (!saveCustomVideoPresets()) {
+      customVideoPresets = previousPresets
+      setPresetStatus("Could not update the preset file.", true)
+      return
+    }
+    setPresetStatus(`Deleted “${preset.name}”`)
+    for (const listener of videoPresetListeners) listener()
+  })
+
+  const colorModes: { value: VideoColorMode; label: string }[] = [
+    { value: "original", label: "Original" },
+    { value: "mono", label: "Mono checkbox" },
+    { value: "rgb332", label: "8-bit · RGB332" },
+    { value: "rgb565", label: "16-bit · RGB565" },
+    { value: "full", label: "Full · 24-bit" },
+  ]
+  const blockSizes = VIDEO_BLOCK_SIZES
+
+  const makeRow = (labelText: string, control: Gtk.Widget, valueLabel?: Gtk.Label): Gtk.Box => {
+    const row = new Gtk.Box({ spacing: 8 })
+    row.add_css_class("video-fx-row")
+    const label = new Gtk.Label({ label: labelText, xalign: 0 })
+    label.add_css_class("video-fx-label")
+    label.set_size_request(86, -1)
+    row.append(label)
+    control.set_hexpand(true)
+    row.append(control)
+    if (valueLabel) {
+      valueLabel.add_css_class("video-fx-value")
+      valueLabel.set_size_request(34, -1)
+      row.append(valueLabel)
+    }
+    return row
+  }
+
+  const mode = Gtk.DropDown.new_from_strings(colorModes.map((m) => m.label))
+  mode.add_css_class("video-fx-select")
+  mode.connect("notify::selected", () => {
+    const selected = colorModes[mode.selected]
+    if (selected) updateVideoEffects({ colorMode: selected.value })
+  })
+  root.append(makeRow("Color", mode))
+
+  const block = Gtk.DropDown.new_from_strings(blockSizes.map((n) => `${n}×${n} px`))
+  block.add_css_class("video-fx-select")
+  block.connect("notify::selected", () => {
+    const selected = blockSizes[block.selected]
+    if (selected) updateVideoEffects({ blockSize: selected })
+  })
+  root.append(makeRow("px / box", block))
+
+  const rangeWidgets: {
+    key: keyof Pick<VideoEffectSettings, "fps" | "cellSize" | "gap" | "threshold" | "thickness" | "diffusion" | "glow">
+    scale: Gtk.Scale
+    value: Gtk.Label
+  }[] = []
+  const addRange = (
+    labelText: string,
+    key: typeof rangeWidgets[number]["key"],
+    min: number,
+    max: number,
+    step: number,
+  ): Gtk.Box => {
+    const scale = Gtk.Scale.new_with_range(Gtk.Orientation.HORIZONTAL, min, max, step)
+    scale.set_draw_value(false)
+    scale.add_css_class("video-fx-scale")
+    const value = new Gtk.Label({ xalign: 1 })
+    scale.connect("value-changed", () => {
+      updateVideoEffects({ [key]: Math.round(scale.get_value()) } as Partial<VideoEffectSettings>)
+    })
+    rangeWidgets.push({ key, scale, value })
+    return makeRow(labelText, scale, value)
+  }
+
+  root.append(addRange("FPS", "fps", 1, 60, 1))
+  root.append(addRange("Cell px", "cellSize", 10, 40, 1))
+  root.append(addRange("Gap px", "gap", 0, 6, 1))
+  root.append(addRange("Threshold", "threshold", 1, 254, 1))
+
+  const separator = new Gtk.Separator({ orientation: Gtk.Orientation.HORIZONTAL })
+  separator.add_css_class("video-fx-separator")
+  root.append(separator)
+
+  const diffuserSwitch = new Gtk.Switch()
+  diffuserSwitch.set_halign(Gtk.Align.END)
+  diffuserSwitch.connect("notify::active", () => updateVideoEffects({ diffuser: diffuserSwitch.active }))
+  root.append(makeRow("Diffuser", diffuserSwitch))
+
+  const diffuserDetails = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL, spacing: 7 })
+  diffuserDetails.add_css_class("video-fx-diffuser")
+  const diffuserTitle = new Gtk.Label({ label: "DIFFUSER KNOBS", xalign: 0 })
+  diffuserTitle.add_css_class("video-fx-section-label")
+  diffuserDetails.append(diffuserTitle)
+  diffuserDetails.append(addRange("Thickness", "thickness", 0, 100, 1))
+  diffuserDetails.append(addRange("Diffuse", "diffusion", 0, 100, 1))
+  diffuserDetails.append(addRange("Glow", "glow", 0, 100, 1))
+  root.append(diffuserDetails)
+
+  const hint = new Gtk.Label({
+    label: "Settings are shared with the desktop video.",
+    xalign: 0,
+  })
+  hint.add_css_class("video-fx-hint")
+  root.append(hint)
+
+  const syncControls = () => {
+    const modeIndex = colorModes.findIndex((m) => m.value === videoEffects.colorMode)
+    if (mode.selected !== modeIndex) mode.selected = modeIndex
+    const blockIndex = blockSizes.indexOf(videoEffects.blockSize)
+    if (block.selected !== blockIndex) block.selected = blockIndex
+    for (const item of rangeWidgets) {
+      const next = Number(videoEffects[item.key])
+      if (Math.round(item.scale.get_value()) !== next) item.scale.set_value(next)
+      item.value.set_label(String(next))
+    }
+    if (diffuserSwitch.active !== videoEffects.diffuser) diffuserSwitch.active = videoEffects.diffuser
+    diffuserDetails.sensitive = videoEffects.diffuser
+    syncPresetSelection()
+  }
+
+  videoEffectsListeners.add(syncControls)
+  videoPresetListeners.add(refreshPresetList)
+  popover.connect("destroy", () => {
+    videoEffectsListeners.delete(syncControls)
+    videoPresetListeners.delete(refreshPresetList)
+  })
+  refreshPresetList()
+  syncControls()
+  popover.set_child(root)
+  button.set_popover(popover)
+  return button
 }
 
 // ── TV: shows current YT thumbnail and embedded video ─────────────────
-function MediaTV(): { widget: Gtk.Widget; sourceId: number } {
+function MediaTV(): { widget: Gtk.Widget; cleanup: () => void } {
   const frame = new Gtk.Box()
   frame.add_css_class("mc-tv")
   frame.set_size_request(420, 236)
@@ -1045,6 +1999,10 @@ function MediaTV(): { widget: Gtk.Widget; sourceId: number } {
   thumbHolder.set_vexpand(true)
   stack.add_named(thumbHolder, "thumb")
 
+  const videoSurface = new Gtk.Stack()
+  videoSurface.set_hexpand(true)
+  videoSurface.set_vexpand(true)
+
   const video = new Gtk.Video()
   video.set_autoplay(true)
   video.set_loop(false)
@@ -1052,63 +2010,88 @@ function MediaTV(): { widget: Gtk.Widget; sourceId: number } {
   video.set_vexpand(true)
   video.add_css_class("mc-tv-video")
   ytVideo = video
-  stack.add_named(video, "video")
+  videoSurface.add_named(video, "fallback")
+
+  const filteredPicture = new Gtk.Picture()
+  filteredPicture.set_content_fit(Gtk.ContentFit.CONTAIN)
+  filteredPicture.set_hexpand(true)
+  filteredPicture.set_vexpand(true)
+  filteredPicture.add_css_class("mc-tv-video")
+  filteredPicture.add_css_class("mc-tv-filtered")
+  videoSurface.add_named(filteredPicture, "filtered")
+  videoSurface.set_visible_child_name("fallback")
+
+  stack.add_named(videoSurface, "video")
   stack.set_visible_child_name("off")
 
   let lastId = ""
-  let thumbPic: Gtk.Picture | null = null
-  const sourceId = GLib.timeout_add(GLib.PRIORITY_DEFAULT, 250, () => {
+  const thumbPic = new Gtk.Picture()
+  thumbPic.set_content_fit(Gtk.ContentFit.COVER)
+  thumbPic.set_hexpand(true)
+  thumbPic.set_vexpand(true)
+  thumbPic.set_size_request(420, 236)
+  thumbPic.add_css_class("mc-tv-img")
+  thumbHolder.append(thumbPic)
+  let lastPaintable: Gdk.Paintable | null = null
+  let lastFallbackStream: Gtk.MediaStream | null = null
+
+  const syncVideoSurface = () => {
+    const mediaCenterVisible = Boolean(app.get_window("media-center")?.visible)
+    const videoSurfaceVisible = mediaCenterVisible && ytVideoVisible && ytVideoReady
+    const nextPaintable = videoSurfaceVisible ? ytFilteredPaintable : null
+    const nextFallbackStream = videoSurfaceVisible && !nextPaintable ? ytMediaStream : null
+    if (nextPaintable !== lastPaintable) {
+      lastPaintable = nextPaintable
+      filteredPicture.set_paintable(lastPaintable)
+    }
+    if (nextFallbackStream !== lastFallbackStream) {
+      lastFallbackStream = nextFallbackStream
+      video.set_media_stream(lastFallbackStream)
+    }
+    const desiredSurface = lastPaintable ? "filtered" : "fallback"
+    if (videoSurface.get_visible_child_name() !== desiredSurface) {
+      videoSurface.set_visible_child_name(desiredSurface)
+    }
+  }
+
+  const unsubscribeSurface = subscribeMediaCenterVideoSurface(syncVideoSurface)
+  const refreshThumbnail = () => {
+    syncVideoSurface()
     const id = ytNowPlaying?.id || ""
     if (!id) {
-      lastId = ""
-      if (thumbPic) {
-        thumbHolder.remove(thumbPic)
-        thumbPic = null
+      if (lastId) {
+        lastId = ""
+        thumbPic.set_paintable(null)
       }
-      refreshTvMode()
-      return GLib.SOURCE_CONTINUE
+      return
     }
 
-    if (id === lastId) {
-      refreshTvMode()
-      return GLib.SOURCE_CONTINUE
-    }
+    if (id === lastId) return
 
     lastId = id
-    if (thumbPic) {
-      thumbHolder.remove(thumbPic)
-      thumbPic = null
-    }
-
-    const dest = `${THUMB_DIR}/${id}.jpg`
     const setPic = (path: string) => {
-      const pic = new Gtk.Picture()
-      pic.set_filename(path)
-      pic.set_content_fit(Gtk.ContentFit.COVER)
-      pic.set_hexpand(true)
-      pic.set_vexpand(true)
-      pic.set_size_request(420, 236)
-      pic.add_css_class("mc-tv-img")
-      thumbPic = pic
-      thumbHolder.append(pic)
-      refreshTvMode()
+      if (ytNowPlaying?.id !== id) return
+      const texture = thumbnailTexture(id, path)
+      if (texture) thumbPic.set_paintable(texture)
+      else thumbPic.set_filename(path)
     }
 
-    if (GLib.file_test(dest, GLib.FileTest.EXISTS)) {
-      setPic(dest)
-    } else {
-      ensureThumbDir()
-      execAsync(["curl", "-sSL", "-o", dest,
-        `https://img.youtube.com/vi/${id}/hqdefault.jpg`])
-        .then(() => { if (ytNowPlaying?.id === id) setPic(dest) })
-        .catch(() => { refreshTvMode() })
-    }
+    if (thumbCache.has(id)) setPic(thumbCache.get(id)!)
+    else fetchThumbnail(id, setPic)
+  }
+  ytTvRefreshHook = refreshThumbnail
+  refreshThumbnail()
 
-    refreshTvMode()
-    return GLib.SOURCE_CONTINUE
-  })
-
-  return { widget: frame, sourceId }
+  return {
+    widget: frame,
+    cleanup: () => {
+      if (ytTvRefreshHook === refreshThumbnail) ytTvRefreshHook = null
+      unsubscribeSurface()
+      filteredPicture.set_paintable(null)
+      video.set_media_stream(null)
+      thumbPic.set_paintable(null)
+    },
+  }
 }
 
 // ── CAVA visualizer ────────────────────────────────────────────────────
@@ -1350,13 +2333,15 @@ export function MediaCenterPopover({ gdkmonitor }: { gdkmonitor: Gdk.Monitor }) 
 
   const hide = () => { if (win) win.visible = false }
 
-  const { widget: tvWidget, sourceId: tvSourceId } = MediaTV()
+  const { widget: tvWidget, cleanup: tvCleanup } = MediaTV()
   const { widget: cavaWidget, cleanup: cavaCleanup } = CavaBars()
 
   let resultsList: Gtk.Box | null = null
   let emptyBox: Gtk.Widget | null = null
+  const resultRowCache = new Map<string, ResultRowView>()
   let downloadedList: Gtk.Box | null = null
   let downloadedEmpty: Gtk.Widget | null = null
+  const downloadedRowCache = new Map<string, DownloadedRowView>()
   let downloadedItemsCache: DownloadedVideoGroup[] = []
   let downloadedSig = ""
   let downloadedRefreshId = 0
@@ -1382,6 +2367,7 @@ export function MediaCenterPopover({ gdkmonitor }: { gdkmonitor: Gdk.Monitor }) 
 
   const notifyListsChanged = () => {
     refreshDownloaded()
+    rebuildDownloaded(downloadedItemsCache)
     rebuildPlaylists(ytPlaylists)
     rebuildPlaylistItems()
   }
@@ -1930,17 +2916,34 @@ export function MediaCenterPopover({ gdkmonitor }: { gdkmonitor: Gdk.Monitor }) 
 
   function rebuildResults(tracks: YtResult[]) {
     if (!resultsList) return
-    let child = resultsList.get_first_child()
-    while (child) {
-      const next = child.get_next_sibling()
-      if (child !== emptyBox) resultsList.remove(child)
-      child = next
+
+    const visibleIds = new Set(tracks.map((track) => track.id))
+    // Preserve rows through the transient empty/searching state. Once a new
+    // result set arrives, discard only rows that are genuinely no longer used.
+    if (tracks.length > 0) {
+      for (const [id, view] of resultRowCache) {
+        if (visibleIds.has(id)) continue
+        if (view.widget.get_parent() === resultsList) resultsList.remove(view.widget)
+        resultRowCache.delete(id)
+      }
     }
+
     let prev: Gtk.Widget | null = null
     for (const track of tracks) {
-      const row = makeResultRow(track, playYtTrack, enqueueTrack)
-      resultsList.insert_child_after(row, prev)
-      prev = row
+      let view = resultRowCache.get(track.id)
+      if (!view) {
+        view = makeResultRow(track, playYtTrack, enqueueTrack)
+        resultRowCache.set(track.id, view)
+        resultsList.insert_child_after(view.widget, prev)
+      } else {
+        view.update(track)
+        resultsList.reorder_child_after(view.widget, prev)
+      }
+      view.widget.set_visible(true)
+      prev = view.widget
+    }
+    for (const [id, view] of resultRowCache) {
+      if (!visibleIds.has(id)) view.widget.set_visible(false)
     }
     if (emptyBox) emptyBox.set_visible(tracks.length === 0)
   }
@@ -2050,26 +3053,40 @@ export function MediaCenterPopover({ gdkmonitor }: { gdkmonitor: Gdk.Monitor }) 
   function rebuildDownloaded(items: DownloadedVideoGroup[]) {
     if (!downloadedList) return
     downloadedItemsCache = items
-    let child = downloadedList.get_first_child()
-    while (child) {
-      const next = child.get_next_sibling()
-      if (child !== downloadedEmpty) downloadedList.remove(child)
-      child = next
+
+    const itemIds = new Set(items.map((item) => item.id))
+    for (const [id, view] of downloadedRowCache) {
+      if (itemIds.has(id)) continue
+      if (view.widget.get_parent() === downloadedList) downloadedList.remove(view.widget)
+      downloadedRowCache.delete(id)
     }
+
     const visible = items.filter(downloadedMatchesFilter).sort(compareDownloaded)
+    const visibleIds = new Set(visible.map((item) => item.id))
     let prev: Gtk.Widget | null = null
     for (const item of visible) {
-      const row = makeDownloadedRow(
-        item,
-        playDownloadedTrack,
-        enqueueById,
-        toggleTrackInActivePlaylist,
-        deleteDownloadedTrack,
-        isTrackInActivePlaylist,
-        () => ytActivePlaylistId !== null,
-      )
-      downloadedList.insert_child_after(row, prev)
-      prev = row
+      let view = downloadedRowCache.get(item.id)
+      if (!view) {
+        view = makeDownloadedRow(
+          item,
+          playDownloadedTrack,
+          enqueueById,
+          toggleTrackInActivePlaylist,
+          deleteDownloadedTrack,
+          isTrackInActivePlaylist,
+          () => ytActivePlaylistId !== null,
+        )
+        downloadedRowCache.set(item.id, view)
+        downloadedList.insert_child_after(view.widget, prev)
+      } else {
+        view.update(item)
+        downloadedList.reorder_child_after(view.widget, prev)
+      }
+      view.widget.set_visible(true)
+      prev = view.widget
+    }
+    for (const [id, view] of downloadedRowCache) {
+      if (!visibleIds.has(id)) view.widget.set_visible(false)
     }
     if (downloadedEmpty) {
       downloadedEmpty.set_visible(visible.length === 0)
@@ -2149,7 +3166,7 @@ export function MediaCenterPopover({ gdkmonitor }: { gdkmonitor: Gdk.Monitor }) 
 
   onCleanup(() => {
     if (ytSearchDebounce) GLib.source_remove(ytSearchDebounce)
-    GLib.source_remove(tvSourceId)
+    tvCleanup()
     if (downloadedRefreshId) GLib.source_remove(downloadedRefreshId)
     if (playlistAdvanceWatchId) GLib.source_remove(playlistAdvanceWatchId)
     ytUiRefreshHook = null
@@ -2198,6 +3215,11 @@ export function MediaCenterPopover({ gdkmonitor }: { gdkmonitor: Gdk.Monitor }) 
     refreshTvMode()
   }
 
+  // Keep display presets in the sticky header. The previous button lived in a
+  // conditional, scrollable row, so it disappeared (and its popover was torn
+  // down) whenever playback state changed.
+  const videoSettingsButton = makeMediaCenterVideoSettingsButton()
+
   return (
     <window
       $={(self) => {
@@ -2205,6 +3227,7 @@ export function MediaCenterPopover({ gdkmonitor }: { gdkmonitor: Gdk.Monitor }) 
         const k = new Gtk.EventControllerKey()
         k.connect("key-pressed", (_c, kv) => { if (kv === Gdk.KEY_Escape) hide() })
         self.add_controller(k)
+        self.connect("notify::visible", notifyVideoSurfacesChanged)
       }}
       visible={false}
       namespace="ags-media-center"
@@ -2233,6 +3256,10 @@ export function MediaCenterPopover({ gdkmonitor }: { gdkmonitor: Gdk.Monitor }) 
           <box class="mc-header" spacing={10}>
             <image iconName="multimedia-player-symbolic" pixelSize={18} class="mc-header-icon" />
             <label class="mc-title" label="Media Center" hexpand xalign={0} />
+            <box
+              class="mc-video-settings-slot mc-header-video-settings"
+              $={(self) => { self.append(videoSettingsButton) }}
+            />
             <button class="mc-close-btn" onClicked={hide} tooltipText="Close">
               <image iconName="window-close-symbolic" pixelSize={14} />
             </button>
@@ -2316,14 +3343,7 @@ export function MediaCenterPopover({ gdkmonitor }: { gdkmonitor: Gdk.Monitor }) 
                 <button
                   class="mc-stop-btn"
                   tooltipText={ytIsPlayingState((p) => p ? "Pause" : "Play")}
-                  onClicked={() => {
-                    try {
-                      const stream = ytMediaStream as any
-                      if (!stream) return
-                      const playing = Boolean(stream.get_playing?.())
-                      stream.set_playing?.(!playing)
-                    } catch { /* ignore */ }
-                  }}
+                  onClicked={toggleMediaCenterVideoPlayback}
                 >
                   <image
                     iconName={ytIsPlayingState((p) => p ? "media-playback-pause-symbolic" : "media-playback-start-symbolic")}
@@ -2343,16 +3363,7 @@ export function MediaCenterPopover({ gdkmonitor }: { gdkmonitor: Gdk.Monitor }) 
                   class="mc-player-progress"
                   hexpand
                   value={ytSeekState}
-                  onChangeValue={({ value }) => {
-                    try {
-                      const stream = ytMediaStream as any
-                      if (!stream) return
-                      const durRaw = Number(stream.get_duration?.() || 0)
-                      if (durRaw <= 0) return
-                      const target = Math.max(0, Math.min(1, value)) * durRaw
-                      stream.seek?.(target)
-                    } catch { /* ignore */ }
-                  }}
+                  onChangeValue={({ value }) => seekMediaCenterVideo(value)}
                 />
 
                 <label class="mc-player-time" label={ytTimeState} xalign={1} />

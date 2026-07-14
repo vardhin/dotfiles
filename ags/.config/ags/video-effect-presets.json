@@ -1,0 +1,18 @@
+[
+  {
+    "id": "custom:c278b898-371b-4ab8-990a-eafb1505fc66",
+    "name": "check1",
+    "settings": {
+      "fps": 60,
+      "blockSize": 10,
+      "cellSize": 12,
+      "gap": 6,
+      "colorMode": "rgb332",
+      "threshold": 128,
+      "diffuser": true,
+      "thickness": 7,
+      "diffusion": 30,
+      "glow": 10
+    }
+  }
+]

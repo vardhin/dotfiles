@@ -1923,6 +1923,192 @@ $dw-card-shadow: 0 12px 28px rgba(0, 0, 0, 0.34), 0 3px 8px rgba(0, 0, 0, 0.2);
 }
 
 // ━━━━━━━━━━━━━━━ MEDIA VIDEO ━━━━━━━━━━━━━━━━━━━━━━━
+.video-fx-popover {
+  > contents {
+    background: $surface-solid;
+    border: 1px solid rgba($accent, 0.22);
+    border-radius: $radius-lg;
+    padding: 0;
+    box-shadow: none;
+  }
+}
+
+.video-fx-panel {
+  padding: 14px;
+  min-width: 340px;
+
+  .video-fx-title {
+    color: $fg;
+    font-size: 12px;
+    font-weight: 800;
+    letter-spacing: 1.5px;
+  }
+
+  .video-fx-subtitle,
+  .video-fx-hint {
+    color: $fg-faint;
+    font-size: 9px;
+  }
+
+  .video-fx-reset {
+    min-height: 0;
+    padding: 4px 8px;
+    border-radius: 7px;
+    color: $fg-dim;
+    background: rgba(255, 255, 255, 0.04);
+    border: 1px solid $surface-border;
+
+    &:hover {
+      color: $accent;
+      border-color: rgba($accent, 0.35);
+      background: rgba($accent, 0.12);
+    }
+  }
+
+  .video-fx-presets {
+    padding: 9px 10px 10px;
+    border-radius: 9px;
+    background: rgba($accent, 0.045);
+    border: 1px solid rgba($accent, 0.16);
+  }
+
+  .video-fx-preset-select { min-width: 0; }
+
+  .video-fx-preset-delete,
+  .video-fx-preset-save {
+    min-height: 0;
+    min-width: 0;
+    padding: 5px 8px;
+    border-radius: 7px;
+    color: $fg-dim;
+    background: rgba(255, 255, 255, 0.045);
+    border: 1px solid $surface-border;
+
+    &:hover {
+      color: $accent;
+      background: rgba($accent, 0.13);
+      border-color: rgba($accent, 0.3);
+    }
+
+    &:disabled { opacity: 0.35; }
+  }
+
+  .video-fx-preset-delete:hover { color: $red; }
+
+  .video-fx-preset-name {
+    min-height: 0;
+    padding: 5px 8px;
+    border-radius: 7px;
+    color: $fg;
+    caret-color: $accent;
+    background: rgba(255, 255, 255, 0.045);
+    border: 1px solid $surface-border;
+
+    &:focus {
+      border-color: rgba($accent, 0.38);
+      background: rgba(255, 255, 255, 0.065);
+      outline: none;
+      box-shadow: none;
+    }
+  }
+
+  .video-fx-preset-status {
+    color: $green;
+    font-size: 9px;
+
+    &.error { color: $red; }
+  }
+
+  .video-fx-row { min-height: 26px; }
+
+  .video-fx-label {
+    color: $fg-dim;
+    font-size: 10px;
+    font-weight: 600;
+  }
+
+  .video-fx-value {
+    color: $accent;
+    font-size: 10px;
+    font-weight: 700;
+    font-feature-settings: "tnum";
+  }
+
+  .video-fx-select {
+    color: $fg;
+    background: rgba(255, 255, 255, 0.045);
+    border: 1px solid $surface-border;
+    border-radius: 7px;
+    padding: 3px 7px;
+    font-size: 10px;
+  }
+
+  .video-fx-scale {
+    padding: 0;
+
+    trough {
+      min-height: 5px;
+      border-radius: 999px;
+      background: rgba(255, 255, 255, 0.08);
+    }
+
+    highlight {
+      min-height: 5px;
+      border-radius: 999px;
+      background: linear-gradient(90deg, $accent, $teal);
+    }
+
+    slider {
+      min-width: 13px;
+      min-height: 13px;
+      margin: -5px;
+      border-radius: 999px;
+      background: $fg;
+      border: 2px solid $accent;
+      box-shadow: none;
+    }
+  }
+
+  .video-fx-separator {
+    min-height: 1px;
+    margin: 2px 0;
+    background: $surface-border-soft;
+  }
+
+  .video-fx-section-label {
+    color: $fg-faint;
+    font-size: 9px;
+    font-weight: 800;
+    letter-spacing: 1.4px;
+  }
+
+  .video-fx-diffuser {
+    padding: 9px 10px;
+    border-radius: 9px;
+    background: rgba(255, 255, 255, 0.025);
+    border: 1px solid $surface-border-soft;
+
+    &:disabled { opacity: 0.42; }
+  }
+
+  switch {
+    min-width: 34px;
+    min-height: 18px;
+    border-radius: 999px;
+    background: rgba(255, 255, 255, 0.08);
+    border: 1px solid $surface-border;
+
+    &:checked { background: rgba($accent, 0.55); }
+    slider {
+      min-width: 14px;
+      min-height: 14px;
+      margin: 1px;
+      border-radius: 999px;
+      background: $fg;
+    }
+  }
+}
+
 .dw-video-card {
   background: $dw-card-bg;
   border: 1px solid $dw-card-border;
@@ -1947,6 +2133,34 @@ $dw-card-shadow: 0 12px 28px rgba(0, 0, 0, 0.34), 0 3px 8px rgba(0, 0, 0, 0.2);
   letter-spacing: 2px;
 }
 
+.dw-video-effect-badge {
+  color: $accent;
+  background: rgba($accent, 0.12);
+  border: 1px solid rgba($accent, 0.28);
+  border-radius: 999px;
+  padding: 2px 6px;
+  font-size: 8px;
+  font-weight: 800;
+  letter-spacing: 0.7px;
+}
+
+.dw-video-settings-slot .video-fx-button,
+.dw-video-play {
+  min-height: 0;
+  min-width: 0;
+  padding: 4px 6px;
+  border-radius: 7px;
+  color: $fg-dim;
+  background: rgba(255, 255, 255, 0.045);
+  border: 1px solid $surface-border;
+
+  &:hover {
+    color: $accent;
+    background: rgba($accent, 0.13);
+    border-color: rgba($accent, 0.3);
+  }
+}
+
 .dw-video-frame {
   background: rgba(0, 0, 0, 0.24);
   border-radius: $radius;
@@ -1961,6 +2175,40 @@ $dw-card-shadow: 0 12px 28px rgba(0, 0, 0, 0.34), 0 3px 8px rgba(0, 0, 0, 0.2);
 .dw-video-scrim {
   background: rgba(0, 0, 0, 0.08);
   border-radius: $radius;
+}
+
+.dw-video-controls {
+  padding-top: 2px;
+
+  .dw-video-seek {
+    margin: 0;
+
+    trough {
+      min-height: 4px;
+      border-radius: 999px;
+      background: rgba(255, 255, 255, 0.08);
+    }
+    highlight {
+      min-height: 4px;
+      border-radius: 999px;
+      background: $accent;
+    }
+    slider {
+      min-width: 11px;
+      min-height: 11px;
+      margin: -4px;
+      border-radius: 999px;
+      background: $fg;
+      border: 2px solid $accent;
+    }
+  }
+
+  .dw-video-time {
+    min-width: 82px;
+    color: $fg-dim;
+    font-size: 9px;
+    font-feature-settings: "tnum";
+  }
 }
 
 // ━━━━━━━━━━━━━━━ NOW PLAYING ━━━━━━━━━━━━━━━━━━━━━━━
@@ -1985,6 +2233,13 @@ $dw-card-shadow: 0 12px 28px rgba(0, 0, 0, 0.34), 0 3px 8px rgba(0, 0, 0, 0.2);
     font-weight: 700;
     color: $fg-dim;
     letter-spacing: 2px;
+  }
+
+  .dw-np-source {
+    color: $accent;
+    font-size: 8px;
+    font-weight: 800;
+    letter-spacing: 1px;
   }
 
   .dw-np-title {
@@ -2752,6 +3007,23 @@ $dw-card-shadow: 0 12px 28px rgba(0, 0, 0, 0.34), 0 3px 8px rgba(0, 0, 0, 0.2);
       letter-spacing: 0.3px;
     }
 
+    .mc-header-video-settings .video-fx-button {
+      min-height: 0;
+      min-width: 0;
+      padding: 5px 7px;
+      border-radius: 7px;
+      color: $fg-dim;
+      background: rgba(255,255,255,0.04);
+      border: 1px solid rgba(255,255,255,0.07);
+
+      &:hover,
+      &:checked {
+        color: $accent;
+        background: rgba($accent, 0.13);
+        border-color: rgba($accent, 0.3);
+      }
+    }
+
     .mc-close-btn {
       background: rgba(255,255,255,0.04);
       border: 1px solid rgba(255,255,255,0.07);
@@ -2825,7 +3097,8 @@ $dw-card-shadow: 0 12px 28px rgba(0, 0, 0, 0.34), 0 3px 8px rgba(0, 0, 0, 0.2);
     }
 
     .mc-video-btn,
-    .mc-stop-btn {
+    .mc-stop-btn,
+    .mc-video-settings-slot .video-fx-button {
       padding: 5px 9px;
       border-radius: 7px;
       background: rgba(255,255,255,0.05);
@@ -2837,6 +3110,11 @@ $dw-card-shadow: 0 12px 28px rgba(0, 0, 0, 0.34), 0 3px 8px rgba(0, 0, 0, 0.2);
     }
 
     .mc-video-btn:hover {
+      background: rgba($accent, 0.12);
+      border-color: rgba($accent, 0.28);
+      image { color: $accent; }
+    }
+    .mc-video-settings-slot .video-fx-button:hover {
       background: rgba($accent, 0.12);
       border-color: rgba($accent, 0.28);
       image { color: $accent; }

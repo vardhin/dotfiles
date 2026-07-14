@@ -3,10 +3,16 @@ import GLib from "gi://GLib"
 import Astal from "gi://Astal?version=4.0"
 import Gtk from "gi://Gtk?version=4.0"
 import Gdk from "gi://Gdk?version=4.0"
-import AstalMpris from "gi://AstalMpris"
-import { onCleanup, createBinding, For } from "ags"
+import { onCleanup } from "ags"
 import { createPoll } from "ags/time"
-import { getMediaCenterDesktopVideoState } from "./MediaCenter"
+import {
+  getMediaCenterDesktopVideoState,
+  getMediaCenterNowPlayingState,
+  makeMediaCenterVideoSettingsButton,
+  seekMediaCenterVideo,
+  subscribeMediaCenterVideoSurface,
+  toggleMediaCenterVideoPlayback,
+} from "./MediaCenter"
 
 interface CpuSample {
   total: number
@@ -109,6 +115,14 @@ function getUptime(): string {
   }
 }
 
+function formatMediaTime(seconds: number): string {
+  if (!Number.isFinite(seconds) || seconds < 0) return "0:00"
+  const whole = Math.floor(seconds)
+  const minutes = Math.floor(whole / 60)
+  const secs = whole % 60
+  return `${minutes}:${secs.toString().padStart(2, "0")}`
+}
+
 // ━━━━━━━━━━━━━━━ CAVA VISUALIZER ━━━━━━━━━━━━━━━━━━━━
 
 function MusicVisualizer() {
@@ -205,54 +219,49 @@ ascii_max_range = 100
 // ━━━━━━━━━━━━━━━ NOW PLAYING ━━━━━━━━━━━━━━━━━━━━━━━
 
 function NowPlaying() {
-  const mpris = AstalMpris.get_default()
-  const players = createBinding(mpris, "players")
+  // This is the same arbitration used by the Media Center bar marquee:
+  // internal YouTube playback first, otherwise the playing MPRIS client.
+  const nowPlaying = createPoll(getMediaCenterNowPlayingState(), 200, getMediaCenterNowPlayingState)
 
   return (
     <box
       class="dw-np-card"
       orientation={Gtk.Orientation.VERTICAL}
       spacing={8}
-      visible={players((p) => p.length > 0)}
+      visible={nowPlaying((state) => state.available)}
     >
-      <For each={players}>
-        {(player) => {
-          const title = createBinding(player, "title")
-          const artist = createBinding(player, "artist")
-          const status = createBinding(player, "playbackStatus")
-
-          return (
-            <box orientation={Gtk.Orientation.VERTICAL} spacing={6} class="dw-np-inner">
-              <box spacing={6}>
-                <image
-                  class="dw-np-status-icon"
-                  pixelSize={14}
-                  iconName={status((s) =>
-                    s === AstalMpris.PlaybackStatus.PLAYING
-                      ? "media-playback-start-symbolic"
-                      : "media-playback-pause-symbolic"
-                  )}
-                />
-                <label label="NOW PLAYING" class="dw-np-header-label" />
-              </box>
-              <label
-                class="dw-np-title"
-                label={title((t) => t || "Unknown")}
-                xalign={0}
-                wrap
-                maxWidthChars={28}
-              />
-              <label
-                class="dw-np-artist"
-                label={artist((a) => a || "Unknown artist")}
-                xalign={0}
-                wrap
-                maxWidthChars={28}
-              />
-            </box>
-          )
-        }}
-      </For>
+      <box orientation={Gtk.Orientation.VERTICAL} spacing={6} class="dw-np-inner">
+        <box spacing={6}>
+          <image
+            class="dw-np-status-icon"
+            pixelSize={14}
+            iconName={nowPlaying((state) => state.playing
+              ? "media-playback-pause-symbolic"
+              : "media-playback-start-symbolic")}
+          />
+          <label label="NOW PLAYING" class="dw-np-header-label" />
+          <label
+            label={nowPlaying((state) => state.source === "youtube" ? "YT" : "MPRIS")}
+            class="dw-np-source"
+            hexpand
+            xalign={1}
+          />
+        </box>
+        <label
+          class="dw-np-title"
+          label={nowPlaying((state) => state.title || "Unknown")}
+          xalign={0}
+          wrap
+          maxWidthChars={28}
+        />
+        <label
+          class="dw-np-artist"
+          label={nowPlaying((state) => state.artist || "Unknown artist")}
+          xalign={0}
+          wrap
+          maxWidthChars={28}
+        />
+      </box>
     </box>
   )
 }
@@ -261,51 +270,129 @@ function NowPlaying() {
 
 function AmbientMediaVideo() {
   let card: Gtk.Box | null = null
+  let surface: Gtk.Stack | null = null
   let video: Gtk.Video | null = null
-  let scrim: Gtk.Box | null = null
+  let picture: Gtk.Picture | null = null
+  let playIcon: Gtk.Image | null = null
+  let seek: Gtk.Scale | null = null
+  let time: Gtk.Label | null = null
+  let effectBadge: Gtk.Label | null = null
   let media: Gtk.MediaStream | null = null
+  let paintable: Gdk.Paintable | null = null
   let lastVisible = false
+  let updatingSeek = false
 
   const setVisible = (visible: boolean) => {
     if (card) card.visible = visible
-    if (video) video.visible = visible
-    if (scrim) scrim.visible = visible
     lastVisible = visible
   }
 
-  const syncVideo = () => {
+  const syncVideoSurface = () => {
+    if (!card || !surface || !video || !picture) return
     const state = getMediaCenterDesktopVideoState()
     const mediaCenterVisible = Boolean(app.get_window("media-center")?.visible)
-    const shouldShow = state.ready && state.playing && !mediaCenterVisible
-
-    // Reuse MediaCenter's stream. Creating a second Gtk.MediaFile here starts a
-    // second GStreamer audio pipeline whenever the popover is hidden.
-    if (state.mediaStream !== media) {
-      media = state.mediaStream
-      video?.set_media_stream(media)
-    }
+    // Keep the card visible while paused so its play button can resume it.
+    const shouldShow = state.ready && !mediaCenterVisible
 
     if (!shouldShow) {
-      if (lastVisible) {
-        setVisible(false)
+      if (paintable) {
+        paintable = null
+        picture?.set_paintable(null)
       }
+      if (media) {
+        media = null
+        video.set_media_stream(null)
+      }
+      if (lastVisible) setVisible(false)
       return
     }
 
-    if (!lastVisible) {
-      setVisible(true)
+    if (state.paintable) {
+      if (state.paintable !== paintable) {
+        paintable = state.paintable
+        picture.set_paintable(paintable)
+      }
+      if (media) {
+        media = null
+        video.set_media_stream(null)
+      }
+      if (surface.get_visible_child_name() !== "filtered") surface.set_visible_child_name("filtered")
+    } else {
+      if (paintable) {
+        paintable = null
+        picture.set_paintable(null)
+      }
+      // Fallback only: reuse the Media Center stream, never create another
+      // Gtk.MediaFile/audio pipeline on the desktop.
+      if (state.mediaStream !== media) {
+        media = state.mediaStream
+        video.set_media_stream(media)
+      }
+      if (surface.get_visible_child_name() !== "fallback") surface.set_visible_child_name("fallback")
+    }
+
+    if (!lastVisible) setVisible(true)
+  }
+
+  const syncVideoControls = () => {
+    const state = getMediaCenterDesktopVideoState()
+
+    if (playIcon) {
+      const iconName = state.playing
+        ? "media-playback-pause-symbolic"
+        : "media-playback-start-symbolic"
+      if (playIcon.icon_name !== iconName) playIcon.icon_name = iconName
+    }
+    if (seek) {
+      const ratio = state.durationSeconds > 0
+        ? Math.max(0, Math.min(1, state.positionSeconds / state.durationSeconds))
+        : 0
+      if (Math.abs(seek.get_value() - ratio) >= 0.0005) {
+        updatingSeek = true
+        seek.set_value(ratio)
+        updatingSeek = false
+      }
+      const seekable = state.durationSeconds > 0
+      if (seek.sensitive !== seekable) seek.sensitive = seekable
+    }
+    if (time) {
+      const label = `${formatMediaTime(state.positionSeconds)} / ${formatMediaTime(state.durationSeconds)}`
+      if (time.label !== label) time.label = label
+    }
+    if (effectBadge) {
+      const names: Record<string, string> = {
+        original: "ORIGINAL",
+        mono: "MONO",
+        rgb332: "8-BIT",
+        rgb565: "16-BIT",
+        full: "24-BIT",
+      }
+      const label = names[state.effectMode] || state.effectMode.toUpperCase()
+      if (effectBadge.label !== label) effectBadge.label = label
     }
   }
 
-  const sourceId = GLib.timeout_add(GLib.PRIORITY_DEFAULT, 500, () => {
-    syncVideo()
+  const unsubscribeSurface = subscribeMediaCenterVideoSurface(syncVideoSurface)
+  let initialSyncId = GLib.idle_add(GLib.PRIORITY_DEFAULT_IDLE, () => {
+    initialSyncId = 0
+    syncVideoSurface()
+    syncVideoControls()
+    return GLib.SOURCE_REMOVE
+  })
+
+  const sourceId = GLib.timeout_add(GLib.PRIORITY_DEFAULT, 250, () => {
+    syncVideoControls()
     return GLib.SOURCE_CONTINUE
   })
 
   onCleanup(() => {
+    if (initialSyncId) GLib.source_remove(initialSyncId)
     GLib.source_remove(sourceId)
+    unsubscribeSurface()
     video?.set_media_stream(null)
+    picture?.set_paintable(null)
     media = null
+    paintable = null
   })
 
   return (
@@ -320,35 +407,84 @@ function AmbientMediaVideo() {
     >
       <box class="dw-video-header" spacing={6}>
         <image iconName="camera-video-symbolic" pixelSize={14} class="dw-video-header-icon" />
-        <label label="VIDEO" class="dw-video-header-label" />
+        <label label="VIDEO" class="dw-video-header-label" hexpand xalign={0} />
+        <label
+          $={(self) => { effectBadge = self }}
+          label="8-BIT"
+          class="dw-video-effect-badge"
+        />
+        <box
+          class="dw-video-settings-slot"
+          $={(self) => { self.append(makeMediaCenterVideoSettingsButton("dw-video-settings-btn")) }}
+        />
       </box>
       <overlay class="dw-video-frame" hexpand>
         <box
           $={(self) => {
+            const videoStack = new Gtk.Stack()
+            videoStack.set_hexpand(true)
+            videoStack.set_vexpand(true)
+
             const vid = new Gtk.Video()
             vid.add_css_class("dw-video-player")
-            vid.visible = false
             vid.set_autoplay(true)
             vid.set_loop(false)
             vid.set_hexpand(true)
             vid.set_vexpand(true)
             video = vid
-            self.append(vid)
+
+            const pic = new Gtk.Picture()
+            pic.add_css_class("dw-video-player")
+            pic.add_css_class("dw-video-filtered")
+            pic.set_content_fit(Gtk.ContentFit.CONTAIN)
+            pic.set_hexpand(true)
+            pic.set_vexpand(true)
+            picture = pic
+
+            videoStack.add_named(vid, "fallback")
+            videoStack.add_named(pic, "filtered")
+            videoStack.set_visible_child_name("fallback")
+            surface = videoStack
+            self.append(videoStack)
           }}
           hexpand
           vexpand
         />
         <box
           $type="overlay"
-          $={(self) => {
-            scrim = self
-            self.visible = false
-          }}
           class="dw-video-scrim"
           hexpand
           vexpand
         />
       </overlay>
+      <box class="dw-video-controls" spacing={7}>
+        <button
+          class="dw-video-play"
+          tooltipText="Play or pause"
+          onClicked={toggleMediaCenterVideoPlayback}
+        >
+          <image
+            $={(self) => { playIcon = self }}
+            iconName="media-playback-pause-symbolic"
+            pixelSize={14}
+          />
+        </button>
+        <slider
+          $={(self) => { seek = self }}
+          class="dw-video-seek"
+          hexpand
+          value={0}
+          onChangeValue={({ value }) => {
+            if (!updatingSeek) seekMediaCenterVideo(value)
+          }}
+        />
+        <label
+          $={(self) => { time = self }}
+          class="dw-video-time"
+          label="0:00 / 0:00"
+          xalign={1}
+        />
+      </box>
     </box>
   )
 }
