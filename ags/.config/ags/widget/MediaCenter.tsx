@@ -910,9 +910,16 @@ function startFilteredVideoRenderer(filePath: string) {
       "appsink name=ags_video_sink max-buffers=1 drop=true sync=true",
       true,
     ) as Gst.Bin
-    const sink = renderBin.get_by_name("ags_video_sink") as GstApp.AppSink | null
+    const sinkElement = renderBin.get_by_name("ags_video_sink")
     const playbin = Gst.ElementFactory.make("playbin", "ags_filtered_video")
-    if (!sink || !playbin) throw new Error("Required GStreamer CPU video elements are unavailable")
+    // GstApp installs the AppSink pull-method overrides when its GI namespace
+    // is loaded. Keep this as a runtime check: a type-only use is removed by
+    // the AGS bundler, leaving try_pull_sample/try_pull_preroll undefined and
+    // silently forcing both video surfaces onto their unfiltered fallbacks.
+    if (!sinkElement || !(sinkElement instanceof GstApp.AppSink) || !playbin) {
+      throw new Error("Required GStreamer CPU video elements are unavailable")
+    }
+    const sink = sinkElement as GstApp.AppSink
 
     ;(playbin as any).video_sink = renderBin
     ;(playbin as any).flags = Number((playbin as any).flags) & ~0x06 // video only: no duplicate audio/subtitles
