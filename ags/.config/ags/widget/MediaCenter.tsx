@@ -200,11 +200,20 @@ let ytFilteredSourceFrame: Uint8Array | null = null
 let ytFilteredSourceStride = 0
 const FILTERED_FRAME_WIDTH = 420
 const FILTERED_FRAME_HEIGHT = 236
+const AMBIENT_FRAME_WIDTH = 96
+const AMBIENT_FRAME_HEIGHT = 54
 const FILTERED_OPAQUE_BLACK = (() => {
   const pixels = new Uint8Array(FILTERED_FRAME_WIDTH * FILTERED_FRAME_HEIGHT * 4)
   for (let offset = 3; offset < pixels.length; offset += 4) pixels[offset] = 255
   return pixels
 })()
+type VideoAccent = [number, number, number]
+let ytAmbientPaintable: Gdk.Paintable | null = null
+let ytAmbientHasAccents = false
+let ytAmbientAccents: VideoAccent[] = Array.from({ length: 8 }, () => [0, 0, 0] as VideoAccent)
+let ytAmbientSpectrum = new Float32Array(32)
+let ytAmbientEnergy = 0
+let ytAmbientLastRenderUs = 0
 const ytVideoSurfaceListeners = new Set<() => void>()
 const YT_MEDIA_DIR = `${GLib.get_home_dir()}/Video/TV`
 const YT_META_FILE = `${YT_MEDIA_DIR}/video-meta.json`
@@ -231,6 +240,34 @@ function notifyVideoSurfacesChanged() {
 export function subscribeMediaCenterVideoSurface(listener: () => void): () => void {
   ytVideoSurfaceListeners.add(listener)
   return () => ytVideoSurfaceListeners.delete(listener)
+}
+
+export function updateMediaCenterAudioSpectrum(values: number[]) {
+  if (!values.length) return
+
+  let energySquared = 0
+  for (let index = 0; index < ytAmbientSpectrum.length; index++) {
+    const sourcePosition = index * (values.length - 1) / Math.max(1, ytAmbientSpectrum.length - 1)
+    const left = Math.floor(sourcePosition)
+    const mix = sourcePosition - left
+    const leftValue = Number(values[left] || 0)
+    const rightValue = Number(values[Math.min(values.length - 1, left + 1)] || leftValue)
+    const target = Math.max(0, Math.min(1, (leftValue * (1 - mix) + rightValue * mix) / 100))
+    const current = ytAmbientSpectrum[index]
+    // Fast attack catches beats; the slower release produces the breathing tail.
+    const smoothing = target > current ? 0.48 : 0.14
+    const next = current + (target - current) * smoothing
+    ytAmbientSpectrum[index] = next
+    energySquared += next * next
+  }
+  const targetEnergy = Math.sqrt(energySquared / ytAmbientSpectrum.length)
+  ytAmbientEnergy += (targetEnergy - ytAmbientEnergy) * (targetEnergy > ytAmbientEnergy ? 0.4 : 0.1)
+
+  // Both Media Center and the desktop spectrum can report CAVA data. Limit
+  // texture publication to the display cadence when both are alive.
+  const now = GLib.get_monotonic_time()
+  if (now - ytAmbientLastRenderUs < 28_000) return
+  if (publishAmbientFrame(false)) notifyVideoSurfacesChanged()
 }
 
 try { Gst.init(null) } catch { /* Gtk.Video remains available as fallback */ }
@@ -767,6 +804,166 @@ function renderFilteredFrame(source: Uint8Array, sourceStride: number): Uint8Arr
   return output
 }
 
+const AMBIENT_REGIONS = [
+  [0.00, 0.00, 0.18, 0.50], // upper left edge
+  [0.00, 0.00, 0.50, 0.18], // top left
+  [0.50, 0.00, 1.00, 0.18], // top right
+  [0.82, 0.00, 1.00, 0.50], // upper right edge
+  [0.82, 0.50, 1.00, 1.00], // lower right edge
+  [0.50, 0.82, 1.00, 1.00], // bottom right
+  [0.00, 0.82, 0.50, 1.00], // bottom left
+  [0.00, 0.50, 0.18, 1.00], // lower left edge
+] as const
+
+const AMBIENT_LIGHT_POSITIONS = [
+  [0.05, 0.25, "x"],
+  [0.27, 0.05, "y"],
+  [0.73, 0.05, "y"],
+  [0.95, 0.25, "x"],
+  [0.95, 0.75, "x"],
+  [0.73, 0.95, "y"],
+  [0.27, 0.95, "y"],
+  [0.05, 0.75, "x"],
+] as const
+
+function refreshAmbientAccents(source: Uint8Array, sourceStride: number) {
+  const nextAccents: VideoAccent[] = []
+
+  for (const [xStart, yStart, xEnd, yEnd] of AMBIENT_REGIONS) {
+    const left = Math.floor(xStart * FILTERED_FRAME_WIDTH)
+    const top = Math.floor(yStart * FILTERED_FRAME_HEIGHT)
+    const right = Math.max(left + 1, Math.ceil(xEnd * FILTERED_FRAME_WIDTH))
+    const bottom = Math.max(top + 1, Math.ceil(yEnd * FILTERED_FRAME_HEIGHT))
+    let redTotal = 0
+    let greenTotal = 0
+    let blueTotal = 0
+    let totalWeight = 0
+
+    // Sparse sampling keeps the per-frame extraction cheap while still using
+    // the whole surrounding region instead of a potentially noisy edge pixel.
+    for (let y = top; y < bottom; y += 6) {
+      for (let x = left; x < right; x += 6) {
+        const offset = y * sourceStride + x * 4
+        const red = source[offset] || 0
+        const green = source[offset + 1] || 0
+        const blue = source[offset + 2] || 0
+        const maximum = Math.max(red, green, blue)
+        const minimum = Math.min(red, green, blue)
+        const saturation = maximum - minimum
+        const brightness = red * 0.299 + green * 0.587 + blue * 0.114
+        const weight = 0.22 + saturation / 255 * 0.68 + brightness / 255 * 0.10
+        redTotal += red * weight
+        greenTotal += green * weight
+        blueTotal += blue * weight
+        totalWeight += weight
+      }
+    }
+
+    let red = totalWeight > 0 ? redTotal / totalWeight : 0
+    let green = totalWeight > 0 ? greenTotal / totalWeight : 0
+    let blue = totalWeight > 0 ? blueTotal / totalWeight : 0
+    const luma = red * 0.299 + green * 0.587 + blue * 0.114
+    red = luma + (red - luma) * 1.42
+    green = luma + (green - luma) * 1.42
+    blue = luma + (blue - luma) * 1.42
+    const peak = Math.max(red, green, blue)
+    const scale = peak > 0 && peak < 92 ? 92 / peak : peak > 225 ? 225 / peak : 1
+    nextAccents.push([
+      Math.max(0, Math.min(255, red * scale)),
+      Math.max(0, Math.min(255, green * scale)),
+      Math.max(0, Math.min(255, blue * scale)),
+    ])
+  }
+
+  const blend = ytAmbientHasAccents ? 0.20 : 1
+  ytAmbientAccents = nextAccents.map((next, index) => {
+    const previous = ytAmbientAccents[index] || next
+    return [
+      previous[0] + (next[0] - previous[0]) * blend,
+      previous[1] + (next[1] - previous[1]) * blend,
+      previous[2] + (next[2] - previous[2]) * blend,
+    ]
+  })
+  ytAmbientHasAccents = true
+}
+
+function renderAmbientFrame(): Uint8Array {
+  const pixels = new Uint8Array(AMBIENT_FRAME_WIDTH * AMBIENT_FRAME_HEIGHT * 4)
+  const lights = ytAmbientAccents.map((accent, index) => {
+    const bandStart = Math.floor(index * ytAmbientSpectrum.length / ytAmbientAccents.length)
+    const bandEnd = Math.max(bandStart + 1, Math.floor((index + 1) * ytAmbientSpectrum.length / ytAmbientAccents.length))
+    let bandEnergy = 0
+    for (let band = bandStart; band < bandEnd; band++) bandEnergy += ytAmbientSpectrum[band]
+    bandEnergy /= bandEnd - bandStart
+    return {
+      accent,
+      x: AMBIENT_LIGHT_POSITIONS[index][0],
+      y: AMBIENT_LIGHT_POSITIONS[index][1],
+      normalAxis: AMBIENT_LIGHT_POSITIONS[index][2],
+      strength: 0.14 + ytAmbientEnergy * 0.40 + bandEnergy * 0.78,
+      length: 0.10 + ytAmbientEnergy * 0.10 + bandEnergy * 0.30,
+      width: 0.045 + bandEnergy * 0.065,
+    }
+  })
+
+  for (let y = 0; y < AMBIENT_FRAME_HEIGHT; y++) {
+    const ny = y / Math.max(1, AMBIENT_FRAME_HEIGHT - 1)
+    for (let x = 0; x < AMBIENT_FRAME_WIDTH; x++) {
+      const nx = x / Math.max(1, AMBIENT_FRAME_WIDTH - 1)
+      let red = 0
+      let green = 0
+      let blue = 0
+      let total = 0
+
+      for (const light of lights) {
+        const normal = light.normalAxis === "x" ? nx - light.x : ny - light.y
+        const tangent = light.normalAxis === "x" ? ny - light.y : nx - light.x
+        // A narrow source that widens along its normal reads as a soft ray,
+        // rather than turning the complete holder into a color gradient.
+        const rayWidth = light.width + Math.abs(normal) * 0.16
+        const normalShape = normal * normal / Math.max(0.0025, light.length * light.length)
+        const tangentShape = tangent * tangent / Math.max(0.001, rayWidth * rayWidth)
+        const amount = Math.exp(-(normalShape * 1.35 + tangentShape * 1.9)) * light.strength
+        red += light.accent[0] * amount
+        green += light.accent[1] * amount
+        blue += light.accent[2] * amount
+        total += amount
+      }
+
+      const offset = (y * AMBIENT_FRAME_WIDTH + x) * 4
+      if (total > 0.001) {
+        const alpha = Math.max(0, Math.min(210, Math.round(total * 185)))
+        const premultiply = alpha / 255
+        pixels[offset] = Math.max(0, Math.min(alpha, Math.round(red / total * premultiply)))
+        pixels[offset + 1] = Math.max(0, Math.min(alpha, Math.round(green / total * premultiply)))
+        pixels[offset + 2] = Math.max(0, Math.min(alpha, Math.round(blue / total * premultiply)))
+        pixels[offset + 3] = alpha
+      }
+    }
+  }
+  return pixels
+}
+
+function publishAmbientFrame(notify = true): boolean {
+  if (!ytAmbientHasAccents) return false
+  try {
+    const bytes = new GLib.Bytes(renderAmbientFrame())
+    ytAmbientPaintable = Gdk.MemoryTexture.new(
+      AMBIENT_FRAME_WIDTH,
+      AMBIENT_FRAME_HEIGHT,
+      Gdk.MemoryFormat.R8G8B8A8_PREMULTIPLIED,
+      bytes,
+      AMBIENT_FRAME_WIDTH * 4,
+    )
+    ytAmbientLastRenderUs = GLib.get_monotonic_time()
+    if (notify) notifyVideoSurfacesChanged()
+    return true
+  } catch (error) {
+    console.error("Could not publish Media Center ambient frame:", error)
+    return false
+  }
+}
+
 function publishFilteredSourceFrame() {
   if (!ytFilteredSourceFrame || ytFilteredSourceStride < FILTERED_FRAME_WIDTH * 4) return
   try {
@@ -779,6 +976,8 @@ function publishFilteredSourceFrame() {
       bytes,
       FILTERED_FRAME_WIDTH * 4,
     )
+    refreshAmbientAccents(ytFilteredSourceFrame, ytFilteredSourceStride)
+    publishAmbientFrame(false)
     notifyVideoSurfacesChanged()
   } catch (error) {
     console.error("Could not publish Media Center video frame:", error)
@@ -858,6 +1057,9 @@ function stopFilteredVideoRenderer() {
   ytFilteredPipeline = null
   ytFilteredSink = null
   ytFilteredPaintable = null
+  ytAmbientPaintable = null
+  ytAmbientHasAccents = false
+  ytAmbientAccents = Array.from({ length: 8 }, () => [0, 0, 0] as VideoAccent)
   ytFilteredSourceFrame = null
   ytFilteredSourceStride = 0
   ytFilteredLastPlaying = null
@@ -1352,6 +1554,7 @@ export function getMediaCenterDesktopVideoState() {
     filePath: ready && filePath ? filePath : "",
     mediaStream: ready ? ytMediaStream : null,
     paintable: ready ? ytFilteredPaintable : null,
+    ambientPaintable: ready ? ytAmbientPaintable : null,
     ready,
     playing: ready ? Boolean(stream?.get_playing?.()) : false,
     position: ready ? readMediaTimestampRaw() : 0,
@@ -2009,6 +2212,12 @@ function MediaTV(): { widget: Gtk.Widget; cleanup: () => void } {
   const videoSurface = new Gtk.Stack()
   videoSurface.set_hexpand(true)
   videoSurface.set_vexpand(true)
+  videoSurface.set_margin_start(18)
+  videoSurface.set_margin_end(18)
+  videoSurface.set_margin_top(10)
+  videoSurface.set_margin_bottom(10)
+  videoSurface.set_overflow(Gtk.Overflow.HIDDEN)
+  videoSurface.add_css_class("mc-tv-video-shell")
 
   const video = new Gtk.Video()
   video.set_autoplay(true)
@@ -2021,6 +2230,7 @@ function MediaTV(): { widget: Gtk.Widget; cleanup: () => void } {
 
   const filteredPicture = new Gtk.Picture()
   filteredPicture.set_content_fit(Gtk.ContentFit.CONTAIN)
+  filteredPicture.set_can_shrink(true)
   filteredPicture.set_hexpand(true)
   filteredPicture.set_vexpand(true)
   filteredPicture.add_css_class("mc-tv-video")
@@ -2028,7 +2238,21 @@ function MediaTV(): { widget: Gtk.Widget; cleanup: () => void } {
   videoSurface.add_named(filteredPicture, "filtered")
   videoSurface.set_visible_child_name("fallback")
 
-  stack.add_named(videoSurface, "video")
+  const ambientPicture = new Gtk.Picture()
+  ambientPicture.set_content_fit(Gtk.ContentFit.FILL)
+  ambientPicture.set_hexpand(true)
+  ambientPicture.set_vexpand(true)
+  ambientPicture.add_css_class("mc-tv-ambient")
+
+  const ambientShell = new Gtk.Overlay()
+  ambientShell.set_hexpand(true)
+  ambientShell.set_vexpand(true)
+  ambientShell.set_overflow(Gtk.Overflow.HIDDEN)
+  ambientShell.set_child(ambientPicture)
+  ambientShell.add_overlay(videoSurface)
+  ambientShell.add_css_class("mc-tv-ambient-shell")
+
+  stack.add_named(ambientShell, "video")
   stack.set_visible_child_name("off")
 
   let lastId = ""
@@ -2040,16 +2264,22 @@ function MediaTV(): { widget: Gtk.Widget; cleanup: () => void } {
   thumbPic.add_css_class("mc-tv-img")
   thumbHolder.append(thumbPic)
   let lastPaintable: Gdk.Paintable | null = null
+  let lastAmbientPaintable: Gdk.Paintable | null = null
   let lastFallbackStream: Gtk.MediaStream | null = null
 
   const syncVideoSurface = () => {
     const mediaCenterVisible = Boolean(app.get_window("media-center")?.visible)
     const videoSurfaceVisible = mediaCenterVisible && ytVideoVisible && ytVideoReady
     const nextPaintable = videoSurfaceVisible ? ytFilteredPaintable : null
+    const nextAmbientPaintable = videoSurfaceVisible ? ytAmbientPaintable : null
     const nextFallbackStream = videoSurfaceVisible && !nextPaintable ? ytMediaStream : null
     if (nextPaintable !== lastPaintable) {
       lastPaintable = nextPaintable
       filteredPicture.set_paintable(lastPaintable)
+    }
+    if (nextAmbientPaintable !== lastAmbientPaintable) {
+      lastAmbientPaintable = nextAmbientPaintable
+      ambientPicture.set_paintable(lastAmbientPaintable)
     }
     if (nextFallbackStream !== lastFallbackStream) {
       lastFallbackStream = nextFallbackStream
@@ -2095,6 +2325,7 @@ function MediaTV(): { widget: Gtk.Widget; cleanup: () => void } {
       if (ytTvRefreshHook === refreshThumbnail) ytTvRefreshHook = null
       unsubscribeSurface()
       filteredPicture.set_paintable(null)
+      ambientPicture.set_paintable(null)
       video.set_media_stream(null)
       thumbPic.set_paintable(null)
     },
@@ -2169,6 +2400,7 @@ ascii_max_range = 100
             for (let i = 0; i < NUM_BARS && i < values.length; i++) {
               if (bars[i]) bars[i].value = (values[i] || 0) / 100
             }
+            updateMediaCenterAudioSpectrum(values)
           }
         } catch { /* ignore */ }
         return !destroyed

@@ -12,6 +12,7 @@ import {
   seekMediaCenterVideo,
   subscribeMediaCenterVideoSurface,
   toggleMediaCenterVideoPlayback,
+  updateMediaCenterAudioSpectrum,
 } from "./MediaCenter"
 
 interface CpuSample {
@@ -170,6 +171,7 @@ ascii_max_range = 100
             for (let i = 0; i < NUM_BARS && i < values.length; i++) {
               if (bars[i]) bars[i].value = (values[i] || 0) / 100
             }
+            updateMediaCenterAudioSpectrum(values)
           }
         } catch {}
         return !destroyed
@@ -273,12 +275,14 @@ function AmbientMediaVideo() {
   let surface: Gtk.Stack | null = null
   let video: Gtk.Video | null = null
   let picture: Gtk.Picture | null = null
+  let ambientPicture: Gtk.Picture | null = null
   let playIcon: Gtk.Image | null = null
   let seek: Gtk.Scale | null = null
   let time: Gtk.Label | null = null
   let effectBadge: Gtk.Label | null = null
   let media: Gtk.MediaStream | null = null
   let paintable: Gdk.Paintable | null = null
+  let ambientPaintable: Gdk.Paintable | null = null
   let lastVisible = false
   let updatingSeek = false
 
@@ -288,7 +292,7 @@ function AmbientMediaVideo() {
   }
 
   const syncVideoSurface = () => {
-    if (!card || !surface || !video || !picture) return
+    if (!card || !surface || !video || !picture || !ambientPicture) return
     const state = getMediaCenterDesktopVideoState()
     const mediaCenterVisible = Boolean(app.get_window("media-center")?.visible)
     // Keep the card visible while paused so its play button can resume it.
@@ -299,12 +303,21 @@ function AmbientMediaVideo() {
         paintable = null
         picture?.set_paintable(null)
       }
+      if (ambientPaintable) {
+        ambientPaintable = null
+        ambientPicture?.set_paintable(null)
+      }
       if (media) {
         media = null
         video.set_media_stream(null)
       }
       if (lastVisible) setVisible(false)
       return
+    }
+
+    if (state.ambientPaintable !== ambientPaintable) {
+      ambientPaintable = state.ambientPaintable
+      ambientPicture.set_paintable(ambientPaintable)
     }
 
     if (state.paintable) {
@@ -391,8 +404,10 @@ function AmbientMediaVideo() {
     unsubscribeSurface()
     video?.set_media_stream(null)
     picture?.set_paintable(null)
+    ambientPicture?.set_paintable(null)
     media = null
     paintable = null
+    ambientPaintable = null
   })
 
   return (
@@ -421,9 +436,27 @@ function AmbientMediaVideo() {
       <overlay class="dw-video-frame" hexpand>
         <box
           $={(self) => {
+            const ambient = new Gtk.Picture()
+            ambient.set_content_fit(Gtk.ContentFit.FILL)
+            ambient.set_can_shrink(true)
+            ambient.set_hexpand(true)
+            ambient.set_vexpand(true)
+            ambient.add_css_class("dw-video-ambient-light")
+            ambientPicture = ambient
+            self.append(ambient)
+          }}
+          class="dw-video-ambient"
+          hexpand
+          vexpand
+        />
+        <box
+          $type="overlay"
+          $={(self) => {
+            self.set_overflow(Gtk.Overflow.HIDDEN)
             const videoStack = new Gtk.Stack()
             videoStack.set_hexpand(true)
             videoStack.set_vexpand(true)
+            videoStack.add_css_class("dw-video-player-shell")
 
             const vid = new Gtk.Video()
             vid.add_css_class("dw-video-player")
@@ -437,6 +470,7 @@ function AmbientMediaVideo() {
             pic.add_css_class("dw-video-player")
             pic.add_css_class("dw-video-filtered")
             pic.set_content_fit(Gtk.ContentFit.CONTAIN)
+            pic.set_can_shrink(true)
             pic.set_hexpand(true)
             pic.set_vexpand(true)
             picture = pic
@@ -447,14 +481,23 @@ function AmbientMediaVideo() {
             surface = videoStack
             self.append(videoStack)
           }}
+          class="dw-video-surface"
           hexpand
           vexpand
+          marginStart={12}
+          marginEnd={12}
+          marginTop={7}
+          marginBottom={7}
         />
         <box
           $type="overlay"
           class="dw-video-scrim"
           hexpand
           vexpand
+          marginStart={12}
+          marginEnd={12}
+          marginTop={7}
+          marginBottom={7}
         />
       </overlay>
       <box class="dw-video-controls" spacing={7}>

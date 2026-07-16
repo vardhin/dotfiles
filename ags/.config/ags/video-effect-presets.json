@@ -30,5 +30,21 @@
       "diffusion": 33,
       "glow": 2
     }
+  },
+  {
+    "id": "custom:1ae8eab2-a4d6-4fdd-b538-96f19d63849c",
+    "name": "8bitnew",
+    "settings": {
+      "fps": 60,
+      "blockSize": 5,
+      "cellSize": 12,
+      "gap": 1,
+      "colorMode": "rgb332",
+      "threshold": 128,
+      "diffuser": true,
+      "thickness": 0,
+      "diffusion": 33,
+      "glow": 2
+    }
   }
 ]

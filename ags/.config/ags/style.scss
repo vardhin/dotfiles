@@ -2168,13 +2168,31 @@ $dw-card-shadow: 0 12px 28px rgba(0, 0, 0, 0.34), 0 3px 8px rgba(0, 0, 0, 0.2);
   min-height: 135px;
 }
 
-.dw-video-player {
+.dw-video-ambient {
   border-radius: $radius;
+  background: #030407;
+  overflow: hidden;
+}
+
+.dw-video-ambient-light { border-radius: $radius; }
+
+.dw-video-surface {
+  border-radius: 8px;
+  background: #000;
+}
+
+.dw-video-player-shell {
+  border-radius: 8px;
+  background: #000;
+}
+
+.dw-video-player {
+  border-radius: 8px;
 }
 
 .dw-video-scrim {
   background: rgba(0, 0, 0, 0.08);
-  border-radius: $radius;
+  border-radius: 8px;
 }
 
 .dw-video-controls {
@@ -3081,8 +3099,17 @@ $dw-card-shadow: 0 12px 28px rgba(0, 0, 0, 0.34), 0 3px 8px rgba(0, 0, 0, 0.2);
     }
 
     .mc-tv-img { border-radius: $radius-lg; }
-    .mc-tv-video {
+    .mc-tv-ambient-shell {
       border-radius: $radius-lg;
+      background: #030407;
+    }
+    .mc-tv-ambient { border-radius: $radius-lg; }
+    .mc-tv-video-shell {
+      border-radius: 15px;
+      background: #000;
+    }
+    .mc-tv-video {
+      border-radius: 15px;
       background: #000;
     }
   }
