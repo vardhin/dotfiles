@@ -273,7 +273,7 @@ function NowPlaying() {
 function AmbientMediaVideo() {
   let card: Gtk.Box | null = null
   let surface: Gtk.Stack | null = null
-  let video: Gtk.Video | null = null
+  let fallbackPicture: Gtk.Picture | null = null
   let picture: Gtk.Picture | null = null
   let ambientPicture: Gtk.Picture | null = null
   let playIcon: Gtk.Image | null = null
@@ -292,7 +292,7 @@ function AmbientMediaVideo() {
   }
 
   const syncVideoSurface = () => {
-    if (!card || !surface || !video || !picture || !ambientPicture) return
+    if (!card || !surface || !fallbackPicture || !picture || !ambientPicture) return
     const state = getMediaCenterDesktopVideoState()
     const mediaCenterVisible = Boolean(app.get_window("media-center")?.visible)
     // Keep the card visible while paused so its play button can resume it.
@@ -309,7 +309,7 @@ function AmbientMediaVideo() {
       }
       if (media) {
         media = null
-        video.set_media_stream(null)
+        fallbackPicture.set_paintable(null)
       }
       if (lastVisible) setVisible(false)
       return
@@ -327,7 +327,7 @@ function AmbientMediaVideo() {
       }
       if (media) {
         media = null
-        video.set_media_stream(null)
+        fallbackPicture.set_paintable(null)
       }
       if (surface.get_visible_child_name() !== "filtered") surface.set_visible_child_name("filtered")
     } else {
@@ -339,7 +339,7 @@ function AmbientMediaVideo() {
       // Gtk.MediaFile/audio pipeline on the desktop.
       if (state.mediaStream !== media) {
         media = state.mediaStream
-        video.set_media_stream(media)
+        fallbackPicture.set_paintable(media)
       }
       if (surface.get_visible_child_name() !== "fallback") surface.set_visible_child_name("fallback")
     }
@@ -402,7 +402,7 @@ function AmbientMediaVideo() {
     if (initialSyncId) GLib.source_remove(initialSyncId)
     GLib.source_remove(sourceId)
     unsubscribeSurface()
-    video?.set_media_stream(null)
+    fallbackPicture?.set_paintable(null)
     picture?.set_paintable(null)
     ambientPicture?.set_paintable(null)
     media = null
@@ -433,7 +433,11 @@ function AmbientMediaVideo() {
           $={(self) => { self.append(makeMediaCenterVideoSettingsButton("dw-video-settings-btn")) }}
         />
       </box>
-      <overlay class="dw-video-frame" hexpand>
+      <overlay
+        $={(self) => { self.set_overflow(Gtk.Overflow.HIDDEN) }}
+        class="dw-video-frame"
+        hexpand
+      >
         <box
           $={(self) => {
             const ambient = new Gtk.Picture()
@@ -456,15 +460,20 @@ function AmbientMediaVideo() {
             const videoStack = new Gtk.Stack()
             videoStack.set_hexpand(true)
             videoStack.set_vexpand(true)
+            videoStack.set_overflow(Gtk.Overflow.HIDDEN)
             videoStack.add_css_class("dw-video-player-shell")
 
-            const vid = new Gtk.Video()
-            vid.add_css_class("dw-video-player")
-            vid.set_autoplay(true)
-            vid.set_loop(false)
-            vid.set_hexpand(true)
-            vid.set_vexpand(true)
-            video = vid
+            // Gtk.MediaStream implements Gdk.Paintable. Rendering it through a
+            // shrinkable picture keeps the fallback path inside this frame,
+            // unlike Gtk.Video's independently-sized controls widget.
+            const fallback = new Gtk.Picture()
+            fallback.add_css_class("dw-video-player")
+            fallback.add_css_class("dw-video-fallback")
+            fallback.set_content_fit(Gtk.ContentFit.CONTAIN)
+            fallback.set_can_shrink(true)
+            fallback.set_hexpand(true)
+            fallback.set_vexpand(true)
+            fallbackPicture = fallback
 
             const pic = new Gtk.Picture()
             pic.add_css_class("dw-video-player")
@@ -475,7 +484,7 @@ function AmbientMediaVideo() {
             pic.set_vexpand(true)
             picture = pic
 
-            videoStack.add_named(vid, "fallback")
+            videoStack.add_named(fallback, "fallback")
             videoStack.add_named(pic, "filtered")
             videoStack.set_visible_child_name("fallback")
             surface = videoStack
