@@ -2163,8 +2163,8 @@ $dw-card-shadow: 0 12px 28px rgba(0, 0, 0, 0.34), 0 3px 8px rgba(0, 0, 0, 0.2);
 
 .dw-video-stage {
   background: transparent;
-  min-width: 324px;
-  min-height: 182px;
+  min-width: 551px;
+  min-height: 310px;
 }
 
 .dw-video-ambient {
@@ -2175,22 +2175,22 @@ $dw-card-shadow: 0 12px 28px rgba(0, 0, 0, 0.34), 0 3px 8px rgba(0, 0, 0, 0.2);
 .dw-video-ambient-light { opacity: 0.96; }
 
 .dw-video-surface {
-  border-radius: 8px;
+  border-radius: $radius-lg;
   background: transparent;
 }
 
 .dw-video-player-shell {
-  border-radius: 8px;
+  border-radius: $radius-lg;
   background: #000;
 }
 
 .dw-video-player {
-  border-radius: 8px;
+  border-radius: $radius-lg;
 }
 
 .dw-video-scrim {
   background: rgba(0, 0, 0, 0.08);
-  border-radius: 8px;
+  border-radius: $radius-lg;
 }
 
 .dw-video-controls {

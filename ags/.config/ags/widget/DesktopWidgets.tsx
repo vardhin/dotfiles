@@ -6,6 +6,8 @@ import Gdk from "gi://Gdk?version=4.0"
 import { onCleanup } from "ags"
 import { createPoll } from "ags/time"
 import {
+  DESKTOP_VIDEO_MAX_HEIGHT,
+  DESKTOP_VIDEO_MAX_WIDTH,
   getMediaCenterDesktopVideoState,
   getMediaCenterNowPlayingState,
   makeMediaCenterVideoEffectSurface,
@@ -272,9 +274,14 @@ function NowPlaying() {
 
 // ━━━━━━━━━━━━━━━ AMBIENT MEDIA VIDEO ━━━━━━━━━━━━━━
 
+const DESKTOP_VIDEO_STAGE_WIDTH = 551
+const DESKTOP_VIDEO_STAGE_HEIGHT = 310
+
 function AmbientMediaVideo() {
   let card: Gtk.Box | null = null
   let surface: Gtk.Stack | null = null
+  let surfaceShell: Gtk.Widget | null = null
+  let scrim: Gtk.Widget | null = null
   let fallbackVideo: Gtk.Video | null = null
   let effectSurface: MediaCenterVideoEffectSurface | null = null
   let ambientPicture: Gtk.Picture | null = null
@@ -294,7 +301,7 @@ function AmbientMediaVideo() {
   }
 
   const syncVideoSurface = () => {
-    if (!card || !surface || !fallbackVideo || !effectSurface || !ambientPicture) return
+    if (!card || !surface || !surfaceShell || !scrim || !fallbackVideo || !effectSurface || !ambientPicture) return
     const state = getMediaCenterDesktopVideoState()
     const mediaCenterVisible = Boolean(app.get_window("media-center")?.visible)
     // Keep the card visible while paused so its play button can resume it.
@@ -316,6 +323,10 @@ function AmbientMediaVideo() {
       if (lastVisible) setVisible(false)
       return
     }
+
+    surface.set_size_request(state.frameWidth, state.frameHeight)
+    surfaceShell.set_size_request(state.frameWidth, state.frameHeight)
+    scrim.set_size_request(state.frameWidth, state.frameHeight)
 
     if (state.ambientPaintable !== ambientPaintable) {
       ambientPaintable = state.ambientPaintable
@@ -442,8 +453,8 @@ function AmbientMediaVideo() {
       <overlay
         $={(self) => { self.set_overflow(Gtk.Overflow.HIDDEN) }}
         class="dw-video-stage"
-        widthRequest={324}
-        heightRequest={182}
+        widthRequest={DESKTOP_VIDEO_STAGE_WIDTH}
+        heightRequest={DESKTOP_VIDEO_STAGE_HEIGHT}
         halign={Gtk.Align.CENTER}
       >
         <box
@@ -466,8 +477,9 @@ function AmbientMediaVideo() {
           $type="overlay"
           $={(self) => {
             self.set_overflow(Gtk.Overflow.HIDDEN)
+            surfaceShell = self
             const videoStack = new Gtk.Stack()
-            videoStack.set_size_request(240, 135)
+            videoStack.set_size_request(DESKTOP_VIDEO_MAX_WIDTH, DESKTOP_VIDEO_MAX_HEIGHT)
             videoStack.set_halign(Gtk.Align.CENTER)
             videoStack.set_valign(Gtk.Align.CENTER)
             videoStack.set_overflow(Gtk.Overflow.HIDDEN)
@@ -495,16 +507,17 @@ function AmbientMediaVideo() {
             self.append(videoStack)
           }}
           class="dw-video-surface"
-          widthRequest={240}
-          heightRequest={135}
+          widthRequest={DESKTOP_VIDEO_MAX_WIDTH}
+          heightRequest={DESKTOP_VIDEO_MAX_HEIGHT}
           halign={Gtk.Align.CENTER}
           valign={Gtk.Align.CENTER}
         />
         <box
           $type="overlay"
+          $={(self) => { scrim = self }}
           class="dw-video-scrim"
-          widthRequest={240}
-          heightRequest={135}
+          widthRequest={DESKTOP_VIDEO_MAX_WIDTH}
+          heightRequest={DESKTOP_VIDEO_MAX_HEIGHT}
           halign={Gtk.Align.CENTER}
           valign={Gtk.Align.CENTER}
         />

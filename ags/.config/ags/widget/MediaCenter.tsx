@@ -203,8 +203,8 @@ let ytFilteredSourceStride = 0
 let ytFilteredHasVisibleFrame = false
 const FILTERED_FRAME_WIDTH = 420
 const FILTERED_FRAME_HEIGHT = 236
-const DESKTOP_FILTERED_FRAME_WIDTH = 240
-const DESKTOP_FILTERED_FRAME_HEIGHT = 135
+export const DESKTOP_VIDEO_MAX_WIDTH = 408
+export const DESKTOP_VIDEO_MAX_HEIGHT = 230
 const AMBIENT_LIGHT_COUNT = 12
 const AMBIENT_FRAME_WIDTH = 224
 const AMBIENT_FRAME_HEIGHT = 126
@@ -212,6 +212,8 @@ const AMBIENT_VIDEO_INSET = 0.13
 const AMBIENT_VIDEO_SPAN = 1 - AMBIENT_VIDEO_INSET * 2
 const MEDIA_TV_STAGE_WIDTH = 568
 const MEDIA_TV_STAGE_HEIGHT = 319
+let ytFilteredFrameWidth = FILTERED_FRAME_WIDTH
+let ytFilteredFrameHeight = FILTERED_FRAME_HEIGHT
 
 // Keep Gtk.Picture attached to one dynamic paintable for the small ambient
 // texture. Its contents update in place without replacing the picture source.
@@ -783,6 +785,87 @@ function mediaUnitsToSeconds(raw: number): number {
   return raw / 1_000_000
 }
 
+function parseVideoRatio(value: unknown): number {
+  if (typeof value !== "string") return 0
+  const parts = value.split(/[:/]/).map(Number)
+  if (parts.length !== 2 || !parts.every(Number.isFinite) || parts[1] <= 0) return 0
+  return parts[0] / parts[1]
+}
+
+function fitFilteredFrame(aspectRatio: number): { width: number; height: number } {
+  const safeRatio = Number.isFinite(aspectRatio) && aspectRatio > 0
+    ? aspectRatio
+    : FILTERED_FRAME_WIDTH / FILTERED_FRAME_HEIGHT
+  const maxRatio = FILTERED_FRAME_WIDTH / FILTERED_FRAME_HEIGHT
+  const even = (value: number) => Math.max(2, Math.round(value / 2) * 2)
+
+  if (safeRatio >= maxRatio) {
+    return {
+      width: FILTERED_FRAME_WIDTH,
+      height: Math.min(FILTERED_FRAME_HEIGHT, even(FILTERED_FRAME_WIDTH / safeRatio)),
+    }
+  }
+
+  return {
+    width: Math.min(FILTERED_FRAME_WIDTH, even(FILTERED_FRAME_HEIGHT * safeRatio)),
+    height: FILTERED_FRAME_HEIGHT,
+  }
+}
+
+function fitDesktopFilteredFrame(): { width: number; height: number } {
+  const aspectRatio = ytFilteredFrameWidth / Math.max(1, ytFilteredFrameHeight)
+  if (aspectRatio >= DESKTOP_VIDEO_MAX_WIDTH / DESKTOP_VIDEO_MAX_HEIGHT) {
+    return {
+      width: DESKTOP_VIDEO_MAX_WIDTH,
+      height: Math.max(2, Math.round(DESKTOP_VIDEO_MAX_WIDTH / aspectRatio)),
+    }
+  }
+  return {
+    width: Math.max(2, Math.round(DESKTOP_VIDEO_MAX_HEIGHT * aspectRatio)),
+    height: DESKTOP_VIDEO_MAX_HEIGHT,
+  }
+}
+
+function probeFilteredFrameGeometry(filePath: string): { width: number; height: number } {
+  const ffprobe = GLib.find_program_in_path("ffprobe")
+  if (!ffprobe) return fitFilteredFrame(FILTERED_FRAME_WIDTH / FILTERED_FRAME_HEIGHT)
+
+  try {
+    const process = Gio.Subprocess.new([
+      ffprobe,
+      "-v", "error",
+      "-select_streams", "v:0",
+      "-show_entries",
+      "stream=width,height,sample_aspect_ratio,display_aspect_ratio:stream_tags=rotate:stream_side_data=rotation",
+      "-of", "json",
+      filePath,
+    ], Gio.SubprocessFlags.STDOUT_PIPE | Gio.SubprocessFlags.STDERR_SILENCE)
+    const [ok, stdout] = process.communicate_utf8(null, null)
+    if (!ok || !stdout) throw new Error("ffprobe returned no video information")
+
+    const stream = JSON.parse(stdout)?.streams?.[0]
+    const width = Number(stream?.width)
+    const height = Number(stream?.height)
+    let aspectRatio = parseVideoRatio(stream?.display_aspect_ratio)
+    if (!(aspectRatio > 0) && width > 0 && height > 0) {
+      aspectRatio = width / height
+      const sampleAspectRatio = parseVideoRatio(stream?.sample_aspect_ratio)
+      if (sampleAspectRatio > 0) aspectRatio *= sampleAspectRatio
+    }
+
+    const rotation = Number(
+      stream?.tags?.rotate
+      ?? stream?.side_data_list?.find((item: any) => Number.isFinite(Number(item?.rotation)))?.rotation
+      ?? 0,
+    )
+    if (Math.abs(rotation) % 180 === 90 && aspectRatio > 0) aspectRatio = 1 / aspectRatio
+    return fitFilteredFrame(aspectRatio)
+  } catch (error) {
+    console.error("Could not detect video aspect ratio:", error)
+    return fitFilteredFrame(FILTERED_FRAME_WIDTH / FILTERED_FRAME_HEIGHT)
+  }
+}
+
 function quantizeChannel(value: number, levels: number): number {
   return Math.round(Math.round(value * levels / 255) * 255 / levels)
 }
@@ -790,14 +873,14 @@ function quantizeChannel(value: number, levels: number): number {
 function renderFilteredFrame(
   source: Uint8Array,
   sourceStride: number,
-  width = FILTERED_FRAME_WIDTH,
-  height = FILTERED_FRAME_HEIGHT,
+  width = ytFilteredFrameWidth,
+  height = ytFilteredFrameHeight,
 ): Uint8Array {
   const rowBytes = width * 4
   const output = new Uint8Array(rowBytes * height)
 
   if (videoEffects.colorMode === "original") {
-    if (width === FILTERED_FRAME_WIDTH && height === FILTERED_FRAME_HEIGHT) {
+    if (width === ytFilteredFrameWidth && height === ytFilteredFrameHeight) {
       for (let y = 0; y < height; y++) {
         const sourceStart = y * sourceStride
         output.set(source.subarray(sourceStart, sourceStart + rowBytes), y * rowBytes)
@@ -807,13 +890,13 @@ function renderFilteredFrame(
 
     for (let y = 0; y < height; y++) {
       const sourceY = Math.min(
-        FILTERED_FRAME_HEIGHT - 1,
-        Math.floor((y + 0.5) * FILTERED_FRAME_HEIGHT / height),
+        ytFilteredFrameHeight - 1,
+        Math.floor((y + 0.5) * ytFilteredFrameHeight / height),
       )
       for (let x = 0; x < width; x++) {
         const sourceX = Math.min(
-          FILTERED_FRAME_WIDTH - 1,
-          Math.floor((x + 0.5) * FILTERED_FRAME_WIDTH / width),
+          ytFilteredFrameWidth - 1,
+          Math.floor((x + 0.5) * ytFilteredFrameWidth / width),
         )
         const sourceOffset = sourceY * sourceStride + sourceX * 4
         const outputOffset = (y * width + x) * 4
@@ -840,12 +923,12 @@ function renderFilteredFrame(
 
   const sample = (x: number, y: number): [number, number, number] => {
     const sx = Math.max(0, Math.min(
-      FILTERED_FRAME_WIDTH - 1,
-      Math.round((x + 0.5) * FILTERED_FRAME_WIDTH / width - 0.5),
+      ytFilteredFrameWidth - 1,
+      Math.round((x + 0.5) * ytFilteredFrameWidth / width - 0.5),
     ))
     const sy = Math.max(0, Math.min(
-      FILTERED_FRAME_HEIGHT - 1,
-      Math.round((y + 0.5) * FILTERED_FRAME_HEIGHT / height - 0.5),
+      ytFilteredFrameHeight - 1,
+      Math.round((y + 0.5) * ytFilteredFrameHeight / height - 0.5),
     ))
     const offset = sy * sourceStride + sx * 4
     return [source[offset] || 0, source[offset + 1] || 0, source[offset + 2] || 0]
@@ -958,35 +1041,49 @@ interface AmbientLight {
   region: readonly [number, number, number, number]
 }
 
-const ambientEdgePosition = (position: number) =>
-  AMBIENT_VIDEO_INSET + AMBIENT_VIDEO_SPAN * position
-
 // Frequencies progress clockwise from the upper-left top light. Each source
 // samples the matching part of the picture edge and is driven by exactly one
 // of the 12 CAVA slices.
-const AMBIENT_LIGHTS: readonly AmbientLight[] = [
-  { x: ambientEdgePosition(0.20), y: AMBIENT_VIDEO_INSET, directionX: 0, directionY: -1, region: [0.00, 0.00, 0.34, 0.20] },
-  { x: ambientEdgePosition(0.50), y: AMBIENT_VIDEO_INSET, directionX: 0, directionY: -1, region: [0.33, 0.00, 0.67, 0.20] },
-  { x: ambientEdgePosition(0.80), y: AMBIENT_VIDEO_INSET, directionX: 0, directionY: -1, region: [0.66, 0.00, 1.00, 0.20] },
-  { x: 1 - AMBIENT_VIDEO_INSET, y: ambientEdgePosition(0.20), directionX: 1, directionY: 0, region: [0.80, 0.00, 1.00, 0.34] },
-  { x: 1 - AMBIENT_VIDEO_INSET, y: ambientEdgePosition(0.50), directionX: 1, directionY: 0, region: [0.80, 0.33, 1.00, 0.67] },
-  { x: 1 - AMBIENT_VIDEO_INSET, y: ambientEdgePosition(0.80), directionX: 1, directionY: 0, region: [0.80, 0.66, 1.00, 1.00] },
-  { x: ambientEdgePosition(0.80), y: 1 - AMBIENT_VIDEO_INSET, directionX: 0, directionY: 1, region: [0.66, 0.80, 1.00, 1.00] },
-  { x: ambientEdgePosition(0.50), y: 1 - AMBIENT_VIDEO_INSET, directionX: 0, directionY: 1, region: [0.33, 0.80, 0.67, 1.00] },
-  { x: ambientEdgePosition(0.20), y: 1 - AMBIENT_VIDEO_INSET, directionX: 0, directionY: 1, region: [0.00, 0.80, 0.34, 1.00] },
-  { x: AMBIENT_VIDEO_INSET, y: ambientEdgePosition(0.80), directionX: -1, directionY: 0, region: [0.00, 0.66, 0.20, 1.00] },
-  { x: AMBIENT_VIDEO_INSET, y: ambientEdgePosition(0.50), directionX: -1, directionY: 0, region: [0.00, 0.33, 0.20, 0.67] },
-  { x: AMBIENT_VIDEO_INSET, y: ambientEdgePosition(0.20), directionX: -1, directionY: 0, region: [0.00, 0.00, 0.20, 0.34] },
-]
+function ambientLights(): readonly AmbientLight[] {
+  const maxWidth = AMBIENT_FRAME_WIDTH * AMBIENT_VIDEO_SPAN
+  const maxHeight = AMBIENT_FRAME_HEIGHT * AMBIENT_VIDEO_SPAN
+  const scale = Math.min(
+    maxWidth / Math.max(1, ytFilteredFrameWidth),
+    maxHeight / Math.max(1, ytFilteredFrameHeight),
+  )
+  const videoWidth = ytFilteredFrameWidth * scale / AMBIENT_FRAME_WIDTH
+  const videoHeight = ytFilteredFrameHeight * scale / AMBIENT_FRAME_HEIGHT
+  const left = (1 - videoWidth) / 2
+  const top = (1 - videoHeight) / 2
+  const right = left + videoWidth
+  const bottom = top + videoHeight
+  const edgeX = (position: number) => left + videoWidth * position
+  const edgeY = (position: number) => top + videoHeight * position
+
+  return [
+    { x: edgeX(0.20), y: top, directionX: 0, directionY: -1, region: [0.00, 0.00, 0.34, 0.20] },
+    { x: edgeX(0.50), y: top, directionX: 0, directionY: -1, region: [0.33, 0.00, 0.67, 0.20] },
+    { x: edgeX(0.80), y: top, directionX: 0, directionY: -1, region: [0.66, 0.00, 1.00, 0.20] },
+    { x: right, y: edgeY(0.20), directionX: 1, directionY: 0, region: [0.80, 0.00, 1.00, 0.34] },
+    { x: right, y: edgeY(0.50), directionX: 1, directionY: 0, region: [0.80, 0.33, 1.00, 0.67] },
+    { x: right, y: edgeY(0.80), directionX: 1, directionY: 0, region: [0.80, 0.66, 1.00, 1.00] },
+    { x: edgeX(0.80), y: bottom, directionX: 0, directionY: 1, region: [0.66, 0.80, 1.00, 1.00] },
+    { x: edgeX(0.50), y: bottom, directionX: 0, directionY: 1, region: [0.33, 0.80, 0.67, 1.00] },
+    { x: edgeX(0.20), y: bottom, directionX: 0, directionY: 1, region: [0.00, 0.80, 0.34, 1.00] },
+    { x: left, y: edgeY(0.80), directionX: -1, directionY: 0, region: [0.00, 0.66, 0.20, 1.00] },
+    { x: left, y: edgeY(0.50), directionX: -1, directionY: 0, region: [0.00, 0.33, 0.20, 0.67] },
+    { x: left, y: edgeY(0.20), directionX: -1, directionY: 0, region: [0.00, 0.00, 0.20, 0.34] },
+  ]
+}
 
 function refreshAmbientAccents(source: Uint8Array, sourceStride: number) {
   const nextAccents: VideoAccent[] = []
 
-  for (const { region: [xStart, yStart, xEnd, yEnd] } of AMBIENT_LIGHTS) {
-    const left = Math.floor(xStart * FILTERED_FRAME_WIDTH)
-    const top = Math.floor(yStart * FILTERED_FRAME_HEIGHT)
-    const right = Math.max(left + 1, Math.ceil(xEnd * FILTERED_FRAME_WIDTH))
-    const bottom = Math.max(top + 1, Math.ceil(yEnd * FILTERED_FRAME_HEIGHT))
+  for (const { region: [xStart, yStart, xEnd, yEnd] } of ambientLights()) {
+    const left = Math.floor(xStart * ytFilteredFrameWidth)
+    const top = Math.floor(yStart * ytFilteredFrameHeight)
+    const right = Math.max(left + 1, Math.ceil(xEnd * ytFilteredFrameWidth))
+    const bottom = Math.max(top + 1, Math.ceil(yEnd * ytFilteredFrameHeight))
     let redTotal = 0
     let greenTotal = 0
     let blueTotal = 0
@@ -1042,12 +1139,13 @@ function refreshAmbientAccents(source: Uint8Array, sourceStride: number) {
 
 function renderAmbientFrame(): Uint8Array {
   const pixels = new Uint8Array(AMBIENT_FRAME_WIDTH * AMBIENT_FRAME_HEIGHT * 4)
+  const descriptors = ambientLights()
   const lights = ytAmbientAccents.map((accent, index) => {
     const bandEnergy = ytAmbientSpectrum[index] || 0
     // CAVA values spend much of their time near the bottom of the range.
     // A square-root response keeps quiet slices visible while retaining peaks.
     const pulse = Math.sqrt(Math.max(0, bandEnergy))
-    const descriptor = AMBIENT_LIGHTS[index]
+    const descriptor = descriptors[index]
     return {
       accent,
       x: descriptor.x,
@@ -1137,15 +1235,15 @@ function publishAmbientFrame(notify = true): boolean {
 }
 
 function publishFilteredSourceFrame() {
-  if (!ytFilteredSourceFrame || ytFilteredSourceStride < FILTERED_FRAME_WIDTH * 4) return
+  if (!ytFilteredSourceFrame || ytFilteredSourceStride < ytFilteredFrameWidth * 4) return
   if (!ytFilteredHasVisibleFrame) {
     // The first preroll frame in several downloaded videos is solid black.
     // Do not replace the working Gtk.Video fallback with that frame. Once the
     // decoder has produced real picture data, later black scenes are valid.
     let minimum = 255
     let maximum = 0
-    for (let y = 0; y < FILTERED_FRAME_HEIGHT; y += 12) {
-      for (let x = 0; x < FILTERED_FRAME_WIDTH; x += 12) {
+    for (let y = 0; y < ytFilteredFrameHeight; y += 12) {
+      for (let x = 0; x < ytFilteredFrameWidth; x += 12) {
         const offset = y * ytFilteredSourceStride + x * 4
         const red = ytFilteredSourceFrame[offset] || 0
         const green = ytFilteredSourceFrame[offset + 1] || 0
@@ -1162,31 +1260,32 @@ function publishFilteredSourceFrame() {
     const mediaPixels = renderFilteredFrame(
       ytFilteredSourceFrame,
       ytFilteredSourceStride,
-      FILTERED_FRAME_WIDTH,
-      FILTERED_FRAME_HEIGHT,
+      ytFilteredFrameWidth,
+      ytFilteredFrameHeight,
     )
     ytFilteredTexture = Gdk.MemoryTexture.new(
-      FILTERED_FRAME_WIDTH,
-      FILTERED_FRAME_HEIGHT,
+      ytFilteredFrameWidth,
+      ytFilteredFrameHeight,
       Gdk.MemoryFormat.R8G8B8A8_PREMULTIPLIED,
       new GLib.Bytes(mediaPixels),
-      FILTERED_FRAME_WIDTH * 4,
+      ytFilteredFrameWidth * 4,
     )
-    // Render the desktop grid at its actual logical size. Scaling the 420px
-    // Media Center grid down to 240px made a 5px cell become 2.86px, forcing
-    // alternating cell widths. This texture keeps every desktop cell integral.
+    // Render the desktop grid at the widget's exact logical dimensions.
+    // Scaling the 420px Media Center texture to 408px with nearest-neighbour
+    // sampling periodically duplicates columns, producing visible wide bands.
+    const desktopFrame = fitDesktopFilteredFrame()
     const desktopPixels = renderFilteredFrame(
       ytFilteredSourceFrame,
       ytFilteredSourceStride,
-      DESKTOP_FILTERED_FRAME_WIDTH,
-      DESKTOP_FILTERED_FRAME_HEIGHT,
+      desktopFrame.width,
+      desktopFrame.height,
     )
     ytDesktopFilteredTexture = Gdk.MemoryTexture.new(
-      DESKTOP_FILTERED_FRAME_WIDTH,
-      DESKTOP_FILTERED_FRAME_HEIGHT,
+      desktopFrame.width,
+      desktopFrame.height,
       Gdk.MemoryFormat.R8G8B8A8_PREMULTIPLIED,
       new GLib.Bytes(desktopPixels),
-      DESKTOP_FILTERED_FRAME_WIDTH * 4,
+      desktopFrame.width * 4,
     )
     refreshAmbientAccents(ytFilteredSourceFrame, ytFilteredSourceStride)
     publishAmbientFrame(false)
@@ -1219,7 +1318,7 @@ function pullFilteredVideoFrame(): boolean {
       // neither the renderer nor a later effects pass can observe recycled
       // decoder memory.
       ytFilteredSourceFrame = info.data.slice()
-      ytFilteredSourceStride = Math.floor(info.data.length / FILTERED_FRAME_HEIGHT)
+      ytFilteredSourceStride = Math.floor(info.data.length / ytFilteredFrameHeight)
     } finally {
       buffer.unmap(info)
     }
@@ -1340,6 +1439,13 @@ function startFilteredVideoRenderer(filePath: string) {
   // The first frame from the new pipeline replaces it in both snapshot widgets.
   stopFilteredVideoRenderer(false)
   ytFilteredHasVisibleFrame = false
+  const geometry = probeFilteredFrameGeometry(filePath)
+  const geometryChanged =
+    geometry.width !== ytFilteredFrameWidth
+    || geometry.height !== ytFilteredFrameHeight
+  ytFilteredFrameWidth = geometry.width
+  ytFilteredFrameHeight = geometry.height
+  if (geometryChanged) notifyVideoSurfacesChanged()
 
   try {
     const renderBin = Gst.parse_bin_from_description(
@@ -1347,7 +1453,7 @@ function startFilteredVideoRenderer(filePath: string) {
       // libgstgl crashes its render thread, which restarts AGS and looks like
       // full-screen blinking. Appsink retains only the newest CPU frame.
       "videoconvert ! videoscale method=0 ! " +
-      `video/x-raw,format=RGBA,width=${FILTERED_FRAME_WIDTH},height=${FILTERED_FRAME_HEIGHT},pixel-aspect-ratio=1/1 ! ` +
+      `video/x-raw,format=RGBA,width=${ytFilteredFrameWidth},height=${ytFilteredFrameHeight},pixel-aspect-ratio=1/1 ! ` +
       "appsink name=ags_video_sink max-buffers=1 drop=true sync=true",
       true,
     ) as Gst.Bin
@@ -1794,6 +1900,7 @@ export function getMediaCenterDesktopVideoState() {
   const filePath = ytCurrentFilePath
   const ready = Boolean(ytNowPlaying && ytVideoReady && filePath && GLib.file_test(filePath, GLib.FileTest.EXISTS))
 
+  const desktopFrame = fitDesktopFilteredFrame()
   return {
     id: ytNowPlaying?.id || "",
     title: ytNowPlaying?.title || "",
@@ -1801,6 +1908,8 @@ export function getMediaCenterDesktopVideoState() {
     mediaStream: ready ? ytMediaStream : null,
     texture: ready ? ytDesktopFilteredTexture : null,
     ambientPaintable: ready ? ytAmbientPaintable : null,
+    frameWidth: ytDesktopFilteredTexture?.get_width() || desktopFrame.width,
+    frameHeight: ytDesktopFilteredTexture?.get_height() || desktopFrame.height,
     ready,
     playing: ready ? Boolean(stream?.get_playing?.()) : false,
     position: ready ? readMediaTimestampRaw() : 0,
@@ -2517,6 +2626,7 @@ function MediaTV(): { widget: Gtk.Widget; cleanup: () => void } {
   const syncVideoSurface = () => {
     const mediaCenterVisible = Boolean(app.get_window("media-center")?.visible)
     const videoSurfaceVisible = mediaCenterVisible && ytVideoVisible && ytVideoReady
+    videoSurface.set_size_request(ytFilteredFrameWidth, ytFilteredFrameHeight)
     const nextTexture = videoSurfaceVisible ? ytFilteredTexture : null
     const nextAmbientPaintable = videoSurfaceVisible ? ytAmbientPaintable : null
     const nextFallbackStream = videoSurfaceVisible && !nextTexture ? ytMediaStream : null
