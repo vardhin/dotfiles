@@ -8,7 +8,9 @@ import { createPoll } from "ags/time"
 import {
   getMediaCenterDesktopVideoState,
   getMediaCenterNowPlayingState,
+  makeMediaCenterVideoEffectSurface,
   makeMediaCenterVideoSettingsButton,
+  type MediaCenterVideoEffectSurface,
   seekMediaCenterVideo,
   subscribeMediaCenterVideoSurface,
   toggleMediaCenterVideoPlayback,
@@ -273,15 +275,15 @@ function NowPlaying() {
 function AmbientMediaVideo() {
   let card: Gtk.Box | null = null
   let surface: Gtk.Stack | null = null
-  let fallbackPicture: Gtk.Picture | null = null
-  let picture: Gtk.Picture | null = null
+  let fallbackVideo: Gtk.Video | null = null
+  let effectSurface: MediaCenterVideoEffectSurface | null = null
   let ambientPicture: Gtk.Picture | null = null
   let playIcon: Gtk.Image | null = null
   let seek: Gtk.Scale | null = null
   let time: Gtk.Label | null = null
   let effectBadge: Gtk.Label | null = null
   let media: Gtk.MediaStream | null = null
-  let paintable: Gdk.Paintable | null = null
+  let texture: Gdk.Texture | null = null
   let ambientPaintable: Gdk.Paintable | null = null
   let lastVisible = false
   let updatingSeek = false
@@ -292,24 +294,24 @@ function AmbientMediaVideo() {
   }
 
   const syncVideoSurface = () => {
-    if (!card || !surface || !fallbackPicture || !picture || !ambientPicture) return
+    if (!card || !surface || !fallbackVideo || !effectSurface || !ambientPicture) return
     const state = getMediaCenterDesktopVideoState()
     const mediaCenterVisible = Boolean(app.get_window("media-center")?.visible)
     // Keep the card visible while paused so its play button can resume it.
     const shouldShow = state.ready && !mediaCenterVisible
 
     if (!shouldShow) {
-      if (paintable) {
-        paintable = null
-        picture?.set_paintable(null)
+      if (texture) {
+        texture = null
+        effectSurface.setTexture(null)
       }
       if (ambientPaintable) {
         ambientPaintable = null
-        ambientPicture?.set_paintable(null)
+        ambientPicture.set_paintable(null)
       }
       if (media) {
         media = null
-        fallbackPicture.set_paintable(null)
+        fallbackVideo.set_media_stream(null)
       }
       if (lastVisible) setVisible(false)
       return
@@ -320,28 +322,32 @@ function AmbientMediaVideo() {
       ambientPicture.set_paintable(ambientPaintable)
     }
 
-    if (state.paintable) {
-      if (state.paintable !== paintable) {
-        paintable = state.paintable
-        picture.set_paintable(paintable)
+    if (state.texture) {
+      if (state.texture !== texture) {
+        texture = state.texture
+        effectSurface.setTexture(texture)
       }
       if (media) {
         media = null
-        fallbackPicture.set_paintable(null)
+        fallbackVideo.set_media_stream(null)
       }
-      if (surface.get_visible_child_name() !== "filtered") surface.set_visible_child_name("filtered")
+      if (surface.get_visible_child_name() !== "filtered") {
+        surface.set_visible_child_name("filtered")
+      }
     } else {
-      if (paintable) {
-        paintable = null
-        picture.set_paintable(null)
+      if (texture) {
+        texture = null
+        effectSurface.setTexture(null)
       }
-      // Fallback only: reuse the Media Center stream, never create another
-      // Gtk.MediaFile/audio pipeline on the desktop.
+      // Reuse the Media Center stream only until the filtered surface exists;
+      // this never creates a second media/audio pipeline.
       if (state.mediaStream !== media) {
         media = state.mediaStream
-        fallbackPicture.set_paintable(media)
+        fallbackVideo.set_media_stream(media)
       }
-      if (surface.get_visible_child_name() !== "fallback") surface.set_visible_child_name("fallback")
+      if (surface.get_visible_child_name() !== "fallback") {
+        surface.set_visible_child_name("fallback")
+      }
     }
 
     if (!lastVisible) setVisible(true)
@@ -402,11 +408,11 @@ function AmbientMediaVideo() {
     if (initialSyncId) GLib.source_remove(initialSyncId)
     GLib.source_remove(sourceId)
     unsubscribeSurface()
-    fallbackPicture?.set_paintable(null)
-    picture?.set_paintable(null)
+    fallbackVideo?.set_media_stream(null)
+    effectSurface?.setTexture(null)
     ambientPicture?.set_paintable(null)
     media = null
-    paintable = null
+    texture = null
     ambientPaintable = null
   })
 
@@ -435,8 +441,10 @@ function AmbientMediaVideo() {
       </box>
       <overlay
         $={(self) => { self.set_overflow(Gtk.Overflow.HIDDEN) }}
-        class="dw-video-frame"
-        hexpand
+        class="dw-video-stage"
+        widthRequest={324}
+        heightRequest={182}
+        halign={Gtk.Align.CENTER}
       >
         <box
           $={(self) => {
@@ -445,6 +453,7 @@ function AmbientMediaVideo() {
             ambient.set_can_shrink(true)
             ambient.set_hexpand(true)
             ambient.set_vexpand(true)
+            ambient.set_can_target(false)
             ambient.add_css_class("dw-video-ambient-light")
             ambientPicture = ambient
             self.append(ambient)
@@ -458,55 +467,46 @@ function AmbientMediaVideo() {
           $={(self) => {
             self.set_overflow(Gtk.Overflow.HIDDEN)
             const videoStack = new Gtk.Stack()
-            videoStack.set_hexpand(true)
-            videoStack.set_vexpand(true)
+            videoStack.set_size_request(240, 135)
+            videoStack.set_halign(Gtk.Align.CENTER)
+            videoStack.set_valign(Gtk.Align.CENTER)
             videoStack.set_overflow(Gtk.Overflow.HIDDEN)
+            videoStack.set_transition_type(Gtk.StackTransitionType.NONE)
             videoStack.add_css_class("dw-video-player-shell")
 
-            // Gtk.MediaStream implements Gdk.Paintable. Rendering it through a
-            // shrinkable picture keeps the fallback path inside this frame,
-            // unlike Gtk.Video's independently-sized controls widget.
-            const fallback = new Gtk.Picture()
-            fallback.add_css_class("dw-video-player")
-            fallback.add_css_class("dw-video-fallback")
-            fallback.set_content_fit(Gtk.ContentFit.CONTAIN)
-            fallback.set_can_shrink(true)
-            fallback.set_hexpand(true)
-            fallback.set_vexpand(true)
-            fallbackPicture = fallback
+            const mediaVideo = new Gtk.Video()
+            mediaVideo.set_autoplay(true)
+            mediaVideo.set_loop(false)
+            mediaVideo.set_hexpand(true)
+            mediaVideo.set_vexpand(true)
+            mediaVideo.add_css_class("dw-video-player")
+            fallbackVideo = mediaVideo
 
-            const pic = new Gtk.Picture()
-            pic.add_css_class("dw-video-player")
-            pic.add_css_class("dw-video-filtered")
-            pic.set_content_fit(Gtk.ContentFit.CONTAIN)
-            pic.set_can_shrink(true)
-            pic.set_hexpand(true)
-            pic.set_vexpand(true)
-            picture = pic
+            const filtered = makeMediaCenterVideoEffectSurface(
+              "dw-video-player",
+              "dw-video-filtered",
+            )
+            effectSurface = filtered
 
-            videoStack.add_named(fallback, "fallback")
-            videoStack.add_named(pic, "filtered")
+            videoStack.add_named(mediaVideo, "fallback")
+            videoStack.add_named(filtered.widget, "filtered")
             videoStack.set_visible_child_name("fallback")
             surface = videoStack
             self.append(videoStack)
           }}
           class="dw-video-surface"
-          hexpand
-          vexpand
-          marginStart={12}
-          marginEnd={12}
-          marginTop={7}
-          marginBottom={7}
+          widthRequest={240}
+          heightRequest={135}
+          halign={Gtk.Align.CENTER}
+          valign={Gtk.Align.CENTER}
         />
         <box
           $type="overlay"
           class="dw-video-scrim"
-          hexpand
-          vexpand
-          marginStart={12}
-          marginEnd={12}
-          marginTop={7}
-          marginBottom={7}
+          widthRequest={240}
+          heightRequest={135}
+          halign={Gtk.Align.CENTER}
+          valign={Gtk.Align.CENTER}
         />
       </overlay>
       <box class="dw-video-controls" spacing={7}>

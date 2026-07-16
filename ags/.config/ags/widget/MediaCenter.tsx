@@ -2,8 +2,11 @@ import app from "ags/gtk4/app"
 import Astal from "gi://Astal?version=4.0"
 import Gtk from "gi://Gtk?version=4.0"
 import Gdk from "gi://Gdk?version=4.0"
+import Gsk from "gi://Gsk?version=4.0"
 import GLib from "gi://GLib"
 import Gio from "gi://Gio"
+import GObject from "gi://GObject"
+import Graphene from "gi://Graphene?version=1.0"
 import Gst from "gi://Gst?version=1.0"
 import GstApp from "gi://GstApp?version=1.0"
 import AstalMpris from "gi://AstalMpris"
@@ -191,29 +194,83 @@ let ytCurrentQuality: "360" | "480" | null = null
 let ytCurrentFilePath: string | null = null
 let ytFilteredPipeline: Gst.Element | null = null
 let ytFilteredSink: GstApp.AppSink | null = null
-let ytFilteredPaintable: Gdk.Paintable | null = null
 let ytFilteredLastPlaying: boolean | null = null
 let ytFilteredObservedStream: Gtk.MediaStream | null = null
 let ytFilteredPlayingSignalId = 0
 let ytFilteredFrameTimerId = 0
 let ytFilteredSourceFrame: Uint8Array | null = null
 let ytFilteredSourceStride = 0
+let ytFilteredHasVisibleFrame = false
 const FILTERED_FRAME_WIDTH = 420
 const FILTERED_FRAME_HEIGHT = 236
-const AMBIENT_FRAME_WIDTH = 96
-const AMBIENT_FRAME_HEIGHT = 54
-const FILTERED_OPAQUE_BLACK = (() => {
-  const pixels = new Uint8Array(FILTERED_FRAME_WIDTH * FILTERED_FRAME_HEIGHT * 4)
-  for (let offset = 3; offset < pixels.length; offset += 4) pixels[offset] = 255
-  return pixels
-})()
+const DESKTOP_FILTERED_FRAME_WIDTH = 240
+const DESKTOP_FILTERED_FRAME_HEIGHT = 135
+const AMBIENT_LIGHT_COUNT = 12
+const AMBIENT_FRAME_WIDTH = 224
+const AMBIENT_FRAME_HEIGHT = 126
+const AMBIENT_VIDEO_INSET = 0.13
+const AMBIENT_VIDEO_SPAN = 1 - AMBIENT_VIDEO_INSET * 2
+const MEDIA_TV_STAGE_WIDTH = 568
+const MEDIA_TV_STAGE_HEIGHT = 319
+
+// Keep Gtk.Picture attached to one dynamic paintable for the small ambient
+// texture. Its contents update in place without replacing the picture source.
+const MutableTexturePaintable = GObject.registerClass({
+  Implements: [Gdk.Paintable],
+}, class MutableTexturePaintable extends GObject.Object {
+  private current: Gdk.Paintable | null = null
+  private intrinsicWidth: number
+  private intrinsicHeight: number
+
+  constructor(width = 0, height = 0) {
+    super()
+    this.intrinsicWidth = width
+    this.intrinsicHeight = height
+  }
+
+  setPaintable(paintable: Gdk.Paintable | null) {
+    if (paintable === this.current) return
+    this.current = paintable
+    this.invalidate_contents()
+  }
+
+  vfunc_snapshot(snapshot: Gdk.Snapshot, width: number, height: number) {
+    this.current?.snapshot(snapshot, width, height)
+  }
+
+  vfunc_get_current_image(): Gdk.Paintable {
+    return this.current?.get_current_image()
+      || Gdk.Paintable.new_empty(this.intrinsicWidth, this.intrinsicHeight)
+  }
+
+  vfunc_get_flags(): Gdk.PaintableFlags {
+    return Gdk.PaintableFlags.STATIC_SIZE
+  }
+
+  vfunc_get_intrinsic_width(): number {
+    return this.intrinsicWidth
+  }
+
+  vfunc_get_intrinsic_height(): number {
+    return this.intrinsicHeight
+  }
+
+  vfunc_get_intrinsic_aspect_ratio(): number {
+    return this.intrinsicHeight > 0 ? this.intrinsicWidth / this.intrinsicHeight : 0
+  }
+})
+
+type MutableTexturePaintableInstance = InstanceType<typeof MutableTexturePaintable>
+let ytFilteredTexture: Gdk.Texture | null = null
+let ytDesktopFilteredTexture: Gdk.Texture | null = null
 type VideoAccent = [number, number, number]
-let ytAmbientPaintable: Gdk.Paintable | null = null
+let ytAmbientPaintable: MutableTexturePaintableInstance | null = null
 let ytAmbientHasAccents = false
-let ytAmbientAccents: VideoAccent[] = Array.from({ length: 8 }, () => [0, 0, 0] as VideoAccent)
-let ytAmbientSpectrum = new Float32Array(32)
-let ytAmbientEnergy = 0
-let ytAmbientLastRenderUs = 0
+let ytAmbientAccents: VideoAccent[] = Array.from(
+  { length: AMBIENT_LIGHT_COUNT },
+  () => [0, 0, 0] as VideoAccent,
+)
+let ytAmbientSpectrum = new Float32Array(AMBIENT_LIGHT_COUNT)
 const ytVideoSurfaceListeners = new Set<() => void>()
 const YT_MEDIA_DIR = `${GLib.get_home_dir()}/Video/TV`
 const YT_META_FILE = `${YT_MEDIA_DIR}/video-meta.json`
@@ -242,32 +299,90 @@ export function subscribeMediaCenterVideoSurface(listener: () => void): () => vo
   return () => ytVideoSurfaceListeners.delete(listener)
 }
 
+const DirectTextureWidget = GObject.registerClass(
+  {},
+  class DirectTextureWidget extends Gtk.Widget {
+    private texture: Gdk.Texture | null = null
+
+    setTexture(texture: Gdk.Texture | null) {
+      if (texture === this.texture) return
+      this.texture = texture
+      this.queue_draw()
+    }
+
+    vfunc_snapshot(snapshot: Gtk.Snapshot) {
+      if (!this.texture) return
+      const width = this.get_width()
+      const height = this.get_height()
+      if (width <= 0 || height <= 0) return
+      const textureWidth = this.texture.get_width()
+      const textureHeight = this.texture.get_height()
+      const scale = Math.min(width / textureWidth, height / textureHeight)
+      const drawWidth = textureWidth * scale
+      const drawHeight = textureHeight * scale
+      const bounds = new Graphene.Rect()
+      bounds.init(
+        (width - drawWidth) / 2,
+        (height - drawHeight) / 2,
+        drawWidth,
+        drawHeight,
+      )
+      snapshot.append_scaled_texture(this.texture, Gsk.ScalingFilter.NEAREST, bounds)
+    }
+  },
+)
+
+type DirectTextureWidgetInstance = InstanceType<typeof DirectTextureWidget>
+
+export interface MediaCenterVideoEffectSurface {
+  widget: Gtk.Widget
+  setTexture(texture: Gdk.Texture | null): void
+}
+
+export function makeMediaCenterVideoEffectSurface(
+  ...cssClasses: string[]
+): MediaCenterVideoEffectSurface {
+  const widget = new DirectTextureWidget() as DirectTextureWidgetInstance
+  widget.set_hexpand(true)
+  widget.set_vexpand(true)
+  for (const cssClass of cssClasses) widget.add_css_class(cssClass)
+  return {
+    widget,
+    setTexture: (texture) => widget.setTexture(texture),
+  }
+}
+
 export function updateMediaCenterAudioSpectrum(values: number[]) {
   if (!values.length) return
 
-  let energySquared = 0
   for (let index = 0; index < ytAmbientSpectrum.length; index++) {
-    const sourcePosition = index * (values.length - 1) / Math.max(1, ytAmbientSpectrum.length - 1)
-    const left = Math.floor(sourcePosition)
-    const mix = sourcePosition - left
-    const leftValue = Number(values[left] || 0)
-    const rightValue = Number(values[Math.min(values.length - 1, left + 1)] || leftValue)
-    const target = Math.max(0, Math.min(1, (leftValue * (1 - mix) + rightValue * mix) / 100))
+    const bandStart = Math.floor(index * values.length / ytAmbientSpectrum.length)
+    const bandEnd = Math.max(
+      bandStart + 1,
+      Math.ceil((index + 1) * values.length / ytAmbientSpectrum.length),
+    )
+    let squaredTotal = 0
+    let sampleCount = 0
+    for (let band = bandStart; band < Math.min(values.length, bandEnd); band++) {
+      const value = Number(values[band])
+      if (!Number.isFinite(value)) continue
+      squaredTotal += value * value
+      sampleCount++
+    }
+    // RMS preserves a strong hit inside a frequency slice without allowing
+    // neighbouring slices or whole-spectrum energy to boost this light.
+    const rms = sampleCount > 0 ? Math.sqrt(squaredTotal / sampleCount) : 0
+    const target = Math.max(0, Math.min(1, rms / 100))
     const current = ytAmbientSpectrum[index]
     // Fast attack catches beats; the slower release produces the breathing tail.
     const smoothing = target > current ? 0.48 : 0.14
     const next = current + (target - current) * smoothing
     ytAmbientSpectrum[index] = next
-    energySquared += next * next
   }
-  const targetEnergy = Math.sqrt(energySquared / ytAmbientSpectrum.length)
-  ytAmbientEnergy += (targetEnergy - ytAmbientEnergy) * (targetEnergy > ytAmbientEnergy ? 0.4 : 0.1)
 
-  // Both Media Center and the desktop spectrum can report CAVA data. Limit
-  // texture publication to the display cadence when both are alive.
-  const now = GLib.get_monotonic_time()
-  if (now - ytAmbientLastRenderUs < 28_000) return
-  if (publishAmbientFrame(false)) notifyVideoSurfacesChanged()
+  // The light texture is published with the next decoded video frame. Updating
+  // it independently from the video made GTK repaint two stacked surfaces at
+  // slightly different times, which presented as a bright/dark flicker.
 }
 
 try { Gst.init(null) } catch { /* Gtk.Video remains available as fallback */ }
@@ -672,21 +787,46 @@ function quantizeChannel(value: number, levels: number): number {
   return Math.round(Math.round(value * levels / 255) * 255 / levels)
 }
 
-function renderFilteredFrame(source: Uint8Array, sourceStride: number): Uint8Array {
-  const width = FILTERED_FRAME_WIDTH
-  const height = FILTERED_FRAME_HEIGHT
+function renderFilteredFrame(
+  source: Uint8Array,
+  sourceStride: number,
+  width = FILTERED_FRAME_WIDTH,
+  height = FILTERED_FRAME_HEIGHT,
+): Uint8Array {
   const rowBytes = width * 4
-  const output = videoEffects.colorMode === "original"
-    ? new Uint8Array(rowBytes * height)
-    : FILTERED_OPAQUE_BLACK.slice()
+  const output = new Uint8Array(rowBytes * height)
 
   if (videoEffects.colorMode === "original") {
+    if (width === FILTERED_FRAME_WIDTH && height === FILTERED_FRAME_HEIGHT) {
+      for (let y = 0; y < height; y++) {
+        const sourceStart = y * sourceStride
+        output.set(source.subarray(sourceStart, sourceStart + rowBytes), y * rowBytes)
+      }
+      return output
+    }
+
     for (let y = 0; y < height; y++) {
-      const sourceStart = y * sourceStride
-      output.set(source.subarray(sourceStart, sourceStart + rowBytes), y * rowBytes)
+      const sourceY = Math.min(
+        FILTERED_FRAME_HEIGHT - 1,
+        Math.floor((y + 0.5) * FILTERED_FRAME_HEIGHT / height),
+      )
+      for (let x = 0; x < width; x++) {
+        const sourceX = Math.min(
+          FILTERED_FRAME_WIDTH - 1,
+          Math.floor((x + 0.5) * FILTERED_FRAME_WIDTH / width),
+        )
+        const sourceOffset = sourceY * sourceStride + sourceX * 4
+        const outputOffset = (y * width + x) * 4
+        output[outputOffset] = source[sourceOffset] || 0
+        output[outputOffset + 1] = source[sourceOffset + 1] || 0
+        output[outputOffset + 2] = source[sourceOffset + 2] || 0
+        output[outputOffset + 3] = 255
+      }
     }
     return output
   }
+
+  for (let offset = 3; offset < output.length; offset += 4) output[offset] = 255
 
   // The old shader divided fractional UV coordinates, which rounded
   // differently on alternating rows. Every boundary here is an integer pixel:
@@ -699,8 +839,14 @@ function renderFilteredFrame(source: Uint8Array, sourceStride: number): Uint8Arr
   const contentSize = pitch - gap
 
   const sample = (x: number, y: number): [number, number, number] => {
-    const sx = Math.max(0, Math.min(width - 1, Math.round(x)))
-    const sy = Math.max(0, Math.min(height - 1, Math.round(y)))
+    const sx = Math.max(0, Math.min(
+      FILTERED_FRAME_WIDTH - 1,
+      Math.round((x + 0.5) * FILTERED_FRAME_WIDTH / width - 0.5),
+    ))
+    const sy = Math.max(0, Math.min(
+      FILTERED_FRAME_HEIGHT - 1,
+      Math.round((y + 0.5) * FILTERED_FRAME_HEIGHT / height - 0.5),
+    ))
     const offset = sy * sourceStride + sx * 4
     return [source[offset] || 0, source[offset + 1] || 0, source[offset + 2] || 0]
   }
@@ -804,32 +950,39 @@ function renderFilteredFrame(source: Uint8Array, sourceStride: number): Uint8Arr
   return output
 }
 
-const AMBIENT_REGIONS = [
-  [0.00, 0.00, 0.18, 0.50], // upper left edge
-  [0.00, 0.00, 0.50, 0.18], // top left
-  [0.50, 0.00, 1.00, 0.18], // top right
-  [0.82, 0.00, 1.00, 0.50], // upper right edge
-  [0.82, 0.50, 1.00, 1.00], // lower right edge
-  [0.50, 0.82, 1.00, 1.00], // bottom right
-  [0.00, 0.82, 0.50, 1.00], // bottom left
-  [0.00, 0.50, 0.18, 1.00], // lower left edge
-] as const
+interface AmbientLight {
+  x: number
+  y: number
+  directionX: number
+  directionY: number
+  region: readonly [number, number, number, number]
+}
 
-const AMBIENT_LIGHT_POSITIONS = [
-  [0.05, 0.25, "x"],
-  [0.27, 0.05, "y"],
-  [0.73, 0.05, "y"],
-  [0.95, 0.25, "x"],
-  [0.95, 0.75, "x"],
-  [0.73, 0.95, "y"],
-  [0.27, 0.95, "y"],
-  [0.05, 0.75, "x"],
-] as const
+const ambientEdgePosition = (position: number) =>
+  AMBIENT_VIDEO_INSET + AMBIENT_VIDEO_SPAN * position
+
+// Frequencies progress clockwise from the upper-left top light. Each source
+// samples the matching part of the picture edge and is driven by exactly one
+// of the 12 CAVA slices.
+const AMBIENT_LIGHTS: readonly AmbientLight[] = [
+  { x: ambientEdgePosition(0.20), y: AMBIENT_VIDEO_INSET, directionX: 0, directionY: -1, region: [0.00, 0.00, 0.34, 0.20] },
+  { x: ambientEdgePosition(0.50), y: AMBIENT_VIDEO_INSET, directionX: 0, directionY: -1, region: [0.33, 0.00, 0.67, 0.20] },
+  { x: ambientEdgePosition(0.80), y: AMBIENT_VIDEO_INSET, directionX: 0, directionY: -1, region: [0.66, 0.00, 1.00, 0.20] },
+  { x: 1 - AMBIENT_VIDEO_INSET, y: ambientEdgePosition(0.20), directionX: 1, directionY: 0, region: [0.80, 0.00, 1.00, 0.34] },
+  { x: 1 - AMBIENT_VIDEO_INSET, y: ambientEdgePosition(0.50), directionX: 1, directionY: 0, region: [0.80, 0.33, 1.00, 0.67] },
+  { x: 1 - AMBIENT_VIDEO_INSET, y: ambientEdgePosition(0.80), directionX: 1, directionY: 0, region: [0.80, 0.66, 1.00, 1.00] },
+  { x: ambientEdgePosition(0.80), y: 1 - AMBIENT_VIDEO_INSET, directionX: 0, directionY: 1, region: [0.66, 0.80, 1.00, 1.00] },
+  { x: ambientEdgePosition(0.50), y: 1 - AMBIENT_VIDEO_INSET, directionX: 0, directionY: 1, region: [0.33, 0.80, 0.67, 1.00] },
+  { x: ambientEdgePosition(0.20), y: 1 - AMBIENT_VIDEO_INSET, directionX: 0, directionY: 1, region: [0.00, 0.80, 0.34, 1.00] },
+  { x: AMBIENT_VIDEO_INSET, y: ambientEdgePosition(0.80), directionX: -1, directionY: 0, region: [0.00, 0.66, 0.20, 1.00] },
+  { x: AMBIENT_VIDEO_INSET, y: ambientEdgePosition(0.50), directionX: -1, directionY: 0, region: [0.00, 0.33, 0.20, 0.67] },
+  { x: AMBIENT_VIDEO_INSET, y: ambientEdgePosition(0.20), directionX: -1, directionY: 0, region: [0.00, 0.00, 0.20, 0.34] },
+]
 
 function refreshAmbientAccents(source: Uint8Array, sourceStride: number) {
   const nextAccents: VideoAccent[] = []
 
-  for (const [xStart, yStart, xEnd, yEnd] of AMBIENT_REGIONS) {
+  for (const { region: [xStart, yStart, xEnd, yEnd] } of AMBIENT_LIGHTS) {
     const left = Math.floor(xStart * FILTERED_FRAME_WIDTH)
     const top = Math.floor(yStart * FILTERED_FRAME_HEIGHT)
     const right = Math.max(left + 1, Math.ceil(xEnd * FILTERED_FRAME_WIDTH))
@@ -863,11 +1016,11 @@ function refreshAmbientAccents(source: Uint8Array, sourceStride: number) {
     let green = totalWeight > 0 ? greenTotal / totalWeight : 0
     let blue = totalWeight > 0 ? blueTotal / totalWeight : 0
     const luma = red * 0.299 + green * 0.587 + blue * 0.114
-    red = luma + (red - luma) * 1.42
-    green = luma + (green - luma) * 1.42
-    blue = luma + (blue - luma) * 1.42
+    red = luma + (red - luma) * 1.55
+    green = luma + (green - luma) * 1.55
+    blue = luma + (blue - luma) * 1.55
     const peak = Math.max(red, green, blue)
-    const scale = peak > 0 && peak < 92 ? 92 / peak : peak > 225 ? 225 / peak : 1
+    const scale = peak > 0 && peak < 126 ? 126 / peak : peak > 235 ? 235 / peak : 1
     nextAccents.push([
       Math.max(0, Math.min(255, red * scale)),
       Math.max(0, Math.min(255, green * scale)),
@@ -890,19 +1043,22 @@ function refreshAmbientAccents(source: Uint8Array, sourceStride: number) {
 function renderAmbientFrame(): Uint8Array {
   const pixels = new Uint8Array(AMBIENT_FRAME_WIDTH * AMBIENT_FRAME_HEIGHT * 4)
   const lights = ytAmbientAccents.map((accent, index) => {
-    const bandStart = Math.floor(index * ytAmbientSpectrum.length / ytAmbientAccents.length)
-    const bandEnd = Math.max(bandStart + 1, Math.floor((index + 1) * ytAmbientSpectrum.length / ytAmbientAccents.length))
-    let bandEnergy = 0
-    for (let band = bandStart; band < bandEnd; band++) bandEnergy += ytAmbientSpectrum[band]
-    bandEnergy /= bandEnd - bandStart
+    const bandEnergy = ytAmbientSpectrum[index] || 0
+    // CAVA values spend much of their time near the bottom of the range.
+    // A square-root response keeps quiet slices visible while retaining peaks.
+    const pulse = Math.sqrt(Math.max(0, bandEnergy))
+    const descriptor = AMBIENT_LIGHTS[index]
     return {
       accent,
-      x: AMBIENT_LIGHT_POSITIONS[index][0],
-      y: AMBIENT_LIGHT_POSITIONS[index][1],
-      normalAxis: AMBIENT_LIGHT_POSITIONS[index][2],
-      strength: 0.14 + ytAmbientEnergy * 0.40 + bandEnergy * 0.78,
-      length: 0.10 + ytAmbientEnergy * 0.10 + bandEnergy * 0.30,
-      width: 0.045 + bandEnergy * 0.065,
+      x: descriptor.x,
+      y: descriptor.y,
+      directionX: descriptor.directionX,
+      directionY: descriptor.directionY,
+      strength: 0.10 + pulse * 1.18,
+      // Each beam is one CAVA slice: its own bin alone controls how far and
+      // how wide it travels away from the video.
+      length: 0.018 + pulse * 0.155,
+      width: 0.026 + pulse * 0.050,
     }
   })
 
@@ -916,14 +1072,17 @@ function renderAmbientFrame(): Uint8Array {
       let total = 0
 
       for (const light of lights) {
-        const normal = light.normalAxis === "x" ? nx - light.x : ny - light.y
-        const tangent = light.normalAxis === "x" ? ny - light.y : nx - light.x
-        // A narrow source that widens along its normal reads as a soft ray,
-        // rather than turning the complete holder into a color gradient.
-        const rayWidth = light.width + Math.abs(normal) * 0.16
-        const normalShape = normal * normal / Math.max(0.0025, light.length * light.length)
-        const tangentShape = tangent * tangent / Math.max(0.001, rayWidth * rayWidth)
-        const amount = Math.exp(-(normalShape * 1.35 + tangentShape * 1.9)) * light.strength
+        const deltaX = nx - light.x
+        const deltaY = ny - light.y
+        const normal = deltaX * light.directionX + deltaY * light.directionY
+        if (normal < 0) continue
+        const tangent = deltaX * -light.directionY + deltaY * light.directionX
+        // Rays widen as they travel away from the video edge. Their direction
+        // is one-sided, while their length follows the matching CAVA slice.
+        const rayWidth = light.width + normal * 0.28
+        const normalShape = normal * normal / Math.max(0.0001, light.length * light.length)
+        const tangentShape = tangent * tangent / Math.max(0.0001, rayWidth * rayWidth)
+        const amount = Math.exp(-(normalShape * 0.92 + tangentShape * 1.42)) * light.strength
         red += light.accent[0] * amount
         green += light.accent[1] * amount
         blue += light.accent[2] * amount
@@ -932,7 +1091,13 @@ function renderAmbientFrame(): Uint8Array {
 
       const offset = (y * AMBIENT_FRAME_WIDTH + x) * 4
       if (total > 0.001) {
-        const alpha = Math.max(0, Math.min(210, Math.round(total * 185)))
+        // Force the light tail to reach transparent before the texture edge.
+        // This prevents the outer stage boundary from reading as a hard,
+        // horizontal/vertical cutoff when a loud slice has a long ray.
+        const edgeDistance = Math.min(nx, 1 - nx, ny, 1 - ny)
+        const edgeProgress = Math.max(0, Math.min(1, edgeDistance / 0.10))
+        const edgeFade = edgeProgress * edgeProgress * (3 - 2 * edgeProgress)
+        const alpha = Math.max(0, Math.min(235, Math.round(total * edgeFade * 225)))
         const premultiply = alpha / 255
         pixels[offset] = Math.max(0, Math.min(alpha, Math.round(red / total * premultiply)))
         pixels[offset + 1] = Math.max(0, Math.min(alpha, Math.round(green / total * premultiply)))
@@ -948,16 +1113,23 @@ function publishAmbientFrame(notify = true): boolean {
   if (!ytAmbientHasAccents) return false
   try {
     const bytes = new GLib.Bytes(renderAmbientFrame())
-    ytAmbientPaintable = Gdk.MemoryTexture.new(
+    const texture = Gdk.MemoryTexture.new(
       AMBIENT_FRAME_WIDTH,
       AMBIENT_FRAME_HEIGHT,
       Gdk.MemoryFormat.R8G8B8A8_PREMULTIPLIED,
       bytes,
       AMBIENT_FRAME_WIDTH * 4,
     )
-    ytAmbientLastRenderUs = GLib.get_monotonic_time()
-    if (notify) notifyVideoSurfacesChanged()
-    return true
+    const created = ytAmbientPaintable === null
+    if (!ytAmbientPaintable) {
+      ytAmbientPaintable = new MutableTexturePaintable(
+        AMBIENT_FRAME_WIDTH,
+        AMBIENT_FRAME_HEIGHT,
+      )
+    }
+    ytAmbientPaintable.setPaintable(texture)
+    if (notify && created) notifyVideoSurfacesChanged()
+    return created
   } catch (error) {
     console.error("Could not publish Media Center ambient frame:", error)
     return false
@@ -966,18 +1138,61 @@ function publishAmbientFrame(notify = true): boolean {
 
 function publishFilteredSourceFrame() {
   if (!ytFilteredSourceFrame || ytFilteredSourceStride < FILTERED_FRAME_WIDTH * 4) return
+  if (!ytFilteredHasVisibleFrame) {
+    // The first preroll frame in several downloaded videos is solid black.
+    // Do not replace the working Gtk.Video fallback with that frame. Once the
+    // decoder has produced real picture data, later black scenes are valid.
+    let minimum = 255
+    let maximum = 0
+    for (let y = 0; y < FILTERED_FRAME_HEIGHT; y += 12) {
+      for (let x = 0; x < FILTERED_FRAME_WIDTH; x += 12) {
+        const offset = y * ytFilteredSourceStride + x * 4
+        const red = ytFilteredSourceFrame[offset] || 0
+        const green = ytFilteredSourceFrame[offset + 1] || 0
+        const blue = ytFilteredSourceFrame[offset + 2] || 0
+        minimum = Math.min(minimum, red, green, blue)
+        maximum = Math.max(maximum, red, green, blue)
+      }
+    }
+    if (maximum - minimum < 10 && maximum < 18) return
+    ytFilteredHasVisibleFrame = true
+  }
+
   try {
-    const pixels = renderFilteredFrame(ytFilteredSourceFrame, ytFilteredSourceStride)
-    const bytes = new GLib.Bytes(pixels)
-    ytFilteredPaintable = Gdk.MemoryTexture.new(
+    const mediaPixels = renderFilteredFrame(
+      ytFilteredSourceFrame,
+      ytFilteredSourceStride,
       FILTERED_FRAME_WIDTH,
       FILTERED_FRAME_HEIGHT,
-      Gdk.MemoryFormat.R8G8B8A8,
-      bytes,
+    )
+    ytFilteredTexture = Gdk.MemoryTexture.new(
+      FILTERED_FRAME_WIDTH,
+      FILTERED_FRAME_HEIGHT,
+      Gdk.MemoryFormat.R8G8B8A8_PREMULTIPLIED,
+      new GLib.Bytes(mediaPixels),
       FILTERED_FRAME_WIDTH * 4,
+    )
+    // Render the desktop grid at its actual logical size. Scaling the 420px
+    // Media Center grid down to 240px made a 5px cell become 2.86px, forcing
+    // alternating cell widths. This texture keeps every desktop cell integral.
+    const desktopPixels = renderFilteredFrame(
+      ytFilteredSourceFrame,
+      ytFilteredSourceStride,
+      DESKTOP_FILTERED_FRAME_WIDTH,
+      DESKTOP_FILTERED_FRAME_HEIGHT,
+    )
+    ytDesktopFilteredTexture = Gdk.MemoryTexture.new(
+      DESKTOP_FILTERED_FRAME_WIDTH,
+      DESKTOP_FILTERED_FRAME_HEIGHT,
+      Gdk.MemoryFormat.R8G8B8A8_PREMULTIPLIED,
+      new GLib.Bytes(desktopPixels),
+      DESKTOP_FILTERED_FRAME_WIDTH * 4,
     )
     refreshAmbientAccents(ytFilteredSourceFrame, ytFilteredSourceStride)
     publishAmbientFrame(false)
+    // DirectTextureWidget snapshots the new immutable texture. This bypasses
+    // the large custom Gdk.Paintable path that rendered as black with a single
+    // vertical artifact on this GTK backend.
     notifyVideoSurfacesChanged()
   } catch (error) {
     console.error("Could not publish Media Center video frame:", error)
@@ -988,14 +1203,22 @@ function pullFilteredVideoFrame(): boolean {
   const sink = ytFilteredSink
   if (!sink) return false
   try {
-    const sample = sink.try_pull_sample(0) || sink.try_pull_preroll(0)
+    // Preroll is the paused/seek frame; normal samples are the playing queue.
+    // Do not mix both queues while playing or an old preroll can be published
+    // immediately before the first post-seek sample.
+    const sample = ytFilteredLastPlaying
+      ? sink.try_pull_sample(0)
+      : sink.try_pull_preroll(0) || sink.try_pull_sample(0)
     if (!sample) return false
     const buffer = sample.get_buffer()
     if (!buffer) return false
     const [mapped, info] = buffer.map(Gst.MapFlags.READ)
     if (!mapped) return false
     try {
-      ytFilteredSourceFrame = new Uint8Array(info.data)
+      // GstMapInfo owns this memory only until unmap(). Keep a literal copy so
+      // neither the renderer nor a later effects pass can observe recycled
+      // decoder memory.
+      ytFilteredSourceFrame = info.data.slice()
       ytFilteredSourceStride = Math.floor(info.data.length / FILTERED_FRAME_HEIGHT)
     } finally {
       buffer.unmap(info)
@@ -1020,6 +1243,10 @@ function restartFilteredFrameTimer() {
       ytFilteredFrameTimerId = 0
       return GLib.SOURCE_REMOVE
     }
+    // Gtk.MediaStream's notify::playing is not reliable on every backend.
+    // Poll the cheap boolean here so the video-only pipeline cannot remain
+    // paused on its black preroll while the master audio stream advances.
+    syncFilteredVideoRenderer()
     pullFilteredVideoFrame()
     return GLib.SOURCE_CONTINUE
   })
@@ -1043,7 +1270,7 @@ function updateVideoEffects(patch: Partial<VideoEffectSettings>) {
   for (const listener of videoEffectsListeners) listener()
 }
 
-function stopFilteredVideoRenderer() {
+function stopFilteredVideoRenderer(clearPaintables = true) {
   if (ytFilteredObservedStream && ytFilteredPlayingSignalId) {
     try { ytFilteredObservedStream.disconnect(ytFilteredPlayingSignalId) } catch { /* ignore */ }
   }
@@ -1056,15 +1283,24 @@ function stopFilteredVideoRenderer() {
   const pipeline = ytFilteredPipeline
   ytFilteredPipeline = null
   ytFilteredSink = null
-  ytFilteredPaintable = null
-  ytAmbientPaintable = null
-  ytAmbientHasAccents = false
-  ytAmbientAccents = Array.from({ length: 8 }, () => [0, 0, 0] as VideoAccent)
   ytFilteredSourceFrame = null
   ytFilteredSourceStride = 0
   ytFilteredLastPlaying = null
-  // Drop the paintable from every UI surface before shutting down its pipeline.
-  notifyVideoSurfacesChanged()
+  if (clearPaintables) {
+    ytAmbientPaintable?.setPaintable(null)
+    ytFilteredTexture = null
+    ytDesktopFilteredTexture = null
+    ytAmbientPaintable = null
+    ytAmbientHasAccents = false
+    ytFilteredHasVisibleFrame = false
+    ytAmbientAccents = Array.from(
+      { length: AMBIENT_LIGHT_COUNT },
+      () => [0, 0, 0] as VideoAccent,
+    )
+    ytAmbientSpectrum.fill(0)
+    // Drop the paintable from every UI surface before shutting down its pipeline.
+    notifyVideoSurfacesChanged()
+  }
   if (pipeline) {
     try { pipeline.get_bus()?.remove_signal_watch() } catch { /* ignore */ }
     try { pipeline.set_state(Gst.State.NULL) } catch { /* ignore */ }
@@ -1100,7 +1336,10 @@ function seekFilteredVideoRenderer(rawTimestamp: number) {
 }
 
 function startFilteredVideoRenderer(filePath: string) {
-  stopFilteredVideoRenderer()
+  // Preserve the last immutable frame during the 360p -> 480p pipeline swap.
+  // The first frame from the new pipeline replaces it in both snapshot widgets.
+  stopFilteredVideoRenderer(false)
+  ytFilteredHasVisibleFrame = false
 
   try {
     const renderBin = Gst.parse_bin_from_description(
@@ -1199,18 +1438,20 @@ function refreshTvMode() {
 }
 
 function clearEmbeddedMedia() {
-  stopFilteredVideoRenderer()
   const prev = ytMediaStream
+  // Clear shared state before notifying video surfaces so they never receive
+  // the outgoing stream as a one-frame fallback during teardown.
+  ytMediaStream = null
+  ytVideoReady = false
+  ytCurrentFilePath = null
+  stopFilteredVideoRenderer()
+  try { ytVideo?.set_media_stream(null) } catch { /* ignore */ }
   if (prev) {
     try { (prev as any).set_playing?.(false) } catch { /* ignore */ }
     try { (prev as any).set_muted?.(true) } catch { /* ignore */ }
     try { (prev as any).set_volume?.(0) } catch { /* ignore */ }
     try { (prev as any).stream_unprepared?.() } catch { /* ignore */ }
   }
-  ytMediaStream = null
-  ytVideoReady = false
-  ytCurrentFilePath = null
-  try { ytVideo?.set_media_stream(null) } catch { /* ignore */ }
   refreshTvMode()
 }
 
@@ -1442,6 +1683,11 @@ function swapMediaToFile(filePath: string, token: number, videoId: string, quali
   ytMediaStream = media
   ytCurrentQuality = quality
   ytCurrentFilePath = filePath
+  // Bind the real playback widget immediately. Surface subscribers are also
+  // notified so the desktop mirror follows 360p -> 480p stream replacements
+  // instead of retaining the torn-down MediaFile.
+  ytVideo?.set_media_stream(media)
+  notifyVideoSurfacesChanged()
   startFilteredVideoRenderer(filePath)
   try { (ytMediaStream as any).set_playing?.(true) } catch { /* ignore */ }
   // PipeWire/PulseAudio may restore gjs streams as muted+0% — force unmute repeatedly until the stream is active.
@@ -1553,7 +1799,7 @@ export function getMediaCenterDesktopVideoState() {
     title: ytNowPlaying?.title || "",
     filePath: ready && filePath ? filePath : "",
     mediaStream: ready ? ytMediaStream : null,
-    paintable: ready ? ytFilteredPaintable : null,
+    texture: ready ? ytDesktopFilteredTexture : null,
     ambientPaintable: ready ? ytAmbientPaintable : null,
     ready,
     playing: ready ? Boolean(stream?.get_playing?.()) : false,
@@ -2184,12 +2430,13 @@ export function makeMediaCenterVideoSettingsButton(cssClass = "mc-video-settings
 function MediaTV(): { widget: Gtk.Widget; cleanup: () => void } {
   const frame = new Gtk.Box()
   frame.add_css_class("mc-tv")
-  frame.set_size_request(420, 236)
+  frame.set_size_request(MEDIA_TV_STAGE_WIDTH, MEDIA_TV_STAGE_HEIGHT)
   frame.set_halign(Gtk.Align.CENTER)
 
   const stack = new Gtk.Stack()
   stack.set_hexpand(true); stack.set_vexpand(true)
-  stack.set_size_request(420, 236)
+  stack.set_size_request(MEDIA_TV_STAGE_WIDTH, MEDIA_TV_STAGE_HEIGHT)
+  stack.set_transition_type(Gtk.StackTransitionType.NONE)
   ytTvStack = stack
   frame.append(stack)
 
@@ -2210,15 +2457,15 @@ function MediaTV(): { widget: Gtk.Widget; cleanup: () => void } {
   stack.add_named(thumbHolder, "thumb")
 
   const videoSurface = new Gtk.Stack()
-  videoSurface.set_hexpand(true)
-  videoSurface.set_vexpand(true)
-  videoSurface.set_margin_start(18)
-  videoSurface.set_margin_end(18)
-  videoSurface.set_margin_top(10)
-  videoSurface.set_margin_bottom(10)
+  videoSurface.set_size_request(FILTERED_FRAME_WIDTH, FILTERED_FRAME_HEIGHT)
+  videoSurface.set_halign(Gtk.Align.CENTER)
+  videoSurface.set_valign(Gtk.Align.CENTER)
   videoSurface.set_overflow(Gtk.Overflow.HIDDEN)
+  videoSurface.set_transition_type(Gtk.StackTransitionType.NONE)
   videoSurface.add_css_class("mc-tv-video-shell")
 
+  // The real stream stays as a startup/error fallback. As soon as the CPU
+  // renderer publishes a texture, switch to the direct 8/16/24-bit snapshot.
   const video = new Gtk.Video()
   video.set_autoplay(true)
   video.set_loop(false)
@@ -2228,26 +2475,26 @@ function MediaTV(): { widget: Gtk.Widget; cleanup: () => void } {
   ytVideo = video
   videoSurface.add_named(video, "fallback")
 
-  const filteredPicture = new Gtk.Picture()
-  filteredPicture.set_content_fit(Gtk.ContentFit.CONTAIN)
-  filteredPicture.set_can_shrink(true)
-  filteredPicture.set_hexpand(true)
-  filteredPicture.set_vexpand(true)
-  filteredPicture.add_css_class("mc-tv-video")
-  filteredPicture.add_css_class("mc-tv-filtered")
-  videoSurface.add_named(filteredPicture, "filtered")
+  const filteredSurface = makeMediaCenterVideoEffectSurface(
+    "mc-tv-video",
+    "mc-tv-filtered",
+  )
+  videoSurface.add_named(filteredSurface.widget, "filtered")
   videoSurface.set_visible_child_name("fallback")
 
   const ambientPicture = new Gtk.Picture()
   ambientPicture.set_content_fit(Gtk.ContentFit.FILL)
   ambientPicture.set_hexpand(true)
   ambientPicture.set_vexpand(true)
+  ambientPicture.set_can_target(false)
   ambientPicture.add_css_class("mc-tv-ambient")
 
   const ambientShell = new Gtk.Overlay()
   ambientShell.set_hexpand(true)
   ambientShell.set_vexpand(true)
   ambientShell.set_overflow(Gtk.Overflow.HIDDEN)
+  // This larger transparent canvas sits behind the centered video. Rays start
+  // at the video edge and travel outward through the surrounding panel.
   ambientShell.set_child(ambientPicture)
   ambientShell.add_overlay(videoSurface)
   ambientShell.add_css_class("mc-tv-ambient-shell")
@@ -2258,24 +2505,24 @@ function MediaTV(): { widget: Gtk.Widget; cleanup: () => void } {
   let lastId = ""
   const thumbPic = new Gtk.Picture()
   thumbPic.set_content_fit(Gtk.ContentFit.COVER)
-  thumbPic.set_hexpand(true)
-  thumbPic.set_vexpand(true)
-  thumbPic.set_size_request(420, 236)
+  thumbPic.set_halign(Gtk.Align.CENTER)
+  thumbPic.set_valign(Gtk.Align.CENTER)
+  thumbPic.set_size_request(FILTERED_FRAME_WIDTH, FILTERED_FRAME_HEIGHT)
   thumbPic.add_css_class("mc-tv-img")
   thumbHolder.append(thumbPic)
-  let lastPaintable: Gdk.Paintable | null = null
+  let lastTexture: Gdk.Texture | null = null
   let lastAmbientPaintable: Gdk.Paintable | null = null
   let lastFallbackStream: Gtk.MediaStream | null = null
 
   const syncVideoSurface = () => {
     const mediaCenterVisible = Boolean(app.get_window("media-center")?.visible)
     const videoSurfaceVisible = mediaCenterVisible && ytVideoVisible && ytVideoReady
-    const nextPaintable = videoSurfaceVisible ? ytFilteredPaintable : null
+    const nextTexture = videoSurfaceVisible ? ytFilteredTexture : null
     const nextAmbientPaintable = videoSurfaceVisible ? ytAmbientPaintable : null
-    const nextFallbackStream = videoSurfaceVisible && !nextPaintable ? ytMediaStream : null
-    if (nextPaintable !== lastPaintable) {
-      lastPaintable = nextPaintable
-      filteredPicture.set_paintable(lastPaintable)
+    const nextFallbackStream = videoSurfaceVisible && !nextTexture ? ytMediaStream : null
+    if (nextTexture !== lastTexture) {
+      lastTexture = nextTexture
+      filteredSurface.setTexture(lastTexture)
     }
     if (nextAmbientPaintable !== lastAmbientPaintable) {
       lastAmbientPaintable = nextAmbientPaintable
@@ -2285,7 +2532,7 @@ function MediaTV(): { widget: Gtk.Widget; cleanup: () => void } {
       lastFallbackStream = nextFallbackStream
       video.set_media_stream(lastFallbackStream)
     }
-    const desiredSurface = lastPaintable ? "filtered" : "fallback"
+    const desiredSurface = lastTexture ? "filtered" : "fallback"
     if (videoSurface.get_visible_child_name() !== desiredSurface) {
       videoSurface.set_visible_child_name(desiredSurface)
     }
@@ -2324,9 +2571,10 @@ function MediaTV(): { widget: Gtk.Widget; cleanup: () => void } {
     cleanup: () => {
       if (ytTvRefreshHook === refreshThumbnail) ytTvRefreshHook = null
       unsubscribeSurface()
-      filteredPicture.set_paintable(null)
+      filteredSurface.setTexture(null)
       ambientPicture.set_paintable(null)
       video.set_media_stream(null)
+      if (ytVideo === video) ytVideo = null
       thumbPic.set_paintable(null)
     },
   }

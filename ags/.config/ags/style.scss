@@ -2161,24 +2161,22 @@ $dw-card-shadow: 0 12px 28px rgba(0, 0, 0, 0.34), 0 3px 8px rgba(0, 0, 0, 0.2);
   }
 }
 
-.dw-video-frame {
-  background: rgba(0, 0, 0, 0.24);
-  border-radius: $radius;
-  min-width: 240px;
-  min-height: 135px;
+.dw-video-stage {
+  background: transparent;
+  min-width: 324px;
+  min-height: 182px;
 }
 
 .dw-video-ambient {
-  border-radius: $radius;
-  background: #030407;
+  background: transparent;
   overflow: hidden;
 }
 
-.dw-video-ambient-light { border-radius: $radius; }
+.dw-video-ambient-light { opacity: 0.96; }
 
 .dw-video-surface {
   border-radius: 8px;
-  background: #000;
+  background: transparent;
 }
 
 .dw-video-player-shell {
@@ -3085,10 +3083,7 @@ $dw-card-shadow: 0 12px 28px rgba(0, 0, 0, 0.34), 0 3px 8px rgba(0, 0, 0, 0.2);
   .mc-tv-row { padding: 0 14px; }
 
   .mc-tv {
-    border-radius: $radius-lg;
-    border: 1px solid rgba(255,255,255,0.08);
-    background: rgba(0,0,0,0.55);
-    overflow: hidden;
+    background: transparent;
 
     .mc-tv-off-icon { color: rgba(255,255,255,0.18); }
     .mc-tv-off-label {
@@ -3100,17 +3095,18 @@ $dw-card-shadow: 0 12px 28px rgba(0, 0, 0, 0.34), 0 3px 8px rgba(0, 0, 0, 0.2);
 
     .mc-tv-img { border-radius: $radius-lg; }
     .mc-tv-ambient-shell {
-      border-radius: $radius-lg;
-      background: #030407;
+      background: transparent;
     }
-    .mc-tv-ambient { border-radius: $radius-lg; }
+    .mc-tv-ambient {
+      opacity: 0.96;
+    }
     .mc-tv-video-shell {
-      border-radius: 15px;
+      border-radius: $radius-lg;
       background: #000;
     }
     .mc-tv-video {
-      border-radius: 15px;
-      background: #000;
+      border-radius: $radius-lg;
+      background: transparent;
     }
   }
 
