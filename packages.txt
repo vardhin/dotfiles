@@ -51,7 +51,7 @@ cliphist
 wl-clip-persist
 
 # Terminal + CLI
-kitty
+ghostty
 zsh
 zsh-theme-powerlevel10k
 eza

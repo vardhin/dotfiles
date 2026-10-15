@@ -4,3 +4,4 @@
 
 aylurs-gtk-shell-git   # AGS v3
 libastal-meta          # AstalApps, Battery, Hyprland, Mpris, Notifd, PowerProfiles, Tray, Wp
+otf-departure-mono-nerd # Ghostty pixel font (paru also resolves it if it lands in extra)

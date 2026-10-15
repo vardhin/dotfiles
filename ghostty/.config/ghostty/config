@@ -1,0 +1,36 @@
+# Ghostty: the terminal half of the LED panel.
+# Era colors and the dot-matrix custom shader arrive in Phases 5 and 6;
+# until then this keeps Ghostty's default palette.
+
+# ── Font ─────────────────────────────────────────────────────────────
+# Departure Mono: a monospace pixel font drawn on an 11 px grid with
+# 5×7-style capitals. 8.25 pt = 11 px, one font pixel per screen pixel.
+# Pixel fonts are only perfectly crisp at an integer monitor scale; at the
+# current 1.2 they render slightly soft (see monitor.conf).
+font-family = DepartureMono Nerd Font
+font-size = 8.25
+font-feature = -calt
+font-feature = -liga
+
+# ── Window: no chrome ────────────────────────────────────────────────
+window-decoration = none
+gtk-titlebar = false
+window-padding-x = 4
+window-padding-y = 4
+window-padding-balance = true
+window-padding-color = extend
+confirm-close-surface = false
+resize-overlay = never
+
+# Translucent so Hyprland's blur shows through, as kitty did.
+background-opacity = 0.92
+
+# ── Cursor ───────────────────────────────────────────────────────────
+cursor-style = block
+cursor-style-blink = false
+shell-integration-features = no-cursor
+
+# ── Behaviour ────────────────────────────────────────────────────────
+copy-on-select = clipboard
+mouse-hide-while-typing = true
+app-notifications = no-clipboard-copy

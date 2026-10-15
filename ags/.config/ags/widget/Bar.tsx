@@ -15,8 +15,10 @@ import { createPoll } from "ags/time"
 import { execAsync } from "ags/process"
 import { notify } from "../lib/notify"
 
-const DROPDOWN_KITTY_CLASS = "ags-dropdown-cli"
-const DROPDOWN_KITTY_TITLE = "AGS CLI"
+// Must be a valid GTK application ID (dot-separated) or Ghostty ignores --class.
+const DROPDOWN_CLASS = "ags.dropdown-cli"
+const DROPDOWN_CLASS_RE = "ags\\.dropdown-cli"
+const DROPDOWN_TITLE = "AGS CLI"
 const DROPDOWN_SCRATCH_WORKSPACE = "ags-cli-scratch"
 const DROPDOWN_SPAWN_GRACE_MS = 650
 
@@ -76,7 +78,7 @@ function dropdownCliClient(): HyprClientInfo | null {
   const clients = listHyprClients()
   for (const client of clients) {
     const cls = (client.class || client.initialClass || "").toLowerCase()
-    if (cls === DROPDOWN_KITTY_CLASS) return client
+    if (cls === DROPDOWN_CLASS) return client
   }
   return null
 }
@@ -94,7 +96,7 @@ function moveDropdownToWorkspace(workspaceName: string) {
   const hyprland = AstalHyprland.get_default()
   hyprland.dispatch(
     "movetoworkspacesilent",
-    `name:${workspaceName},class:^(${DROPDOWN_KITTY_CLASS})$`,
+    `name:${workspaceName},class:^(${DROPDOWN_CLASS_RE})$`,
   )
 }
 
@@ -108,7 +110,7 @@ function showDropdownCli() {
   if (!target) return
   moveDropdownToWorkspace(target)
   const hyprland = AstalHyprland.get_default()
-  hyprland.dispatch("focuswindow", `class:^(${DROPDOWN_KITTY_CLASS})$`)
+  hyprland.dispatch("focuswindow", `class:^(${DROPDOWN_CLASS_RE})$`)
   dropdownCliHidden = false
 }
 
@@ -125,7 +127,7 @@ function maybeAutoHideDropdownCli(eventArgs?: string) {
     const focused = hyprland.focusedClient
     focusedClass = (focused?.class || focused?.initialClass || "").toLowerCase()
   }
-  if (focusedClass === DROPDOWN_KITTY_CLASS) return
+  if (focusedClass === DROPDOWN_CLASS) return
 
   hideDropdownCli()
 }
@@ -159,13 +161,10 @@ export function toggleDropdownCli() {
     dropdownCliSpawnGraceUntil = Date.now() + DROPDOWN_SPAWN_GRACE_MS
     dropdownCliHidden = false
     execAsync([
-      "kitty",
-      "--class",
-      DROPDOWN_KITTY_CLASS,
-      "--title",
-      DROPDOWN_KITTY_TITLE,
-      "-o",
-      "background_opacity=0.0",
+      "ghostty",
+      `--class=${DROPDOWN_CLASS}`,
+      `--title=${DROPDOWN_TITLE}`,
+      "--background-opacity=0",
     ]).catch(console.error)
     return
   }
@@ -266,7 +265,7 @@ function ActiveWindow() {
   const focused = createBinding(hyprland, "focusedClient")
   const user = GLib.getenv("USER") || "user"
   const host = GLib.get_host_name()
-  const promptPreview = `${user}@${host}:~$ kitty`
+  const promptPreview = `${user}@${host}:~$ ghostty`
 
   return (
     <box class="active-window" hexpand>

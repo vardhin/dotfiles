@@ -1,6 +1,6 @@
 # dotfiles
 
-Arch Linux rice: Hyprland + AGS v3, zsh. Managed with GNU Stow, one module per top-level folder.
+Arch Linux rice: Hyprland + AGS v3, Ghostty, zsh. Managed with GNU Stow, one module per top-level folder.
 
 > Mid re-rice. The plan (Hyprland + Quickshell + the dot-matrix "Dot Shell") lives in the
 > *Arch Rice* doc, tab **Re-rice plan**. This README describes what is in the repo today.
@@ -23,11 +23,11 @@ Re-running is safe.
 ```
 dotfiles/
 ├── hypr/.config/hypr/          → ~/.config/hypr
-│   ├── hyprland.conf           entry point, sources config/*
+│   ├── hyprland.conf           entry point, sources config/* (defaults.conf first)
 │   ├── config/
 │   │   ├── defaults.conf       $TERMINAL, $BROWSER, $EDITOR, $scriptPath, idle handler
 │   │   ├── autostart.conf      boot sound, awww, ags, polkit, clipboard, idle
-│   │   ├── decorations.conf    gaps, borders, blur, shadows, animations
+│   │   ├── decorations.conf    zero chrome: one-dot gutter, focus by dim, blur, animations
 │   │   ├── environment.conf    env vars
 │   │   ├── input.conf          keyboard, touchpad, gestures
 │   │   ├── keybinds.conf       every bind
@@ -45,6 +45,7 @@ dotfiles/
 │   ├── scripts/apply-theme.sh  pushes a preset to Hyprland + wallpaper
 │   ├── style.scss, assets/icons/
 │   └── browser.json            NOT tracked: YouTube Music auth headers, see below
+├── ghostty/.config/ghostty/    → ~/.config/ghostty  (Departure Mono pixel font, no chrome)
 ├── zsh/.zshrc                  → ~/.zshrc  (oh-my-zsh, powerlevel10k, eza, zoxide)
 ├── packages.txt                pacman packages
 ├── packages-aur.txt            AUR packages
