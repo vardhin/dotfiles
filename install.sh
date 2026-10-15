@@ -52,8 +52,16 @@ backup_conflicts() {
   while IFS= read -r -d '' src; do
     rel=${src#"$DOTFILES/$module/"}
     target="$HOME/$rel"
-    # Already ours, directly or through a folded directory link: never touch it.
-    [[ -e $target && $(readlink -f "$target") == "$(readlink -f "$src")" ]] && continue
+    if [[ -e $target && $(readlink -f "$target") == "$(readlink -f "$src")" ]]; then
+      # A hand-made absolute link to the repo file: same content, but stow
+      # refuses links it didn't make. Drop it so stow can make its own.
+      if [[ -L $target && $(readlink "$target") == /* ]]; then
+        rm "$target"
+        log "replaced hand-made link ~/$rel"
+      fi
+      # Otherwise already ours, directly or through a folded directory link.
+      continue
+    fi
     if [[ -e $target && ! -L $target ]]; then
       mkdir -p "$BACKUP/$(dirname "$rel")"
       mv "$target" "$BACKUP/$rel"
@@ -65,14 +73,15 @@ backup_conflicts() {
 link_modules() {
   local dry=${1:-}
   command -v stow >/dev/null || { echo "stow is not installed (sudo pacman -S stow)" >&2; exit 1; }
+  if [[ $dry == --dry-run ]]; then
+    for m in "${MODULES[@]}"; do stow -n -v -d "$DOTFILES" -t "$HOME" --restow "$m" || true; done
+    return
+  fi
+  # Clear every conflict first: one stray link trips stow on every module.
+  for m in "${MODULES[@]}"; do backup_conflicts "$m"; done
   for m in "${MODULES[@]}"; do
-    if [[ $dry == --dry-run ]]; then
-      stow -n -v -d "$DOTFILES" -t "$HOME" --restow "$m" || true
-    else
-      backup_conflicts "$m"
-      stow -d "$DOTFILES" -t "$HOME" --restow "$m"
-      log "linked $m"
-    fi
+    stow -d "$DOTFILES" -t "$HOME" --restow "$m"
+    log "linked $m"
   done
 }
 
