@@ -1,3 +1,9 @@
+# System summary on each new interactive terminal. It prints, so it must run
+# before the p10k instant prompt below, or p10k warns about console output.
+if [[ -o interactive ]] && (( $+commands[fastfetch] )); then
+  fastfetch --config examples/26
+fi
+
 # Powerlevel10k instant prompt. Keep this near the top of ~/.zshrc.
 if [[ -r "${XDG_CACHE_HOME:-$HOME/.cache}/p10k-instant-prompt-${(%):-%n}.zsh" ]]; then
   source "${XDG_CACHE_HOME:-$HOME/.cache}/p10k-instant-prompt-${(%):-%n}.zsh"
@@ -153,8 +159,3 @@ bindkey '^[OB' history-substring-search-down
 
 # Powerlevel10k prompt configuration.
 [[ -f "$HOME/.p10k.zsh" ]] && source "$HOME/.p10k.zsh"
-
-# System summary on each new interactive terminal.
-if [[ -o interactive ]] && (( $+commands[fastfetch] )); then
-  fastfetch --config examples/26
-fi
