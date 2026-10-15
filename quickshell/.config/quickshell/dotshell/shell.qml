@@ -4,8 +4,8 @@
 // Dot Shell: every pane on one shared dot grid.
 // Phase 2 runs beside AGS: only the top LED strip lives here so far.
 //
-//   qs -c dotshell            run (saving any file here hot-reloads the shell)
-//   qs -c dotshell ipc show   list IPC targets
+//   qs -p ~/.config/quickshell/dotshell   run (saving any file here hot-reloads the shell)
+//   qs -p ~/.config/quickshell/dotshell ipc show   list IPC targets
 import QtQuick
 import Quickshell
 import Quickshell.Io

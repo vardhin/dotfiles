@@ -45,7 +45,7 @@ dotfiles/
 │   ├── scripts/apply-theme.sh  pushes a preset to Hyprland + wallpaper
 │   ├── style.scss, assets/icons/
 │   └── browser.json            NOT tracked: YouTube Music auth headers, see below
-├── quickshell/.config/quickshell/dotshell/   → ~/.config/quickshell/dotshell  (run: qs -c dotshell)
+├── quickshell/.config/quickshell/dotshell/   → ~/.config/quickshell/dotshell  (run: qs -p ~/.config/quickshell/dotshell)
 │   ├── shell.qml               entry point; IPC targets strip, shell
 │   ├── Tokens.qml              era, pitch, dot size, depth; persisted in
 │   │                           ~/.local/state/dotshell/tokens.json (IPC target: tokens)
@@ -75,14 +75,20 @@ Wallpapers themselves are not in the repo.
 
 ## Dot Shell
 
-Quickshell hot-reloads on save. Tokens can be changed live:
+Run it by path: `qs -c dotshell` silently skips subfolders when `~/.config/quickshell/shell.qml`
+exists. Hyprland uses `$dotshell` from `defaults.conf`. Quickshell hot-reloads on save.
+Tokens can be changed live:
 
 ```bash
-qs -c dotshell ipc call tokens set era tokyo     # phosphor | tokyo | matrix | vfd
-qs -c dotshell ipc call tokens set pitch 5       # 3 | 5 | 8 | 12 px per dot
-qs -c dotshell ipc call tokens set dotSize 70    # 40–100 % of pitch
-qs -c dotshell ipc call tokens set depth 16      # era | 8 | 16 | 24
-qs -c dotshell ipc call strip toggle
+alias dotshell='qs -p ~/.config/quickshell/dotshell'
+```
+
+```bash
+dotshell ipc call tokens set era tokyo     # phosphor | tokyo | matrix | vfd
+dotshell ipc call tokens set pitch 5       # 3 | 5 | 8 | 12 px per dot
+dotshell ipc call tokens set dotSize 70    # 40–100 % of pitch
+dotshell ipc call tokens set depth 16      # era | 8 | 16 | 24
+dotshell ipc call strip toggle
 ```
 
 Binds: `Super D` toggles the strip, `Super Shift D` cycles eras, `Super Ctrl D` restarts it.

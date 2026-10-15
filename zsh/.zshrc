@@ -120,6 +120,7 @@ alias ports='netstat -tulanp'
 alias rm='rm -i'
 alias cp='cp -i'
 alias mv='mv -i'
+alias dotshell='qs -p ~/.config/quickshell/dotshell'   # Dot Shell: run, ipc, kill
 
 # Smart directory navigation
 if (( $+commands[zoxide] )); then

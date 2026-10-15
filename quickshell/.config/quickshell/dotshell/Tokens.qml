@@ -8,9 +8,9 @@ import Quickshell.Io
 // Lives outside the repo so runtime changes never dirty the dotfiles:
 //   ${XDG_STATE_HOME:-~/.local/state}/dotshell/tokens.json
 // Edit it by hand (picked up live) or over IPC:
-//   qs -c dotshell ipc call tokens set era tokyo
-//   qs -c dotshell ipc call tokens set pitch 5
-//   qs -c dotshell ipc call tokens cycleEra
+//   qs -p ~/.config/quickshell/dotshell ipc call tokens set era tokyo
+//   qs -p ~/.config/quickshell/dotshell ipc call tokens set pitch 5
+//   qs -p ~/.config/quickshell/dotshell ipc call tokens cycleEra
 Singleton {
     id: root
 
