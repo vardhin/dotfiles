@@ -8,7 +8,6 @@ import AstalBattery from "gi://AstalBattery"
 import AstalPowerProfiles from "gi://AstalPowerProfiles"
 import AstalWp from "gi://AstalWp"
 import AstalTray from "gi://AstalTray"
-import AstalMpris from "gi://AstalMpris"
 import AstalNotifd from "gi://AstalNotifd"
 import { For, With, createBinding, onCleanup } from "ags"
 import { MediaCenterButton } from "./MediaCenter"
@@ -180,11 +179,10 @@ export function toggleDropdownCli() {
   hideDropdownCli()
 }
 
-type BarPopoverKind = "clock" | "media" | "shortcuts" | "volume" | "brightness" | "wifi" | "bluetooth" | "battery"
+type BarPopoverKind = "clock" | "shortcuts" | "volume" | "brightness" | "wifi" | "bluetooth" | "battery"
 
 const BAR_POPOVER_KINDS: BarPopoverKind[] = [
   "clock",
-  "media",
   "shortcuts",
   "volume",
   "brightness",
@@ -194,7 +192,7 @@ const BAR_POPOVER_KINDS: BarPopoverKind[] = [
 ]
 
 const BAR_POPOVER_TOP_MARGIN = 50
-const BAR_POPOVER_RIGHT_MARGIN: Record<Exclude<BarPopoverKind, "clock" | "media" | "shortcuts">, number> = {
+const BAR_POPOVER_RIGHT_MARGIN: Record<Exclude<BarPopoverKind, "clock" | "shortcuts">, number> = {
   volume: 188,
   brightness: 140,
   wifi: 92,
@@ -305,224 +303,6 @@ function ActiveWindow() {
         </overlay>
       </button>
     </box>
-  )
-}
-
-// ━━━━━━━━━━━━━━━━ MEDIA PLAYER ━━━━━━━━━━━━━━━━━━━━━━━
-function formatMediaTime(seconds: number): string {
-  if (!seconds || seconds < 0) return "0:00"
-  const m = Math.floor(seconds / 60)
-  const s = Math.floor(seconds % 60)
-  return `${m}:${s.toString().padStart(2, "0")}`
-}
-
-function Mpris({ gdkmonitor }: { gdkmonitor: Gdk.Monitor }) {
-  const mpris = AstalMpris.get_default()
-  const players = createBinding(mpris, "players")
-
-  return (
-    <box class="media" visible={players((p) => p.length > 0)}>
-      <For each={players}>
-        {(player) => {
-          const title = createBinding(player, "title")
-          const playbackStatus = createBinding(player, "playbackStatus")
-          const mediaIcon = playbackStatus((s) =>
-            s === AstalMpris.PlaybackStatus.PLAYING
-              ? svgIcon("pause")
-              : svgIcon("play")
-          )
-
-          return (
-            <box class="media-player" spacing={0}>
-              <button
-                class="media-toggle"
-                onClicked={() => {
-                  const w = app.get_window("media-center")
-                  if (w) w.visible = !w.visible
-                }}
-                tooltipText="Media controls"
-              >
-                <box spacing={6}>
-                  <image iconName={mediaIcon} />
-                  <label
-                    class="media-title-bar"
-                    label={title((t) =>
-                      t ? (t.length > 22 ? t.substring(0, 19) + "..." : t) : "Media"
-                    )}
-                  />
-                </box>
-              </button>
-            </box>
-          )
-        }}
-      </For>
-    </box>
-  )
-}
-
-export function MediaPopover({ gdkmonitor }: { gdkmonitor: Gdk.Monitor }) {
-  const mpris = AstalMpris.get_default()
-  const players = createBinding(mpris, "players")
-  const popupName = barPopoverName("media", gdkmonitor)
-
-  let win: Astal.Window | null = null
-  const { TOP, LEFT, RIGHT, BOTTOM } = Astal.WindowAnchor
-
-  const hide = () => {
-    if (win) win.visible = false
-  }
-
-  onCleanup(() => {
-    win?.destroy()
-  })
-
-  return (
-    <window
-      $={(self) => {
-        win = self
-        const keyCtrl = new Gtk.EventControllerKey()
-        keyCtrl.connect("key-pressed", (_ctrl, keyval) => {
-          if (keyval === Gdk.KEY_Escape) hide()
-        })
-        self.add_controller(keyCtrl)
-      }}
-      visible={false}
-      namespace="ags-bar-popover"
-      name={popupName}
-      gdkmonitor={gdkmonitor}
-      exclusivity={Astal.Exclusivity.IGNORE}
-      keymode={Astal.Keymode.ON_DEMAND}
-      layer={Astal.Layer.OVERLAY}
-      anchor={TOP | LEFT | BOTTOM | RIGHT}
-      application={app}
-    >
-      <overlay>
-        <button class="popover-backdrop" hexpand vexpand onClicked={hide}>
-          <box />
-        </button>
-
-        <box
-          $type="overlay"
-          class="bar-popup-window media-popup-window"
-          orientation={Gtk.Orientation.VERTICAL}
-          halign={Gtk.Align.CENTER}
-          valign={Gtk.Align.START}
-          marginTop={BAR_POPOVER_TOP_MARGIN}
-        >
-          <box orientation={Gtk.Orientation.VERTICAL} spacing={8}>
-            <For each={players}>
-              {(player) => {
-                const title = createBinding(player, "title")
-                const artist = createBinding(player, "artist")
-                const playbackStatus = createBinding(player, "playbackStatus")
-                const canGoPrev = createBinding(player, "canGoPrevious")
-                const canGoNext = createBinding(player, "canGoNext")
-                const canControl = createBinding(player, "canControl")
-                const position = createBinding(player, "position")
-                const length = createBinding(player, "length")
-
-                return (
-                  <box class="media-popup" orientation={Gtk.Orientation.VERTICAL} spacing={10}>
-                    <box orientation={Gtk.Orientation.VERTICAL} spacing={2}>
-                      <label
-                        class="media-popup-title"
-                        label={title((t) => t || "Unknown")}
-                        xalign={0}
-                        wrap
-                        maxWidthChars={35}
-                      />
-                      <label
-                        class="media-popup-artist"
-                        label={artist((a) => a || "Unknown artist")}
-                        xalign={0}
-                        wrap
-                        maxWidthChars={35}
-                      />
-                    </box>
-
-                    <box orientation={Gtk.Orientation.VERTICAL} spacing={2}>
-                      <slider
-                        class="media-progress"
-                        widthRequest={260}
-                        value={position((pos) => {
-                          const len = player.length
-                          return len > 0 ? pos / len : 0
-                        })}
-                        onChangeValue={({ value }) => {
-                          const len = player.length
-                          if (len > 0) player.set_position(value * len)
-                        }}
-                      />
-                      <box>
-                        <label
-                          class="media-time"
-                          label={position((p) => formatMediaTime(p))}
-                          hexpand
-                          xalign={0}
-                        />
-                        <label
-                          class="media-time"
-                          label={length((l) => formatMediaTime(l))}
-                          xalign={1}
-                        />
-                      </box>
-                    </box>
-
-                    <box class="media-controls" halign={Gtk.Align.CENTER} spacing={16}>
-                      <button
-                        class="media-control-btn"
-                        onClicked={() => player.previous()}
-                        visible={canGoPrev}
-                        tooltipText="Previous"
-                      >
-                        <image iconName="media-skip-backward-symbolic" pixelSize={18} />
-                      </button>
-                      <button
-                        class="media-play-btn"
-                        onClicked={() => player.play_pause()}
-                        visible={canControl}
-                        tooltipText="Play/Pause"
-                      >
-                        <image
-                          iconName={playbackStatus((s) =>
-                            s === AstalMpris.PlaybackStatus.PLAYING
-                              ? "media-playback-pause-symbolic"
-                              : "media-playback-start-symbolic"
-                          )}
-                          pixelSize={22}
-                        />
-                      </button>
-                      <button
-                        class="media-control-btn"
-                        onClicked={() => player.next()}
-                        visible={canGoNext}
-                        tooltipText="Next"
-                      >
-                        <image iconName="media-skip-forward-symbolic" pixelSize={18} />
-                      </button>
-                    </box>
-
-                    <box halign={Gtk.Align.CENTER}>
-                      <label
-                        class="media-player-name"
-                        label={createBinding(player, "identity")((id) => id || "Player")}
-                      />
-                    </box>
-                  </box>
-                )
-              }}
-            </For>
-
-            <label
-              class="media-time"
-              visible={players((p) => p.length === 0)}
-              label="No active media players"
-              xalign={0.5}
-            />
-          </box>
-        </box>
-      </overlay>
-    </window>
   )
 }
 
