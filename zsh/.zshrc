@@ -157,7 +157,3 @@ bindkey '^[OB' history-substring-search-down
 if [[ -o interactive ]] && (( $+commands[fastfetch] )); then
   fastfetch --config examples/26
 fi
-
-# >>> Codex installer >>>
-export PATH="$HOME/.local/bin:$PATH"
-# <<< Codex installer <<<
