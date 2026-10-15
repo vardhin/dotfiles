@@ -1,0 +1,7 @@
+# AUR packages (installed with paru or yay). '#' starts a comment.
+# oh-my-zsh and its custom plugins are cloned by install.sh into ~/.oh-my-zsh,
+# which is where .zshrc expects them.
+
+aylurs-gtk-shell-git   # AGS v3
+libastal-meta          # AstalApps, Battery, Hyprland, Mpris, Notifd, PowerProfiles, Tray, Wp
+awww                   # wallpaper daemon (formerly swww)

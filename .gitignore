@@ -1,0 +1,13 @@
+# Secrets: YouTube Music auth headers (regenerate locally, never commit)
+ags/.config/ags/browser.json
+*.secret
+.env
+
+# AGS build + deps
+node_modules/
+ags/.config/ags/@girs/
+
+# Runtime state
+*.log
+*.db
+*.sqlite
