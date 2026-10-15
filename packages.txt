@@ -17,6 +17,10 @@ xdg-desktop-portal-hyprland
 polkit-gnome
 greetd
 
+# Dot Shell (Quickshell); qt6-shadertools only to rebuild .qsb shaders
+quickshell
+qt6-shadertools
+
 # Shell runtime (AGS v3 itself is AUR, see packages-aur.txt)
 gjs
 gtk4
