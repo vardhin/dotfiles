@@ -2,12 +2,15 @@ import QtQuick
 import QtQuick.Effects
 import Quickshell
 import Quickshell.Hyprland
+import Quickshell.Services.Notifications
 import Quickshell.Services.SystemTray
 import Quickshell.Wayland
 import Quickshell.Widgets
+import qs.services
 
-// Top LED strip: workspaces | clock | tray glyphs, on one row of dots.
+// Top LED strip: workspaces | clock or ticker | status words, tray glyphs.
 // Everything inside the DotSurface is measured in dots, not pixels.
+// Status words open their pane on click; VOL and BRT also take the wheel.
 PanelWindow {
     id: strip
 
@@ -17,6 +20,8 @@ PanelWindow {
     readonly property int rows: 11
     readonly property int cols: Math.floor(width / Tokens.pitch)
     readonly property HyprlandMonitor monitor: Hyprland.monitorFor(screen)
+    // Narrow strips (coarse pitch) drop words and keep numbers.
+    readonly property bool compact: cols < 420
 
     anchors {
         top: true
@@ -28,6 +33,13 @@ PanelWindow {
 
     WlrLayershell.namespace: "dotshell-strip"
     WlrLayershell.layer: WlrLayer.Top
+
+    Component.onCompleted: Ui.addStrip(strip)
+    Component.onDestruction: Ui.removeStrip(strip)
+
+    function word(full: string, short: string): string {
+        return compact ? short : full;
+    }
 
     DotSurface {
         id: surface
@@ -85,19 +97,25 @@ PanelWindow {
             }
         }
 
-        // ── Center: clock ───────────────────────────────────────────
+        // ── Center: clock, or the ticker when a message arrives ─────
         SystemClock {
             id: clock
             precision: SystemClock.Seconds
         }
 
+        // Centered, but pushed left when the status words grow into the middle.
+        readonly property int centerMin: workspaces.x + workspaces.width + 8
+        readonly property int centerMax: right.x - 8
+
         Row {
-            anchors.horizontalCenter: parent.horizontalCenter
+            id: clockRow
+            x: Math.max(surface.centerMin, Math.min(Math.round((strip.cols - width) / 2), surface.centerMax - width))
             height: strip.rows
             spacing: 4
+            visible: !ticker.visible
 
             DotText {
-                text: Qt.formatDateTime(clock.date, "ddd dd MMM").toUpperCase()
+                text: Qt.formatDateTime(clock.date, strip.compact ? "dd" : "ddd dd MMM").toUpperCase()
                 color: Tokens.slot2
             }
             DotText {
@@ -107,13 +125,104 @@ PanelWindow {
             }
         }
 
-        // ── Right: tray glyphs ──────────────────────────────────────
+        MouseArea {
+            anchors.fill: clockRow
+            enabled: clockRow.visible
+            onClicked: Ui.toggle("calendar", strip.screen)
+        }
+
+        Marquee {
+            id: ticker
+            x: surface.centerMin
+            width: Math.max(0, surface.centerMax - surface.centerMin)
+            height: strip.rows
+            visible: false
+            onFinished: visible = false
+
+            MouseArea {
+                anchors.fill: parent
+                onClicked: {
+                    ticker.visible = false;
+                    Ui.toggle("notifs", strip.screen);
+                }
+            }
+        }
+
+        Connections {
+            target: Notifs
+            function onArrived(n) {
+                // Only the focused screen's strip runs the ticker.
+                if (strip.screen !== Ui.focusedScreen())
+                    return;
+                const parts = [n.appName, n.summary, n.body].filter(s => s && s.trim() !== "");
+                ticker.text = parts.join(" · ").replace(/\s+/g, " ").toUpperCase();
+                ticker.color = n.urgency === NotificationUrgency.Critical ? Tokens.slot2 : Tokens.slot0;
+                ticker.visible = true;
+                ticker.run();
+            }
+        }
+
+        // ── Right: status words, then tray glyphs ───────────────────
         Row {
-            id: tray
+            id: right
             anchors.right: parent.right
             anchors.rightMargin: 2
             height: strip.rows
-            spacing: 3
+            spacing: strip.compact ? 4 : 6
+
+            StatusWord {
+                visible: Notifs.dnd || Notifs.live.length > 0
+                text: Notifs.dnd ? "DND" : strip.word("MSG ", "M") + Notifs.live.length
+                color: Notifs.dnd ? Tokens.slot1 : Tokens.slot2
+                onClicked: Ui.toggle("notifs", strip.screen)
+            }
+            StatusWord {
+                visible: Idle.caffeine
+                text: strip.word("CAF", "C")
+                color: Tokens.slot2
+                onClicked: Ui.toggle("brightness", strip.screen)
+            }
+            StatusWord {
+                text: strip.word("VOL ", "V") + (Audio.muted ? "--" : Math.round(Audio.volume * 100))
+                dim: Audio.muted
+                onClicked: Ui.toggle("audio", strip.screen)
+                onWheel: up => Audio.setVolume(Audio.volume + (up ? 0.05 : -0.05))
+            }
+            StatusWord {
+                visible: Brightness.available
+                text: strip.word("BRT ", "B") + Math.round(Brightness.value * 100)
+                onClicked: Ui.toggle("brightness", strip.screen)
+                onWheel: up => Brightness.set(Brightness.value + (up ? 0.05 : -0.05))
+            }
+            StatusWord {
+                text: {
+                    if (Net.wiredUp)
+                        return strip.word("WIRED", "W");
+                    if (Net.active)
+                        return strip.compact ? "W" : Net.active.name.toUpperCase().slice(0, 12);
+                    return strip.word("OFFLINE", "W");
+                }
+                dim: !Net.wiredUp && !Net.active
+                onClicked: Ui.toggle("wifi", strip.screen)
+            }
+            StatusWord {
+                visible: Bt.present
+                text: strip.word("BT", "") + (Bt.connected.length > 0 ? (strip.compact ? "B" : " ") + Bt.connected.length : strip.compact ? "B" : "")
+                dim: !Bt.powered || Bt.connected.length === 0
+                onClicked: Ui.toggle("bluetooth", strip.screen)
+            }
+            StatusWord {
+                visible: Power.present
+                text: strip.word("BAT ", "") + Power.percent + (Power.charging ? "+" : "")
+                color: Power.discharging && Power.fraction <= 0.15 ? Tokens.slot2 : Tokens.slot0
+                onClicked: Ui.toggle("battery", strip.screen)
+            }
+
+            Item {
+                visible: SystemTray.items.values.length > 0
+                width: 1
+                height: strip.rows
+            }
 
             Repeater {
                 model: SystemTray.items

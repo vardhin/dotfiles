@@ -4,7 +4,7 @@ import QtQuick
 import Quickshell
 import Quickshell.Io
 
-// The one tokens file: era, pitch, dot size, color depth.
+// The one tokens file: era, pitch, dot size, color depth, wallpaper, night warmth.
 // Lives outside the repo so runtime changes never dirty the dotfiles:
 //   ${XDG_STATE_HOME:-~/.local/state}/dotshell/tokens.json
 // Edit it by hand (picked up live) or over IPC:
@@ -19,6 +19,9 @@ Singleton {
     readonly property int pitch: [3, 5, 8, 12].includes(store.pitch) ? store.pitch : 3
     readonly property real dotSize: Math.max(40, Math.min(100, store.dotSize)) / 100
     readonly property string depth: ["era", "8", "16", "24"].includes(store.depth) ? store.depth : "era"
+    // "~" is expanded; "" shows bare glass.
+    readonly property string wallpaper: store.wallpaper.replace(/^~(?=\/|$)/, Quickshell.env("HOME"))
+    readonly property bool night: store.night
 
     // ── Derived ─────────────────────────────────────────────────────
     readonly property var current: Eras.get(era)
@@ -32,15 +35,23 @@ Singleton {
     // Pixel font: 5x7 capitals on an 11 px grid. In a DotSurface 1 px = 1 dot.
     readonly property string font: "DepartureMono Nerd Font"
     readonly property int fontPx: 11
+    readonly property int charDots: 7       // advance of one glyph
+    readonly property int lineDots: 13      // one text line in multi-line panes
 
     // ── Storage ─────────────────────────────────────────────────────
     readonly property string dir: (Quickshell.env("XDG_STATE_HOME") || Quickshell.env("HOME") + "/.local/state") + "/dotshell"
 
     // FileView writes atomically but does not create directories.
+    // Other state files (notifications, launcher counts) wait for dirReady too.
+    property bool dirReady: false
+
     Process {
         running: true
         command: ["mkdir", "-p", root.dir]
-        onExited: file.path = root.dir + "/tokens.json"
+        onExited: {
+            root.dirReady = true;
+            file.path = root.dir + "/tokens.json";
+        }
     }
 
     FileView {
@@ -59,6 +70,8 @@ Singleton {
             property int pitch: 3
             property int dotSize: 80
             property string depth: "era"
+            property string wallpaper: "~/wallpaper/frozen-winter/2006_toyota_corolla_xrs-pic-2322350110483638351-1600x1200.jpeg"
+            property bool night: false
         }
     }
 
@@ -78,10 +91,20 @@ Singleton {
         case "depth":
             store.depth = value;
             break;
+        case "wallpaper":
+            store.wallpaper = value;
+            break;
+        case "night":
+            store.night = value === "true" || value === "on" || value === "1";
+            break;
         default:
-            return "unknown token; one of: era, pitch, dotSize, depth";
+            return "unknown token; one of: era, pitch, dotSize, depth, wallpaper, night";
         }
         return "ok";
+    }
+
+    function toggleNight(): void {
+        store.night = !store.night;
     }
 
     IpcHandler {
@@ -91,7 +114,7 @@ Singleton {
             return root.set(key, value);
         }
         function get(): string {
-            return JSON.stringify({ era: root.era, pitch: root.pitch, dotSize: Math.round(root.dotSize * 100), depth: root.depth });
+            return JSON.stringify({ era: root.era, pitch: root.pitch, dotSize: Math.round(root.dotSize * 100), depth: root.depth, wallpaper: store.wallpaper, night: root.night });
         }
         function cycleEra(): string {
             const ids = Eras.ids;

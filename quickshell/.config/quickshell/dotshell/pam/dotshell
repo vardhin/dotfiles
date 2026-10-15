@@ -1,0 +1,3 @@
+# PAM stack for the Dot Shell lock screen (services/Lock.qml).
+# Password only, no faillock, so lock-screen typos never lock the account.
+auth required pam_unix.so
