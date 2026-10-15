@@ -89,6 +89,13 @@ function resolveHomePath(path: string): string {
   return path
 }
 
+// Store wallpaper paths as ~/… so the tracked theme files stay user-agnostic.
+function toHomePath(path: string): string {
+  if (path === HOME) return "~"
+  if (path.startsWith(`${HOME}/`)) return `~/${path.slice(HOME.length + 1)}`
+  return path
+}
+
 function clampByte(v: number): number {
   return Math.max(0, Math.min(255, Math.round(v)))
 }
@@ -331,7 +338,7 @@ function saveCurrentWallpaper(themeId: string, path: string) {
       const [ok, bytes] = GLib.file_get_contents(filePath)
       if (!ok) return
       const parsed = JSON.parse(new TextDecoder().decode(bytes)) as ThemePreset
-      parsed.wallpaper = path
+      parsed.wallpaper = toHomePath(path)
       GLib.file_set_contents(filePath, `${JSON.stringify(parsed, null, 2)}\n`)
     } catch {
       // ignore invalid or missing file
@@ -955,7 +962,7 @@ export function ThemeSwitcher({ gdkmonitor }: { gdkmonitor: Gdk.Monitor }) {
 
   const syncActiveTheme = (id: string) => {
     activeThemeId = id
-    activeWallpaper = findTheme(id)?.wallpaper ?? ""
+    activeWallpaper = resolveHomePath(findTheme(id)?.wallpaper ?? "")
   }
 
   // ── Rebuild left theme list ──────────────────────────────

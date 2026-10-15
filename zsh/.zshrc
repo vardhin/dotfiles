@@ -159,5 +159,5 @@ if [[ -o interactive ]] && (( $+commands[fastfetch] )); then
 fi
 
 # >>> Codex installer >>>
-export PATH="/home/vardhin/.local/bin:$PATH"
+export PATH="$HOME/.local/bin:$PATH"
 # <<< Codex installer <<<

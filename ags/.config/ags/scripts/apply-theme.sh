@@ -89,8 +89,8 @@ cp "$THEME_FILE" "$CURRENT_THEME_FILE"
 
 # ── 4. Wallpaper ───────────────────────────────────────────────────────────────
 
-if [[ "$WALLPAPER" == ~/* ]]; then
-  WALLPAPER="$HOME/${WALLPAPER#~/}"
+if [[ "$WALLPAPER" == "~/"* ]]; then
+  WALLPAPER="$HOME/${WALLPAPER:2}"
 fi
 
 if [[ -n "$WALLPAPER" && -f "$WALLPAPER" ]]; then
