@@ -183,6 +183,12 @@ let ytVideoVisible = false
 let ytVideoReady = false
 let ytVideo: Gtk.Video | null = null
 let ytMediaStream: Gtk.MediaFile | null = null
+let ytEndedObservedStream: Gtk.MediaStream | null = null
+let ytEndedSignalId = 0
+let ytErrorSignalId = 0
+let ytEndAdvanceScheduled = false
+let ytTrackEndedHook: (() => void) | null = null
+let ytPlaybackUserPaused = false
 let ytTvStack: Gtk.Stack | null = null
 let ytTvRefreshHook: (() => void) | null = null
 let ytPlayToken = 0
@@ -290,6 +296,9 @@ let ytActivePlaylistMode: "sequential" | "shuffle" | null = null
 let ytActivePlaylistIndex = -1
 let ytActiveShuffleBag: string[] = []
 let ytLastPlaylistPlayedId: string | null = null
+let ytRandomizerEnabled = false
+let ytRandomizerBag: string[] = []
+let ytLastRandomizedId: string | null = null
 let playlistDragPick: string | null = null
 
 function notifyVideoSurfacesChanged() {
@@ -1515,7 +1524,9 @@ export function toggleMediaCenterVideoPlayback() {
   try {
     const stream = ytMediaStream as any
     if (!stream) return
-    stream.set_playing?.(!Boolean(stream.get_playing?.()))
+    const willPlay = !Boolean(stream.get_playing?.())
+    ytPlaybackUserPaused = !willPlay
+    stream.set_playing?.(willPlay)
     syncFilteredVideoRenderer()
   } catch { /* ignore */ }
 }
@@ -1543,8 +1554,52 @@ function refreshTvMode() {
   notifyVideoSurfacesChanged()
 }
 
+function disconnectYtEndedObserver() {
+  if (ytEndedObservedStream && ytEndedSignalId) {
+    try { ytEndedObservedStream.disconnect(ytEndedSignalId) } catch { /* ignore */ }
+  }
+  if (ytEndedObservedStream && ytErrorSignalId) {
+    try { ytEndedObservedStream.disconnect(ytErrorSignalId) } catch { /* ignore */ }
+  }
+  ytEndedObservedStream = null
+  ytEndedSignalId = 0
+  ytErrorSignalId = 0
+  ytEndAdvanceScheduled = false
+}
+
+function scheduleYtEndAdvance(stream: Gtk.MediaStream) {
+  if (ytPlaybackUserPaused || ytEndAdvanceScheduled || stream !== ytMediaStream) return
+  ytEndAdvanceScheduled = true
+  GLib.idle_add(GLib.PRIORITY_DEFAULT_IDLE, () => {
+    ytEndAdvanceScheduled = false
+    if (stream !== ytMediaStream || ytPlaybackUserPaused) return GLib.SOURCE_REMOVE
+    ytTrackEndedHook?.()
+    return GLib.SOURCE_REMOVE
+  })
+}
+
+function observeYtStreamEnd(stream: Gtk.MediaStream) {
+  disconnectYtEndedObserver()
+  ytEndedObservedStream = stream
+  try {
+    ytEndedSignalId = stream.connect("notify::ended", () => {
+      if (stream !== ytMediaStream) return
+      let ended = false
+      try { ended = Boolean((stream as any).get_ended?.()) } catch { /* ignore */ }
+      if (ended) scheduleYtEndAdvance(stream)
+    })
+    ytErrorSignalId = stream.connect("notify::error", () => {
+      if (stream !== ytMediaStream) return
+      let failed = false
+      try { failed = Boolean((stream as any).get_error?.()) } catch { /* ignore */ }
+      if (failed) scheduleYtEndAdvance(stream)
+    })
+  } catch { /* polling fallback below still covers this backend */ }
+}
+
 function clearEmbeddedMedia() {
   const prev = ytMediaStream
+  disconnectYtEndedObserver()
   // Clear shared state before notifying video surfaces so they never receive
   // the outgoing stream as a one-frame fallback during teardown.
   ytMediaStream = null
@@ -1777,6 +1832,7 @@ function swapMediaToFile(filePath: string, token: number, videoId: string, quali
   // Tear down the previous stream BEFORE wiring up the new one. Leaving the old
   // Gtk.MediaFile alive keeps its GStreamer pipeline decoding audio, which is the
   // "double audio" symptom during a 360p->480p hot-swap.
+  disconnectYtEndedObserver()
   if (prevStream) {
     try { (prevStream as any).set_playing?.(false) } catch { /* ignore */ }
     try { (prevStream as any).set_muted?.(true) } catch { /* ignore */ }
@@ -1787,6 +1843,7 @@ function swapMediaToFile(filePath: string, token: number, videoId: string, quali
   const media = Gtk.MediaFile.new_for_file(Gio.File.new_for_path(filePath))
   media.set_muted(false)
   ytMediaStream = media
+  observeYtStreamEnd(media)
   ytCurrentQuality = quality
   ytCurrentFilePath = filePath
   // Bind the real playback widget immediately. Surface subscribers are also
@@ -1795,7 +1852,7 @@ function swapMediaToFile(filePath: string, token: number, videoId: string, quali
   ytVideo?.set_media_stream(media)
   notifyVideoSurfacesChanged()
   startFilteredVideoRenderer(filePath)
-  try { (ytMediaStream as any).set_playing?.(true) } catch { /* ignore */ }
+  try { (ytMediaStream as any).set_playing?.(hadPrevStream ? wasPlaying : true) } catch { /* ignore */ }
   // PipeWire/PulseAudio may restore gjs streams as muted+0% — force unmute repeatedly until the stream is active.
   const unmutePactl = () => execAsync(["bash", "-c",
     "pactl list sink-inputs | awk '/Sink Input/{id=$3} /application.name.*=.*\"gjs\"/{print id}'" +
@@ -2923,7 +2980,10 @@ export function MediaCenterPopover({ gdkmonitor }: { gdkmonitor: Gdk.Monitor }) 
     const p = getPlaylistById(ytActivePlaylistId)
     return p ? `Selected: ${p.name}` : "Select playlist to add/remove tracks"
   })
-  const queueCountState = createPoll(0, 300, () => ytQueue.length)
+  const randomizerState = createPoll(false, 250, () => ytRandomizerEnabled)
+  const queueVisibleState = createPoll(false, 250, () => ytQueue.length > 0 || ytRandomizerEnabled)
+  const queueLabelState = createPoll("UP NEXT", 250, () =>
+    ytRandomizerEnabled ? `ENDLESS MIX · ${ytQueue.length} READY` : `UP NEXT · ${ytQueue.length}`)
 
   let win: Astal.Window | null = null
   const { TOP, LEFT, RIGHT, BOTTOM } = Astal.WindowAnchor
@@ -2955,6 +3015,9 @@ export function MediaCenterPopover({ gdkmonitor }: { gdkmonitor: Gdk.Monitor }) 
   let playlistItemsEmpty: Gtk.Widget | null = null
   let playlistAdvanceWatchId = 0
   let playlistEndedLatch = false
+  let playlistObservedStream: Gtk.MediaStream | null = null
+  let playlistNearEndStoppedTicks = 0
+  let randomizerStartPending = false
   let queueList: Gtk.Box | null = null
   let queueEmpty: Gtk.Widget | null = null
 
@@ -2999,6 +3062,10 @@ export function MediaCenterPopover({ gdkmonitor }: { gdkmonitor: Gdk.Monitor }) 
     const playlist = getPlaylistById(playlistId)
     if (!playlist || playlist.itemIds.length === 0) return
 
+    const wasRandomizing = ytRandomizerEnabled
+    ytRandomizerEnabled = false
+    ytRandomizerBag = []
+    if (wasRandomizing) clearQueue()
     ytActivePlaylistId = playlistId
     ytActivePlaylistMode = mode
     playlistEndedLatch = false
@@ -3370,6 +3437,7 @@ export function MediaCenterPopover({ gdkmonitor }: { gdkmonitor: Gdk.Monitor }) 
 
   const playYtTrack = (track: YtResult) => {
     ytNowPlaying = track
+    ytPlaybackUserPaused = false
     incrementPlayCount(track.id)
     upsertVideoMeta(track.id, {
       title: track.title,
@@ -3381,6 +3449,15 @@ export function MediaCenterPopover({ gdkmonitor }: { gdkmonitor: Gdk.Monitor }) 
       ytStatus = "error"
       ytStatusMsg = error instanceof Error ? error.message : "Playback failed"
       clearEmbeddedMedia()
+      // A bad or half-written file should not strand an active queue. Skip it
+      // after briefly surfacing the error, while respecting an explicit pause.
+      GLib.timeout_add(GLib.PRIORITY_DEFAULT, 450, () => {
+        if (ytNowPlaying?.id !== track.id || ytPlaybackUserPaused) return GLib.SOURCE_REMOVE
+        if (ytQueue.length > 0 || ytRandomizerEnabled || Boolean(ytActivePlaylistMode)) {
+          advanceToNext()
+        }
+        return GLib.SOURCE_REMOVE
+      })
     })
   }
 
@@ -3412,23 +3489,95 @@ export function MediaCenterPopover({ gdkmonitor }: { gdkmonitor: Gdk.Monitor }) 
     }
   }
 
+  const takeRandomizedTrack = (): YtResult | null => {
+    const libraryIds = Array.from(new Set(downloadedItemsCache.map((item) => item.id)))
+    if (libraryIds.length === 0) return null
+    const available = new Set(libraryIds)
+    ytRandomizerBag = ytRandomizerBag.filter((id) => available.has(id))
+    if (ytRandomizerBag.length === 0) {
+      ytRandomizerBag = makeShuffledBag(libraryIds, ytLastRandomizedId || ytNowPlaying?.id || null)
+    }
+    const id = ytRandomizerBag.shift()
+    if (!id) return null
+    ytLastRandomizedId = id
+    return trackFromId(id)
+  }
+
+  const fillRandomizerQueue = (targetSize = 6) => {
+    if (!ytRandomizerEnabled) return
+    let changed = false
+    let guard = 0
+    while (ytQueue.length < targetSize && guard < targetSize * 3) {
+      guard++
+      const track = takeRandomizedTrack()
+      if (!track) break
+      ytQueue.push(track)
+      changed = true
+    }
+    if (changed) notifyQueueChanged()
+  }
+
+  const stopRandomizer = (clearGeneratedQueue = true) => {
+    ytRandomizerEnabled = false
+    ytRandomizerBag = []
+    if (clearGeneratedQueue) clearQueue()
+    else notifyQueueChanged()
+  }
+
+  const startRandomizer = async () => {
+    if (randomizerStartPending) return
+    randomizerStartPending = true
+    try {
+      if (downloadedItemsCache.length === 0) {
+        downloadedItemsCache = await listDownloadedVideoGroups()
+        rebuildDownloaded(downloadedItemsCache)
+      }
+      if (downloadedItemsCache.length === 0) {
+        ytStatus = "error"
+        ytStatusMsg = "Download at least one song to start an endless mix"
+        return
+      }
+
+      ytRandomizerEnabled = true
+      ytRandomizerBag = []
+      ytLastRandomizedId = ytNowPlaying?.id || null
+      ytActivePlaylistMode = null
+      clearQueue()
+
+      const first = takeRandomizedTrack()
+      fillRandomizerQueue()
+      if (first) playYtTrack(first)
+    } finally {
+      randomizerStartPending = false
+    }
+  }
+
+  const toggleRandomizer = () => {
+    if (ytRandomizerEnabled) stopRandomizer()
+    else void startRandomizer()
+  }
+
   const enqueueById = (id: string) => {
     enqueueTrack(trackFromId(id))
   }
 
   // Pull the next track from the queue first; fall back to the active playlist.
   const advanceToNext = () => {
+    if (ytRandomizerEnabled && ytQueue.length === 0) fillRandomizerQueue()
     const next = dequeueNextTrack()
     if (next) {
-      // Manual queue takes over: detach any playlist auto-advance.
+      // A manual queue takes over from a playlist. Endless Mix remains active
+      // and replenishes its visible look-ahead after every transition.
       ytActivePlaylistMode = null
       notifyQueueChanged()
       playYtTrack(next)
+      if (ytRandomizerEnabled) fillRandomizerQueue()
       return
     }
-    playNextFromActivePlaylist()
+    if (ytActivePlaylistId && ytActivePlaylistMode) playNextFromActivePlaylist()
   }
   ytBarNextHook = advanceToNext
+  ytTrackEndedHook = advanceToNext
 
   // Play right now and push whatever is playing nowhere — used by "play next".
   const playFromQueueNow = (index: number) => {
@@ -3437,6 +3586,7 @@ export function MediaCenterPopover({ gdkmonitor }: { gdkmonitor: Gdk.Monitor }) 
     ytActivePlaylistMode = null
     notifyQueueChanged()
     playYtTrack(track)
+    if (ytRandomizerEnabled) fillRandomizerQueue()
   }
 
   const rebuildQueue = () => {
@@ -3743,18 +3893,41 @@ export function MediaCenterPopover({ gdkmonitor }: { gdkmonitor: Gdk.Monitor }) 
   })
 
   playlistAdvanceWatchId = GLib.timeout_add(GLib.PRIORITY_DEFAULT, 300, () => {
-    // Advance when either the queue has something up next, or a playlist is
-    // running on auto-advance. Without a current stream there's nothing to watch.
-    const hasNext = ytQueue.length > 0 || Boolean(ytActivePlaylistId && ytActivePlaylistMode)
+    // The signal observer is the primary path. This poll covers backends that
+    // stop playback at the final timestamp without updating the `ended` flag.
+    const hasNext = ytQueue.length > 0
+      || ytRandomizerEnabled
+      || Boolean(ytActivePlaylistId && ytActivePlaylistMode)
     if (!hasNext || !ytMediaStream) {
       playlistEndedLatch = false
+      playlistNearEndStoppedTicks = 0
+      playlistObservedStream = null
       return GLib.SOURCE_CONTINUE
     }
+    const stream = ytMediaStream
+    if (playlistObservedStream !== stream) {
+      playlistObservedStream = stream
+      playlistEndedLatch = false
+      playlistNearEndStoppedTicks = 0
+    }
     let ended = false
-    try { ended = Boolean((ytMediaStream as any).get_ended?.()) } catch { ended = false }
+    let playing = true
+    try {
+      ended = Boolean((stream as any).get_ended?.())
+      playing = Boolean((stream as any).get_playing?.())
+    } catch { ended = false }
+    const duration = readMediaDurationRaw()
+    const position = readMediaTimestampRaw()
+    const endTolerance = Math.max(650_000, duration * 0.004)
+    const stoppedAtEnd = !ytPlaybackUserPaused
+      && !playing
+      && duration > 2_000_000
+      && position >= duration - endTolerance
+    playlistNearEndStoppedTicks = stoppedAtEnd ? playlistNearEndStoppedTicks + 1 : 0
+    ended = ended || playlistNearEndStoppedTicks >= 2
     if (ended && !playlistEndedLatch) {
       playlistEndedLatch = true
-      advanceToNext()
+      scheduleYtEndAdvance(stream)
     } else if (!ended) {
       playlistEndedLatch = false
     }
@@ -3769,6 +3942,9 @@ export function MediaCenterPopover({ gdkmonitor }: { gdkmonitor: Gdk.Monitor }) 
     ytUiRefreshHook = null
     ytQueueRefreshHook = null
     if (ytBarNextHook === advanceToNext) ytBarNextHook = null
+    if (ytTrackEndedHook === advanceToNext) ytTrackEndedHook = null
+    ytRandomizerEnabled = false
+    ytRandomizerBag = []
     cavaCleanup()
     stopYtAll()
     win?.destroy()
@@ -3802,6 +3978,7 @@ export function MediaCenterPopover({ gdkmonitor }: { gdkmonitor: Gdk.Monitor }) 
   }
 
   const stopYtPlayback = () => {
+    if (ytRandomizerEnabled) stopRandomizer()
     ytPlayToken++
     stopYtAll()
     ytCurrentQuality = null
@@ -3851,8 +4028,21 @@ export function MediaCenterPopover({ gdkmonitor }: { gdkmonitor: Gdk.Monitor }) 
         >
           {/* Header (sticky, outside scroll) */}
           <box class="mc-header" spacing={10}>
-            <image iconName="multimedia-player-symbolic" pixelSize={18} class="mc-header-icon" />
-            <label class="mc-title" label="Media Center" hexpand xalign={0} />
+            <box class="mc-brand-icon">
+              <image iconName="multimedia-player-symbolic" pixelSize={18} class="mc-header-icon" />
+            </box>
+            <box class="mc-brand" orientation={Gtk.Orientation.VERTICAL} spacing={1} hexpand>
+              <label class="mc-title" label="Media Center" xalign={0} />
+              <label class="mc-subtitle" label="LISTEN · WATCH · DISCOVER" xalign={0} />
+            </box>
+            <box
+              class="mc-live-mode"
+              spacing={5}
+              visible={randomizerState}
+            >
+              <box class="mc-live-dot" />
+              <label label="ENDLESS MIX" />
+            </box>
             <box
               class="mc-video-settings-slot mc-header-video-settings"
               $={(self) => { self.append(videoSettingsButton) }}
@@ -3879,9 +4069,36 @@ export function MediaCenterPopover({ gdkmonitor }: { gdkmonitor: Gdk.Monitor }) 
                 <box $={(self) => { self.append(tvWidget) }} />
               </box>
 
+              {/* Persistent library radio — available even before playback starts. */}
+              <box class="mc-quick-actions" halign={Gtk.Align.CENTER} marginTop={8}>
+                <button
+                  class={randomizerState((active) => `mc-randomizer-btn ${active ? "active" : ""}`)}
+                  tooltipText={randomizerState((active) => active
+                    ? "Stop Endless Mix and clear its queue"
+                    : "Build an always-playing random queue from your downloads")}
+                  onClicked={toggleRandomizer}
+                >
+                  <box spacing={8}>
+                    <image iconName="media-playlist-shuffle-symbolic" pixelSize={15} />
+                    <box orientation={Gtk.Orientation.VERTICAL} spacing={0}>
+                      <label
+                        class="mc-randomizer-title"
+                        label={randomizerState((active) => active ? "Endless Mix is on" : "Start Endless Mix")}
+                        xalign={0}
+                      />
+                      <label
+                        class="mc-randomizer-subtitle"
+                        label={randomizerState((active) => active ? "Your next songs are ready" : "A fresh random queue that never runs out")}
+                        xalign={0}
+                      />
+                    </box>
+                  </box>
+                </button>
+              </box>
+
               {/* YT now-playing label + open-video / stop */}
               <box
-                class="mc-tv-controls"
+                class="mc-tv-controls mc-now-playing-strip"
                 spacing={8}
                 halign={Gtk.Align.CENTER}
                 marginTop={6}
@@ -3938,7 +4155,7 @@ export function MediaCenterPopover({ gdkmonitor }: { gdkmonitor: Gdk.Monitor }) 
                 visible={ytPlayingState((np) => np !== null)}
               >
                 <button
-                  class="mc-stop-btn"
+                  class="mc-transport-btn"
                   tooltipText={ytIsPlayingState((p) => p ? "Pause" : "Play")}
                   onClicked={toggleMediaCenterVideoPlayback}
                 >
@@ -3949,7 +4166,7 @@ export function MediaCenterPopover({ gdkmonitor }: { gdkmonitor: Gdk.Monitor }) 
                 </button>
 
                 <button
-                  class="mc-stop-btn"
+                  class="mc-transport-btn"
                   tooltipText="Skip to next in queue/playlist"
                   onClicked={() => advanceToNext()}
                 >
@@ -3974,21 +4191,24 @@ export function MediaCenterPopover({ gdkmonitor }: { gdkmonitor: Gdk.Monitor }) 
                 marginTop={10}
                 marginStart={18}
                 marginEnd={18}
-                visible={queueCountState((n) => n > 0)}
+                visible={queueVisibleState}
               >
                 <box class="mc-queue-header" spacing={8}>
                   <label
                     class="mc-section-label"
-                    label={queueCountState((n) => `UP NEXT · ${n}`)}
+                    label={queueLabelState}
                     hexpand
                     xalign={0}
                   />
                   <button
-                    class="mc-stop-btn"
-                    tooltipText="Clear queue"
-                    onClicked={() => clearQueue()}
+                    class="mc-queue-clear"
+                    tooltipText={randomizerState((active) => active ? "Stop Endless Mix" : "Clear queue")}
+                    onClicked={() => ytRandomizerEnabled ? stopRandomizer() : clearQueue()}
                   >
-                    <image iconName="edit-clear-all-symbolic" pixelSize={14} />
+                    <image
+                      iconName={randomizerState((active) => active ? "media-playback-stop-symbolic" : "edit-clear-all-symbolic")}
+                      pixelSize={14}
+                    />
                   </button>
                 </box>
                 <box

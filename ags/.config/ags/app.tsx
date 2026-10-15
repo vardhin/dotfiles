@@ -15,7 +15,6 @@ import { NotificationPopups, NotificationCenter } from "./widget/Notifications"
 import { OSD } from "./widget/OSD"
 import { AppLauncher } from "./widget/AppLauncher"
 import { SessionMenu } from "./widget/Session"
-import { DesktopWidgets } from "./widget/DesktopWidgets"
 import { ThemeSwitcher, applyGeneratedThemeCSS } from "./widget/ThemeSwitcher"
 import { MediaCenterPopover } from "./widget/MediaCenter"
 import { startBatteryMonitor } from "./lib/batteryMonitor"
@@ -92,7 +91,6 @@ app.start({
           const needsLauncher = !app.get_window("applauncher")
           const needsSession = !app.get_window("session")
           const needsNotifCenter = !app.get_window("notification-center")
-          const needsWidgets = !app.get_window("desktop-widgets")
           const needsThemeSwitcher = !app.get_window("theme-switcher")
           const needsMediaCenter = !app.get_window("media-center")
 
@@ -111,7 +109,6 @@ app.start({
               {needsLauncher && <AppLauncher gdkmonitor={monitor} />}
               {needsSession && <SessionMenu gdkmonitor={monitor} />}
               {needsNotifCenter && <NotificationCenter gdkmonitor={monitor} />}
-              {needsWidgets && <DesktopWidgets gdkmonitor={monitor} />}
               {needsThemeSwitcher && <ThemeSwitcher gdkmonitor={monitor} />}
               {needsMediaCenter && <MediaCenterPopover gdkmonitor={monitor} />}
             </This>

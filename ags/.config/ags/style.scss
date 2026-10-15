@@ -1788,140 +1788,6 @@ menubutton button {
   }
 }
 
-// ━━━━━━━━━━━━━━━ DESKTOP WIDGETS ━━━━━━━━━━━━━━━━━━━━
-$dw-card-bg: $widget-card-bg;
-$dw-card-border: $widget-card-border;
-$dw-card-shadow: 0 12px 28px rgba(0, 0, 0, 0.34), 0 3px 8px rgba(0, 0, 0, 0.2);
-
-.desktop-widgets {
-  background: transparent;
-  padding: 28px 42px;
-}
-
-.dw-col-left {
-  margin-left: 60px;
-}
-
-.dw-col-right {
-  margin-right: 60px;
-}
-
-.dw-clock-card {
-  background: $dw-card-bg;
-  border: 1px solid $dw-card-border;
-  border-radius: $radius-xl;
-  padding: 28px 40px 22px;
-  box-shadow: none;
-
-  .dw-clock-row {
-    margin-bottom: 2px;
-  }
-
-  .dw-clock-time {
-    font-size: 72px;
-    font-weight: 200;
-    color: $fg;
-    letter-spacing: 2px;
-  }
-
-  .dw-clock-seconds {
-    font-size: 28px;
-    font-weight: 300;
-    color: $accent;
-    margin-top: 32px;
-    margin-left: 4px;
-  }
-
-  .dw-clock-date {
-    font-size: 15px;
-    font-weight: 500;
-    color: $fg-dim;
-    letter-spacing: 1px;
-    margin-top: 4px;
-  }
-
-  .dw-clock-year {
-    font-size: 12px;
-    font-weight: 400;
-    color: $fg-faint;
-    letter-spacing: 3px;
-  }
-}
-
-.dw-stats-card {
-  background: $dw-card-bg;
-  border: 1px solid $dw-card-border;
-  border-radius: $radius-xl;
-  padding: 18px 24px;
-  box-shadow: none;
-  min-width: 240px;
-
-  .dw-stats-header {
-    padding-bottom: 8px;
-    border-bottom: 1px solid rgba(255, 255, 255, 0.04);
-  }
-
-  .dw-stats-header-icon {
-    color: $accent;
-  }
-
-  .dw-stats-header-label {
-    font-size: 10px;
-    font-weight: 700;
-    color: $fg-dim;
-    letter-spacing: 2px;
-  }
-
-  .dw-stat-label {
-    font-size: 11px;
-    font-weight: 600;
-    color: $fg-dim;
-    letter-spacing: 1px;
-  }
-
-  .dw-stat-value {
-    font-size: 11px;
-    font-weight: 600;
-    color: $fg;
-  }
-
-  .dw-stat-bar {
-    min-height: 4px;
-    border-radius: 2px;
-
-    trough {
-      background: rgba(255, 255, 255, 0.06);
-      border-radius: 2px;
-      min-height: 4px;
-    }
-
-    // GTK4 LevelBar uses block elements inside trough
-    block {
-      min-height: 4px;
-      border-radius: 2px;
-    }
-
-    &.dw-stat-bar-cpu block.filled {
-      background: linear-gradient(90deg, $accent, $teal);
-    }
-    &.dw-stat-bar-mem block.filled {
-      background: linear-gradient(90deg, $magenta, rgba($accent, 0.6));
-    }
-    &.dw-stat-bar-disk block.filled {
-      background: linear-gradient(90deg, $yellow, $orange);
-    }
-  }
-
-  .dw-uptime-row {
-    padding-top: 8px;
-    border-top: 1px solid rgba(255, 255, 255, 0.04);
-  }
-
-  .dw-uptime-icon {
-    color: $green;
-  }
-}
-
 // ━━━━━━━━━━━━━━━ MEDIA VIDEO ━━━━━━━━━━━━━━━━━━━━━━━
 .video-fx-popover {
   > contents {
@@ -2105,362 +1971,6 @@ $dw-card-shadow: 0 12px 28px rgba(0, 0, 0, 0.34), 0 3px 8px rgba(0, 0, 0, 0.2);
       margin: 1px;
       border-radius: 999px;
       background: $fg;
-    }
-  }
-}
-
-.dw-video-card {
-  background: $dw-card-bg;
-  border: 1px solid $dw-card-border;
-  border-radius: $radius-xl;
-  padding: 14px;
-  box-shadow: none;
-  min-width: 240px;
-}
-
-.dw-video-header {
-  padding: 0 4px 2px;
-}
-
-.dw-video-header-icon {
-  color: $accent;
-}
-
-.dw-video-header-label {
-  font-size: 10px;
-  font-weight: 700;
-  color: $fg-dim;
-  letter-spacing: 2px;
-}
-
-.dw-video-effect-badge {
-  color: $accent;
-  background: rgba($accent, 0.12);
-  border: 1px solid rgba($accent, 0.28);
-  border-radius: 999px;
-  padding: 2px 6px;
-  font-size: 8px;
-  font-weight: 800;
-  letter-spacing: 0.7px;
-}
-
-.dw-video-settings-slot .video-fx-button,
-.dw-video-play {
-  min-height: 0;
-  min-width: 0;
-  padding: 4px 6px;
-  border-radius: 7px;
-  color: $fg-dim;
-  background: rgba(255, 255, 255, 0.045);
-  border: 1px solid $surface-border;
-
-  &:hover {
-    color: $accent;
-    background: rgba($accent, 0.13);
-    border-color: rgba($accent, 0.3);
-  }
-}
-
-.dw-video-stage {
-  background: transparent;
-  min-width: 551px;
-  min-height: 310px;
-}
-
-.dw-video-ambient {
-  background: transparent;
-  overflow: hidden;
-}
-
-.dw-video-ambient-light { opacity: 0.96; }
-
-.dw-video-surface {
-  border-radius: $radius-lg;
-  background: transparent;
-}
-
-.dw-video-player-shell {
-  border-radius: $radius-lg;
-  background: #000;
-}
-
-.dw-video-player {
-  border-radius: $radius-lg;
-}
-
-.dw-video-scrim {
-  background: rgba(0, 0, 0, 0.08);
-  border-radius: $radius-lg;
-}
-
-.dw-video-controls {
-  padding-top: 2px;
-
-  .dw-video-seek {
-    margin: 0;
-
-    trough {
-      min-height: 4px;
-      border-radius: 999px;
-      background: rgba(255, 255, 255, 0.08);
-    }
-    highlight {
-      min-height: 4px;
-      border-radius: 999px;
-      background: $accent;
-    }
-    slider {
-      min-width: 11px;
-      min-height: 11px;
-      margin: -4px;
-      border-radius: 999px;
-      background: $fg;
-      border: 2px solid $accent;
-    }
-  }
-
-  .dw-video-time {
-    min-width: 82px;
-    color: $fg-dim;
-    font-size: 9px;
-    font-feature-settings: "tnum";
-  }
-}
-
-// ━━━━━━━━━━━━━━━ NOW PLAYING ━━━━━━━━━━━━━━━━━━━━━━━
-.dw-np-card {
-  background: $dw-card-bg;
-  border: 1px solid $dw-card-border;
-  border-radius: $radius-xl;
-  padding: 18px 24px;
-  box-shadow: none;
-  min-width: 240px;
-
-  .dw-np-inner {
-    padding: 0;
-  }
-
-  .dw-np-status-icon {
-    color: $green;
-  }
-
-  .dw-np-header-label {
-    font-size: 10px;
-    font-weight: 700;
-    color: $fg-dim;
-    letter-spacing: 2px;
-  }
-
-  .dw-np-source {
-    color: $accent;
-    font-size: 8px;
-    font-weight: 800;
-    letter-spacing: 1px;
-  }
-
-  .dw-np-title {
-    font-size: 14px;
-    font-weight: 600;
-    color: $fg;
-  }
-
-  .dw-np-artist {
-    font-size: 11px;
-    font-weight: 500;
-    color: $fg-dim;
-  }
-}
-
-// ━━━━━━━━━━━━━━━ AUDIO VISUALIZER ━━━━━━━━━━━━━━━━━━
-.dw-viz-card {
-  background: $dw-card-bg;
-  border: 1px solid $dw-card-border;
-  border-radius: $radius-xl;
-  padding: 18px 24px 14px;
-  box-shadow: none;
-  min-width: 240px;
-
-  .dw-viz-header {
-    padding-bottom: 8px;
-    border-bottom: 1px solid rgba(255, 255, 255, 0.04);
-  }
-
-  .dw-viz-header-icon {
-    color: $magenta;
-  }
-
-  .dw-viz-header-label {
-    font-size: 10px;
-    font-weight: 700;
-    color: $fg-dim;
-    letter-spacing: 2px;
-  }
-
-  .dw-viz-bars {
-    padding: 8px 0 4px;
-    min-height: 64px;
-  }
-
-  .dw-viz-bar {
-    min-width: 10px;
-    border-radius: 3px;
-    min-height: 64px;
-
-    trough {
-      background: rgba(255, 255, 255, 0.04);
-      border-radius: 3px;
-      min-width: 10px;
-    }
-
-    block {
-      border-radius: 3px;
-      min-width: 10px;
-    }
-
-    block.filled {
-      background: linear-gradient(0deg, $accent, $magenta);
-    }
-  }
-}
-
-// ━━━━━━━━━━━━━━━ TODO WIDGET ━━━━━━━━━━━━━━━━━━━━━━━
-.dw-todo-card {
-  background: $dw-card-bg;
-  border: 1px solid $dw-card-border;
-  border-radius: $radius-xl;
-  padding: 18px 24px;
-  box-shadow: none;
-  min-width: 240px;
-
-  .dw-todo-header {
-    padding-bottom: 8px;
-    border-bottom: 1px solid rgba(255, 255, 255, 0.04);
-  }
-
-  .dw-todo-header-icon {
-    color: $green;
-  }
-
-  .dw-todo-header-label {
-    font-size: 10px;
-    font-weight: 700;
-    color: $fg-dim;
-    letter-spacing: 2px;
-  }
-
-  .dw-todo-count {
-    font-size: 10px;
-    font-weight: 600;
-    color: $fg-faint;
-  }
-
-  .dw-todo-input-row {
-    padding: 4px 0;
-  }
-
-  .dw-todo-input {
-    background: rgba(255, 255, 255, 0.04);
-    border: 1px solid rgba(255, 255, 255, 0.06);
-    border-radius: 8px;
-    padding: 6px 10px;
-    color: $fg;
-    font-size: 11px;
-    caret-color: $accent;
-    min-height: 0;
-
-    &:focus {
-      border-color: rgba($accent, 0.3);
-      background: rgba(255, 255, 255, 0.06);
-    }
-  }
-
-  .dw-todo-add-btn {
-    background: rgba(0, 204, 153, 0.12);
-    border: 1px solid rgba(0, 204, 153, 0.2);
-    border-radius: 8px;
-    padding: 6px 8px;
-    transition: all 200ms ease;
-    min-height: 0;
-    min-width: 0;
-
-    &:hover {
-      background: rgba(0, 204, 153, 0.22);
-      border-color: rgba(0, 204, 153, 0.4);
-    }
-
-    image {
-      color: $green;
-    }
-  }
-
-  .dw-todo-list {
-    padding-top: 4px;
-  }
-
-  .dw-todo-empty {
-    font-size: 11px;
-    color: $fg-faint;
-    font-style: italic;
-    padding: 8px 0;
-  }
-
-  .dw-todo-row {
-    padding: 4px 6px;
-    border-radius: 8px;
-    transition: all 150ms ease;
-
-    &:hover {
-      background: rgba(255, 255, 255, 0.03);
-    }
-
-    checkbutton {
-      min-height: 0;
-      min-width: 0;
-
-      indicator {
-        min-width: 16px;
-        min-height: 16px;
-        border-radius: 4px;
-        border: 1px solid rgba(255, 255, 255, 0.15);
-        background: rgba(255, 255, 255, 0.03);
-
-        &:checked {
-          background: rgba(0, 204, 153, 0.25);
-          border-color: rgba(0, 204, 153, 0.5);
-          color: $green;
-        }
-      }
-    }
-  }
-
-  .dw-todo-text {
-    font-size: 11px;
-    font-weight: 500;
-    color: $fg;
-  }
-
-  .dw-todo-done {
-    color: $fg-faint;
-    text-decoration-line: line-through;
-  }
-
-  .dw-todo-delete {
-    background: transparent;
-    border: none;
-    border-radius: 6px;
-    padding: 3px;
-    min-height: 0;
-    min-width: 0;
-    opacity: 0.4;
-    transition: all 150ms ease;
-
-    &:hover {
-      background: rgba(224, 108, 117, 0.15);
-      opacity: 1;
-    }
-
-    image {
-      color: $red;
     }
   }
 }
@@ -3006,21 +2516,59 @@ $dw-card-shadow: 0 12px 28px rgba(0, 0, 0, 0.34), 0 3px 8px rgba(0, 0, 0, 0.2);
 }
 
 .mc-panel {
-  background: $widget-card-bg;
-  border: 1px solid $widget-card-border;
+  background: linear-gradient(165deg, rgba($accent, 0.055), transparent 180px), $widget-card-bg;
+  border: 1px solid rgba($accent, 0.14);
   border-radius: $radius-xl;
   padding: 0 0 14px;
 
   .mc-header {
-    padding: 12px 16px 10px;
+    padding: 13px 16px 11px;
+
+    .mc-brand-icon {
+      min-width: 34px;
+      min-height: 34px;
+      border-radius: 10px;
+      background: rgba($accent, 0.12);
+      border: 1px solid rgba($accent, 0.2);
+    }
 
     .mc-header-icon { color: $accent; }
 
+    .mc-brand { margin-top: 1px; }
+
     .mc-title {
-      font-size: 14px;
-      font-weight: 700;
+      font-size: 15px;
+      font-weight: 800;
       color: $fg;
       letter-spacing: 0.3px;
+    }
+
+    .mc-subtitle {
+      font-size: 8px;
+      font-weight: 700;
+      color: $fg-faint;
+      letter-spacing: 1.45px;
+    }
+
+    .mc-live-mode {
+      padding: 5px 9px;
+      border-radius: 999px;
+      color: $accent;
+      background: rgba($accent, 0.11);
+      border: 1px solid rgba($accent, 0.22);
+
+      label {
+        font-size: 8px;
+        font-weight: 800;
+        letter-spacing: 0.9px;
+      }
+
+      .mc-live-dot {
+        min-width: 6px;
+        min-height: 6px;
+        border-radius: 999px;
+        background: $accent;
+      }
     }
 
     .mc-header-video-settings .video-fx-button {
@@ -3110,13 +2658,58 @@ $dw-card-shadow: 0 12px 28px rgba(0, 0, 0, 0.34), 0 3px 8px rgba(0, 0, 0, 0.2);
     }
   }
 
-  .mc-tv-controls {
+  .mc-quick-actions {
     padding: 0 18px;
 
+    .mc-randomizer-btn {
+      padding: 7px 13px;
+      border-radius: 11px;
+      background: rgba(255,255,255,0.035);
+      border: 1px solid rgba(255,255,255,0.075);
+      transition: all 180ms ease;
+
+      image { color: $fg-dim; }
+
+      .mc-randomizer-title {
+        color: $fg;
+        font-size: 11px;
+        font-weight: 700;
+      }
+
+      .mc-randomizer-subtitle {
+        color: $fg-faint;
+        font-size: 9px;
+      }
+
+      &:hover {
+        background: rgba($accent, 0.1);
+        border-color: rgba($accent, 0.25);
+        image { color: $accent; }
+      }
+
+      &.active {
+        background: linear-gradient(110deg, rgba($accent, 0.2), rgba($magenta, 0.1));
+        border-color: rgba($accent, 0.42);
+        image, .mc-randomizer-title { color: $accent; }
+      }
+    }
+  }
+
+  .mc-tv-controls {
+    padding: 8px 10px;
+    margin-left: 18px;
+    margin-right: 18px;
+
+    &.mc-now-playing-strip {
+      border-radius: 11px;
+      background: rgba(255,255,255,0.025);
+      border: 1px solid rgba(255,255,255,0.06);
+    }
+
     .mc-tv-title {
-      font-size: 11px;
-      font-weight: 600;
-      color: $fg-dim;
+      font-size: 12px;
+      font-weight: 700;
+      color: $fg;
     }
 
     .mc-video-btn,
@@ -3178,6 +2771,28 @@ $dw-card-shadow: 0 12px 28px rgba(0, 0, 0, 0.34), 0 3px 8px rgba(0, 0, 0, 0.2);
   }
 
   .mc-tv-seek-controls {
+    padding: 6px 8px;
+    border-radius: 11px;
+    background: rgba(0,0,0,0.12);
+    border: 1px solid rgba(255,255,255,0.045);
+
+    .mc-transport-btn {
+      min-width: 30px;
+      min-height: 30px;
+      padding: 5px;
+      border-radius: 9px;
+      background: rgba(255,255,255,0.045);
+      border: 1px solid rgba(255,255,255,0.07);
+      transition: all 160ms ease;
+      image { color: $fg-dim; }
+
+      &:hover {
+        background: rgba($accent, 0.13);
+        border-color: rgba($accent, 0.3);
+        image { color: $accent; }
+      }
+    }
+
     .mc-player-time {
       min-width: 88px;
       font-size: 11px;
@@ -3574,10 +3189,33 @@ $dw-card-shadow: 0 12px 28px rgba(0, 0, 0, 0.34), 0 3px 8px rgba(0, 0, 0, 0.2);
   }
 
   .mc-queue-section {
-    padding: 4px 0;
+    padding: 10px;
+    border-radius: 12px;
+    background: linear-gradient(135deg, rgba($accent, 0.06), rgba(255,255,255,0.018));
+    border: 1px solid rgba($accent, 0.12);
 
     .mc-queue-header {
       align-items: center;
+
+      .mc-section-label {
+        color: rgba($accent, 0.9);
+      }
+
+      .mc-queue-clear {
+        min-width: 28px;
+        min-height: 28px;
+        padding: 4px;
+        border-radius: 8px;
+        background: rgba(255,255,255,0.04);
+        border: 1px solid rgba(255,255,255,0.07);
+        image { color: $fg-dim; }
+
+        &:hover {
+          background: rgba($red, 0.14);
+          border-color: rgba($red, 0.28);
+          image { color: $red; }
+        }
+      }
     }
 
     .mc-queue-list {
@@ -3585,6 +3223,8 @@ $dw-card-shadow: 0 12px 28px rgba(0, 0, 0, 0.34), 0 3px 8px rgba(0, 0, 0, 0.2);
     }
 
     .mc-queue-row {
+      transition: all 160ms ease;
+
       .mc-queue-pos {
         min-width: 18px;
         font-size: 10px;
@@ -3594,8 +3234,8 @@ $dw-card-shadow: 0 12px 28px rgba(0, 0, 0, 0.34), 0 3px 8px rgba(0, 0, 0, 0.2);
 
       .mc-queue-play {
         border-radius: 9px;
-        background: rgba(255,255,255,0.025);
-        border: 1px solid rgba(255,255,255,0.05);
+        background: rgba(0,0,0,0.1);
+        border: 1px solid rgba(255,255,255,0.055);
         padding: 6px 10px;
         transition: all 160ms ease;
 

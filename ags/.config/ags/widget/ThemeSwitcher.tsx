@@ -498,11 +498,7 @@ menubutton > button:hover,
 .notification-center,
 .applauncher,
 .session-menu,
-.osd,
-.dw-clock-card,
-.dw-stats-card,
-.dw-viz-card,
-.dw-np-card {
+.osd {
   background: ${c.bg_solid} !important;
   border-color: ${c.accent_dim} !important;
   color: ${c.fg} !important;
@@ -757,9 +753,7 @@ textarea {
 .osd image,
 .osd label,
 .ts-panel image,
-.ts-panel label,
-.desktop-widgets image,
-.desktop-widgets label {
+.ts-panel label {
   color: ${c.fg} !important;
 }
 
@@ -770,8 +764,6 @@ textarea {
 .applauncher button,
 .session-menu button,
 .ts-panel button,
-.desktop-widgets button,
-.desktop-widgets levelbar,
 .osd levelbar {
   border-color: transparent !important;
   background: transparent !important;
@@ -783,8 +775,7 @@ textarea {
 .notification button:hover,
 .applauncher button:hover,
 .session-menu button:hover,
-.ts-panel button:hover,
-.desktop-widgets button:hover {
+.ts-panel button:hover {
   background: ${c.accent_glow} !important;
   border-color: ${c.accent_dim} !important;
 }
