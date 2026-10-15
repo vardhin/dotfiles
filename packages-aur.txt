@@ -4,4 +4,3 @@
 
 aylurs-gtk-shell-git   # AGS v3
 libastal-meta          # AstalApps, Battery, Hyprland, Mpris, Notifd, PowerProfiles, Tray, Wp
-awww                   # wallpaper daemon (formerly swww)

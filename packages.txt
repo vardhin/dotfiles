@@ -12,6 +12,7 @@ hyprlock
 hypridle
 hyprpicker
 hyprsunset
+awww
 xdg-desktop-portal-hyprland
 polkit-gnome
 greetd
