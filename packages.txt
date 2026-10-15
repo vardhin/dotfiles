@@ -8,25 +8,16 @@ base-devel
 
 # Compositor + session
 hyprland
-hyprlock
-hypridle
 hyprpicker
-hyprsunset
-awww
 xdg-desktop-portal-hyprland
-polkit-gnome
 greetd
 
-# Dot Shell (Quickshell); qt6-shadertools only to rebuild .qsb shaders
+# Dot Shell (Quickshell): the whole shell, incl. lock, idle, polkit agent,
+# notifications and wallpaper. qt6-shadertools only to rebuild .qsb shaders;
+# libnotify for notify-send, which the shell's own toasts go through.
 quickshell
 qt6-shadertools
-
-# Shell runtime (AGS v3 itself is AUR, see packages-aur.txt)
-gjs
-gtk4
-gtk4-layer-shell
 libnotify
-sqlite
 
 # Audio, media, display
 pipewire
@@ -44,14 +35,12 @@ cava
 networkmanager
 bluez
 bluez-utils
-blueman
 
 # Screenshots + clipboard
 grim
 slurp
 swappy
 wl-clipboard
-cliphist
 wl-clip-persist
 
 # Terminal + CLI

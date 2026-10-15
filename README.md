@@ -1,6 +1,6 @@
 # dotfiles
 
-Arch Linux rice: Hyprland + AGS v3 (being replaced by the Quickshell "Dot Shell"), Ghostty, zsh. Managed with GNU Stow, one module per top-level folder.
+Arch Linux rice: Hyprland + the Quickshell "Dot Shell" (a dot-matrix LED shell), Ghostty, zsh. Managed with GNU Stow, one module per top-level folder.
 
 > Mid re-rice. The plan (Hyprland + Quickshell + the dot-matrix "Dot Shell") lives in the
 > *Arch Rice* doc, tab **Re-rice plan**. This README describes what is in the repo today.
@@ -25,36 +25,35 @@ dotfiles/
 ├── hypr/.config/hypr/          → ~/.config/hypr
 │   ├── hyprland.conf           entry point, sources config/* (defaults.conf first)
 │   ├── config/
-│   │   ├── defaults.conf       $TERMINAL, $BROWSER, $EDITOR, $scriptPath, idle handler
-│   │   ├── autostart.conf      boot sound, awww, ags, polkit, clipboard, idle
+│   │   ├── defaults.conf       $TERMINAL, $BROWSER, $EDITOR, $scriptPath, $dotshell
+│   │   ├── autostart.conf      session env, boot sound, Dot Shell, clipboard
 │   │   ├── decorations.conf    zero chrome: one-dot gutter, focus by dim, blur, animations
 │   │   ├── environment.conf    env vars
 │   │   ├── input.conf          keyboard, touchpad, gestures
-│   │   ├── keybinds.conf       every bind
+│   │   ├── keybinds.conf       every bind, as `bindd` with a description (cheatsheet)
 │   │   ├── monitor.conf        outputs
-│   │   └── windowrules.conf    window + layer rules
-│   ├── hypridle.conf / hyprlock.conf (+ hyprlock/background.jpg)
+│   │   └── windowrules.conf    window rules
 │   ├── scripts/screenshot.sh
 │   └── sounds/boot.wav
-├── ags/.config/ags/            → ~/.config/ags   (AGS v3, GTK4, TSX)
-│   ├── app.tsx                 entry point + IPC request handler
-│   ├── widget/                 Bar (+ popovers), AppLauncher, Notifications, OSD,
-│   │                           Session, ThemeSwitcher, MediaCenter
-│   ├── lib/                    battery monitor, notify helper
-│   ├── themes/*.json           theme presets; current.json is the active one
-│   ├── scripts/apply-theme.sh  pushes a preset to Hyprland + wallpaper
-│   ├── style.scss, assets/icons/
-│   └── browser.json            NOT tracked: YouTube Music auth headers, see below
-├── quickshell/.config/quickshell/dotshell/   → ~/.config/quickshell/dotshell  (run: qs -p ~/.config/quickshell/dotshell)
-│   ├── shell.qml               entry point; IPC targets strip, shell
-│   ├── Tokens.qml              era, pitch, dot size, depth; persisted in
+├── quickshell/.config/quickshell/dotshell/   → ~/.config/quickshell/dotshell
+│   ├── shell.qml               entry point; IPC targets pane, strip, night, shell
+│   ├── Tokens.qml / Eras.qml   era, pitch, dot size, depth, wallpaper, night; persisted in
 │   │                           ~/.local/state/dotshell/tokens.json (IPC target: tokens)
-│   ├── Eras.qml                era presets (slot colors, unlit, glass, ramp, glow, shape)
+│   ├── Ui.qml                  which pane is open, on which screen
 │   ├── DotSurface.qml          low-res QML canvas → LED dots (shaders/dot.frag)
-│   ├── DotText.qml             pixel-font text, 1 font px = 1 dot
-│   ├── TopStrip.qml            top LED strip: workspaces, clock, tray glyphs
-│   ├── shaders/dot.frag(.qsb)  dot mask, depth quantize, glow; .qsb is committed
-│   └── build-shaders.sh        recompile .qsb after editing a shader (qt6-shadertools)
+│   ├── Pane.qml                a floating LED pane (layer-shell window + DotSurface)
+│   ├── TopStrip.qml            workspaces | clock / ticker | status words, tray
+│   ├── DotText DotLabel DotButton DotInput VuBar Marquee FlapText Frame Rule Line StatusWord
+│   ├── services/               Notifs (the notification daemon), Audio, Brightness, Power
+│   │                           (+ battery monitor), Net, Bt, Idle (+ logind bridge), Lock (PAM),
+│   │                           Night, DropTerm, Notify
+│   ├── panes/                  Launcher, Messages, ToastStack, Osd, Session, Cheatsheet,
+│   │                           Calendar, Audio, Brightness, Wifi, Bluetooth, Battery,
+│   │                           LockScreen, Polkit, Wallpaper
+│   ├── pam/dotshell            PAM stack for the lock screen (pam_unix only)
+│   ├── shaders/                dot.frag(.qsb) for DotSurface; warm.glsl, the Hyprland
+│   │                           night-warmth screen shader
+│   └── build-shaders.sh        recompile .qsb after editing dot.frag (qt6-shadertools)
 ├── ghostty/.config/ghostty/    → ~/.config/ghostty  (Departure Mono pixel font, no chrome)
 ├── zsh/.zshrc                  → ~/.zshrc  (oh-my-zsh, powerlevel10k, eza, zoxide)
 ├── packages.txt                pacman packages
@@ -64,24 +63,38 @@ dotfiles/
 
 ## Secrets
 
-`ags/.config/ags/browser.json` holds YouTube Music request headers for the Media Center.
-It is gitignored and must be regenerated locally after logging in; never commit it.
+The old AGS Media Center kept YouTube Music request headers in `ags/.config/ags/browser.json`.
+It stays gitignored for as long as a local copy exists; never commit it.
 
 ## Paths
 
-Nothing hard-codes a username. Configs use `~` or `$HOME`; theme presets store wallpapers
-as `~/wallpaper/<theme>/…`, expanded at runtime by `ThemeSwitcher.tsx` and `apply-theme.sh`.
-Wallpapers themselves are not in the repo.
+Nothing hard-codes a username. Configs use `~` or `$HOME`. The wallpaper is the `wallpaper`
+token (a `~/…` path); wallpapers themselves are not in the repo.
 
 ## Dot Shell
 
 Run it by path: `qs -c dotshell` silently skips subfolders when `~/.config/quickshell/shell.qml`
-exists. Hyprland uses `$dotshell` from `defaults.conf`. Quickshell hot-reloads on save.
-Tokens can be changed live:
+exists. Hyprland starts it from `autostart.conf` as `$dotshell`. Quickshell hot-reloads on save.
 
 ```bash
-alias dotshell='qs -p ~/.config/quickshell/dotshell'
+alias dotshell='qs -p ~/.config/quickshell/dotshell'   # already in .zshrc
+dotshell ipc show                          # every IPC target and function
 ```
+
+It replaces, one for one: AGS (bar, popovers, launcher, notifications, OSD, session menu),
+hyprlock, hypridle, polkit-gnome, awww and hyprsunset.
+
+| Thing | How |
+|---|---|
+| Panes | `dotshell ipc call pane toggle <launcher\|session\|notifs\|cheatsheet\|calendar\|audio\|brightness\|wifi\|bluetooth\|battery>`; strip words open them too |
+| Notifications | Dot Shell is the daemon. New ones scroll across the strip and pop top right; `Super N` lists live ones and the log (`~/.local/state/dotshell/notifications.json`); `Super Shift N` is do-not-disturb |
+| Launcher | `Alt Space`: departure board. Type, arrows or Ctrl J/K, Enter; Ctrl 1–8 jumps to a gate. Launch counts rank results |
+| Lock | `Super L` (`loginctl lock-session`), idle, the session menu and suspend all lock through logind. PAM stack: `pam/dotshell` |
+| Idle | dim 5 min, lock 7.5 min, screen off 7.75 min. Caffeine (`Super Shift C`, or the brightness pane) holds all three |
+| Night warmth | `Super Shift H` or `dotshell ipc call night toggle`: a Hyprland screen shader, persisted in tokens |
+| Wallpaper | `dotshell ipc call tokens set wallpaper ~/wallpaper/x.jpg` |
+| Battery monitor | toasts on plug/unplug, at 15 % and 10 %; at 5 % a 60 s grace, then poweroff |
+| Shortcuts | `Super /`: read live from `hyprctl -j binds`, described by the `bindd` descriptions |
 
 ```bash
 dotshell ipc call tokens set era tokyo     # phosphor | tokyo | matrix | vfd
@@ -91,4 +104,4 @@ dotshell ipc call tokens set depth 16      # era | 8 | 16 | 24
 dotshell ipc call strip toggle
 ```
 
-Binds: `Super D` toggles the strip, `Super Shift D` cycles eras, `Super Ctrl D` restarts it.
+Binds: `Super D` toggles the strip, `Super Shift D` cycles eras, `Super Ctrl D` restarts the shell.

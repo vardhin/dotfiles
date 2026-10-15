@@ -10,7 +10,7 @@
 set -euo pipefail
 
 DOTFILES="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-MODULES=(hypr ags quickshell ghostty zsh)
+MODULES=(hypr quickshell ghostty zsh)
 BACKUP="$HOME/.dotfiles-backup/$(date +%Y%m%d-%H%M%S)"
 
 log() { printf '\033[1;33m::\033[0m %s\n' "$*"; }
@@ -70,6 +70,17 @@ backup_conflicts() {
   done < <(find "$DOTFILES/$module" -type f -print0)
 }
 
+# Links into this repo whose target is gone (a module or file was removed
+# from the repo, like ags in Phase 3) are deleted, so nothing dangles.
+prune_dead_links() {
+  local link
+  while IFS= read -r -d '' link; do
+    [[ $(readlink "$link") == *"$(basename "$DOTFILES")/"* ]] || continue
+    rm "$link"
+    log "removed dead link ${link/#$HOME/~}"
+  done < <(find "$HOME" "$HOME/.config" -maxdepth 1 -xtype l -print0 2>/dev/null)
+}
+
 link_modules() {
   local dry=${1:-}
   command -v stow >/dev/null || { echo "stow is not installed (sudo pacman -S stow)" >&2; exit 1; }
@@ -77,6 +88,7 @@ link_modules() {
     for m in "${MODULES[@]}"; do stow -n -v -d "$DOTFILES" -t "$HOME" --restow "$m" || true; done
     return
   fi
+  prune_dead_links
   # Clear every conflict first: one stray link trips stow on every module.
   for m in "${MODULES[@]}"; do backup_conflicts "$m"; done
   for m in "${MODULES[@]}"; do
