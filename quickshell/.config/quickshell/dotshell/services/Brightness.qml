@@ -32,6 +32,13 @@ Singleton {
                     root.device = f[0];
                     root.max = parseInt(f[4]);
                     root.current = parseInt(f[2]);
+                    // Started while idle-dimmed (a shell restart mid-dim): the
+                    // new shell never saw the dim, so no activity would undo
+                    // it. Put back the level brightnessctl saved.
+                    if (root.current === root.dimLevel) {
+                        root.quiet = true;
+                        root.restore();
+                    }
                 }
             }
         }
@@ -64,9 +71,12 @@ Singleton {
     }
 
     // Idle dim and restore, like hypridle's brightnessctl -s / -r.
+    // Raw backlight units while idle-dimmed.
+    readonly property int dimLevel: 10
+
     function dim(): void {
         quiet = true;
-        Quickshell.execDetached(["brightnessctl", "-q", "-s", "set", "10"]);
+        Quickshell.execDetached(["brightnessctl", "-q", "-s", "set", String(dimLevel)]);
     }
     function restore(): void {
         if (!quiet)
