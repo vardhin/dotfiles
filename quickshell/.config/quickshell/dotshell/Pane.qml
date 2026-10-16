@@ -14,6 +14,9 @@ import Quickshell.Wayland
 //   }
 //
 // Escape closes it. Clicking outside closes it unless `grab` is false.
+// Keyboard: on demand. The focus grab hands the pane the keyboard; Exclusive
+// would also keep Hyprland from ever clearing the grab, so clicking outside
+// would not close the pane (kept only by the polkit prompt, which has no grab).
 PanelWindow {
     id: pane
 
@@ -51,7 +54,8 @@ PanelWindow {
 
     // Never wider or taller than the screen at the current pitch.
     readonly property int maxCols: screen ? Math.floor(screen.width / Tokens.pitch) : cols
-    readonly property int maxRows: screen ? Math.floor(screen.height / Tokens.pitch) : rows
+    // The strip's rows are taken (the pane sits under it).
+    readonly property int maxRows: screen ? Math.floor((screen.height - (Tokens.top ? 11 * Tokens.pitch + 4 : 0)) / Tokens.pitch) : rows
 
     DotSurface {
         id: surface

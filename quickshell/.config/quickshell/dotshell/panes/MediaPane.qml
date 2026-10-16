@@ -25,7 +25,6 @@ Pane {
     id: pane
 
     name: "media"
-    keyboard: WlrKeyboardFocus.Exclusive
     anchors {
         top: true
         right: true
@@ -39,12 +38,23 @@ Pane {
     rows: body.height + 8
 
     // Dot rows free under the strip at this pitch.
-    readonly property int avail: Math.floor(((screen?.height ?? 1000) - 40) / Tokens.pitch) - 2
-    // The video: the pane's width, 16:9. Shown on NOW and TV while Dot TV
-    // plays, and always on SCREEN.
-    readonly property int screenH: Math.round(inner * 9 / 16)
-    readonly property bool tvShown: page === "screen" || Media.isTv && (page === "now" || page === "tv")
-    readonly property int slots: Math.max(3, Math.min(10, Math.floor((avail - 4 * Tokens.lineDots - 20 - (tvShown ? screenH + 3 : 0)) / Tokens.lineDots)))
+    readonly property int avail: maxRows - 2
+    // The video: 16:9, as wide as the pane unless that would not fit the
+    // screen with the page's own rows; then smaller, centered. Shown on NOW
+    // and TV while Dot TV plays, and always on SCREEN.
+    // Rows each page needs besides the video (lines, rules, spacing, padding).
+    readonly property int reserve: {
+        const L = Tokens.lineDots;
+        if (page === "now")
+            return L * 9 + 20 + 30;     // tabs, 4 info, transport, 3 up next, spectrum
+        if (page === "tv")
+            return L * 7 + 30;          // tabs, query, 3 rows at least, mode, 2 hints
+        return L * 9 + 30;              // tabs, 6 settings, 2 hints
+    }
+    readonly property int screenH: Math.max(0, Math.min(Math.round(inner * 9 / 16), avail - reserve))
+    readonly property int screenW: Math.min(inner, Math.round(screenH * 16 / 9))
+    readonly property bool tvShown: (page === "screen" || Media.isTv && (page === "now" || page === "tv")) && screenH >= 18
+    readonly property int slots: Math.max(3, Math.min(10, Math.floor((avail - 5 * Tokens.lineDots - 30 - (tvShown ? screenH + 3 : 0)) / Tokens.lineDots)))
     property int screenRow: 0
 
     property string page: "now"
@@ -265,9 +275,9 @@ Pane {
             void (pane.page, pane.tvShown, screenSlot.y, Tokens.pitch);
             return screenSlot.mapToItem(pane.surface, 0, 0);
         }
-        x: at.x
+        x: at.x + Math.floor((pane.inner - pane.screenW) / 2) * Tokens.pitch
         y: at.y
-        width: pane.inner * Tokens.pitch
+        width: pane.screenW * Tokens.pitch
         height: pane.screenH * Tokens.pitch
         visible: pane.shown && pane.tvShown
     }

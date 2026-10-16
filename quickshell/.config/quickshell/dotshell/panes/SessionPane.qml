@@ -11,7 +11,6 @@ Pane {
     id: pane
 
     name: "session"
-    keyboard: WlrKeyboardFocus.Exclusive
 
     readonly property var actions: [
         { key: "L", label: "LOCK", run: () => Lock.lock() },

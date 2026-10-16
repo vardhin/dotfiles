@@ -13,7 +13,6 @@ Pane {
     id: pane
 
     name: "launcher"
-    keyboard: WlrKeyboardFocus.Exclusive
     anchors {
         bottom: true
         left: true

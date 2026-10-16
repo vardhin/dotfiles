@@ -15,7 +15,6 @@ Pane {
     id: pane
 
     name: "packages"
-    keyboard: WlrKeyboardFocus.Exclusive
 
     readonly property int slots: 10
     readonly property int inner: Math.min(64, Math.floor((maxCols - 8) / Tokens.charDots)) * Tokens.charDots
