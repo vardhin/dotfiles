@@ -58,7 +58,7 @@ Pane {
         { token: "wall", label: "WALL", options: [["dots", "DOTS"], ["image", "IMAGE"], ["off", "OFF"]] },
         { token: "hue", label: "HUE", options: [["era", "ERA"], ["wallpaper", "WALLPAPER"]] },
         { token: "cascade", label: "CASCADE", options: [["true", "FLIP"], ["false", "CUT"]] },
-        { token: "screen", label: "SCREEN", options: [["glass", "GLASS"], ["led", "LED"], ["off", "OFF"]] },
+        { token: "screen", label: "SCREEN", options: [["glass", "GLASS"], ["led", "LED"], ["board", "BOARD"], ["off", "OFF"]] },
         { token: "winfx", label: "WINDOWS", options: [["true", "DOTS"], ["false", "PLAIN"]] }
     ]
     // Settings rows that fit; the window follows `row`.

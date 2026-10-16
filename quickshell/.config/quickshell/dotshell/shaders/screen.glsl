@@ -7,9 +7,12 @@
 // and a token change writes a new file.
 //
 //   MODE 0  glass: faint dot mask, phosphor tint, vignette. Always on.
-//   MODE 1  full LED: the whole screen sampled once per dot, quantized to the
-//           era (ramp or RGB332/565), drawn as dots on the era's glass.
+//   MODE 1  full LED: the screen as dots on the era's glass, quantized to
+//           the era (ramp or RGB332/565). Screen = board samples one color
+//           per dot (LED_DETAIL 0); led keeps every pixel inside its dot.
 //   MODE 2  pass-through (screen = off with night on: warmth only).
+//   LED_DETAIL 1  full LED keeps every pixel inside a dot instead of one
+//           color per dot: text stays legible at fine pitches.
 //   NIGHT 1 warmth (~4000 K, the old hyprsunset setting) on top of either.
 //
 // Coordinates: in Hyprland's screen pass v_texcoord (0, 0) is the top left,
@@ -37,6 +40,9 @@ precision highp float;
 #define RAMP1 vec3(0.42, 0.29, 0.12)
 #define RAMP2 vec3(0.72, 0.51, 0.20)
 #define RAMP3 vec3(1.0, 0.70, 0.28)
+#endif
+#ifndef LED_DETAIL
+#define LED_DETAIL 0
 #endif
 
 // Glass strength. Small on purpose: text must stay as sharp as without it.
@@ -90,20 +96,42 @@ void main() {
     float m = 1.0 - smoothstep(r - aa, r + aa, d);
 
 #if MODE == 1
-    // One color per dot: four taps inside the cell, so thin lines and small
-    // text still light the dots they cross instead of vanishing between taps.
+#if LED_DETAIL == 1
+    // Detail: every pixel inside a dot keeps its own color, so strokes thinner
+    // than a dot survive; only the gaps between dots are glass.
+    vec3 s = texture(tex, v_texcoord).rgb;
+#else
+    // One color per dot, from the 3x3 tap that stands out most from the
+    // cell's mean: a 1 px text stroke wins over the background around it
+    // (an average would blur it to the background's grey), on dark and light
+    // themes alike.
     vec2 center = (floor(g) + 0.5) * PITCH;
-    vec2 o = vec2(PITCH * 0.25);
-    vec3 s = texture(tex, (center + vec2(-o.x, -o.y)) / fullSize).rgb
-           + texture(tex, (center + vec2( o.x, -o.y)) / fullSize).rgb
-           + texture(tex, (center + vec2(-o.x,  o.y)) / fullSize).rgb
-           + texture(tex, (center + vec2( o.x,  o.y)) / fullSize).rgb;
-    s *= 0.25;
+    float o = PITCH / 3.0;
+    vec3 taps[9];
+    vec3 mean = vec3(0.0);
+    for (int i = 0; i < 9; i++) {
+        vec2 at = center + vec2(float(i % 3 - 1), float(i / 3 - 1)) * o;
+        taps[i] = texture(tex, at / fullSize).rgb;
+        mean += taps[i];
+    }
+    mean /= 9.0;
+    vec3 s = taps[4];
+    float best = -1.0;
+    for (int i = 0; i < 9; i++) {
+        float dl = abs(luma(taps[i]) - luma(mean));
+        if (dl > best) {
+            best = dl;
+            s = taps[i];
+        }
+    }
+#endif
     float l = luma(s);
     // Dark-theme backgrounds stay unlit, like the off dots of a real board.
     bool lit = l > 0.11;
 #if DEPTH == 0
-    vec3 col = eraRamp(l);
+    // Stretched so mid-grey UI text lands on the bright levels, not the dim
+    // ones: the ramp is for contrast, the dots carry the detail.
+    vec3 col = eraRamp(clamp((l - 0.11) / 0.5, 0.0, 1.0) * 0.99);
 #elif DEPTH == 8
     vec3 col = quantize(s, vec3(3.0, 3.0, 2.0));
 #elif DEPTH == 16

@@ -100,7 +100,7 @@ hyprlock, hypridle, polkit-gnome, awww and hyprsunset.
 | Launcher | `Alt Space`: departure board. Type, arrows or Ctrl J/K, Enter; Ctrl 1–8 jumps to a gate. Launch counts rank results |
 | Lock | `Super L` (`loginctl lock-session`), idle, the session menu and suspend all lock through logind. PAM stack: `pam/dotshell` |
 | Idle | dim 5 min, lock 7.5 min, screen off 7.75 min. Caffeine (`Super Shift C`, or the brightness pane) holds all three |
-| Screen shader | Hyprland's `screen_shader`, written by Dot Shell from `shaders/screen.glsl` with the tokens baked in (Hyprland passes screen shaders no custom uniforms). **glass**, always on: faint dot mask on the shell's grid, phosphor tint, vignette. **LED** (`Super Shift T`, `dotshell ipc call screen toggle`): the whole screen sampled once per dot and quantized to the era or the color depth. **off**. Costs nothing measurable at 1080p on the Lucienne iGPU |
+| Screen shader | Hyprland's `screen_shader`, written by Dot Shell from `shaders/screen.glsl` with the tokens baked in (Hyprland passes screen shaders no custom uniforms). **glass**, always on: faint dot mask on the shell's grid, phosphor tint, vignette. **LED** (`Super Shift T`, `dotshell ipc call screen toggle`): the screen as dots in the era's colors (or the color depth), every pixel kept inside its dot so text stays legible. **board**: one color per dot, a true LED board; text below ~4 dots tall does not survive, so it suits coarse pitches. **off**. Costs nothing measurable at 1080p on the Lucienne iGPU |
 | Night warmth | `Super Shift H` or `dotshell ipc call night toggle`: folded into the screen shader, persisted in tokens |
 | Window effects | Windows open with a raster sweep of dots and close by collapsing to a line, drawn by Dot Shell on a click-through overlay (Hyprland has no per-window shaders); Hyprland's own window animation is cut to a fade. `winfx` token |
 | Wallpaper | `dotshell ipc call tokens set wallpaper ~/wallpaper/x.jpg`; `wall` picks how it shows: `dots` (drawn by the matrix), `image` (plain, parallax), `off` (unlit glass) |
@@ -115,7 +115,7 @@ dotshell ipc call tokens set depth 16      # era | 8 | 16 | 24
 dotshell ipc call tokens set wall dots     # dots | image | off
 dotshell ipc call tokens set hue wallpaper # era | wallpaper (matugen picks the hue)
 dotshell ipc call tokens set cascade false # true: era changes flip over in a wave
-dotshell ipc call tokens set screen led    # glass | led | off
+dotshell ipc call tokens set screen led    # glass | led | board | off
 dotshell ipc call tokens set winfx false   # window open/close as dots
 dotshell ipc call strip toggle
 ```

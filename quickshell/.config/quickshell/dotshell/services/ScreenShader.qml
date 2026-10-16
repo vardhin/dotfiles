@@ -7,7 +7,7 @@ import Quickshell.Io
 import qs
 
 // The screen shader: Hyprland's decoration:screen_shader, built from
-// shaders/screen.glsl. Glass (always on), full LED (Super Shift T) or off, with
+// shaders/screen.glsl. Glass (always on), LED (Super Shift T), board or off, with
 // night warmth folded in; it replaced hyprsunset in Phase 3 and warm.glsl in
 // Phase 6. Hyprland passes screen shaders no custom uniforms, so the tokens
 // (mode, night, pitch, dot size, depth and the era on screen) are written into
@@ -38,7 +38,7 @@ Singleton {
 
     // The #define block for the current tokens, or "" for no shader at all.
     function defines(): string {
-        const m = mode === "led" ? 1 : mode === "glass" ? 0 : 2;
+        const m = mode === "led" || mode === "board" ? 1 : mode === "glass" ? 0 : 2;
         if (m === 2 && !night)
             return "";
         const e = Tokens.current;
@@ -46,6 +46,7 @@ Singleton {
         const pitch = Math.max(2, Tokens.pitch * scale);
         const d = [
             ["MODE", m],
+            ["LED_DETAIL", mode === "board" ? 0 : 1],
             ["NIGHT", night ? 1 : 0],
             ["PITCH", pitch.toFixed(4)],
             ["DOT", Tokens.dotSize.toFixed(3)],
@@ -84,7 +85,10 @@ Singleton {
             return;
         applied = src;
         useB = !useB;
-        (useB ? outB : outA).setText(src);
+        // Stamped: FileView skips a write whose text the file already holds,
+        // and then never says `saved`, so going back to an earlier setting
+        // would never reach Hyprland.
+        (useB ? outB : outA).setText(src + "\n// applied " + Date.now() + "\n");
     }
 
     function hand(path: string): void {
@@ -158,7 +162,7 @@ Singleton {
     IpcHandler {
         target: "screen"
 
-        // dotshell ipc call screen led   (glass | led | off | toggle)
+        // dotshell ipc call screen set led   (glass | led | board | off | toggle)
         function set(mode: string): string {
             if (mode === "toggle")
                 return Tokens.toggleLed();

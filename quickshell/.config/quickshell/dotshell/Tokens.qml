@@ -26,9 +26,12 @@ import Quickshell.Io
 //   cascade    true: an era change flips every dot over in a wave, like a
 //              flip-disc board; false: switch at once
 //   night      warmth in the screen shader, on/off
-//   screen     glass | led | off: the full-screen shader (services/Screen.qml):
-//              faint dot mask and tint over everything, the whole screen as
-//              LED dots (Super Shift T), or nothing
+//   screen     glass | led | board | off: the full-screen shader
+//              (services/ScreenShader.qml): faint dot mask and tint over
+//              everything; the screen as LED dots in era colors, every pixel
+//              kept inside its dot so text stays legible (Super Shift T); one
+//              color per dot, a true LED board (small text does not survive
+//              fine pitches); or nothing
 //   winfx      true: windows open and close as LED dots (panes/WindowFx.qml)
 Singleton {
     id: root
@@ -47,7 +50,7 @@ Singleton {
     readonly property bool winfx: store.winfx
 
     readonly property var walls: ["dots", "image", "off"]
-    readonly property var screens: ["glass", "led", "off"]
+    readonly property var screens: ["glass", "led", "board", "off"]
     readonly property var keys: ["era", "pitch", "dotSize", "depth", "wall", "wallpaper", "hue", "cascade", "night", "screen", "winfx"]
 
     // ── What is on screen ───────────────────────────────────────────
@@ -331,7 +334,7 @@ Singleton {
         store.night = !store.night;
     }
 
-    // Super Shift T: full LED and back to glass (off counts as glass).
+    // Super Shift T: LED and back to glass (from board or off: to LED).
     function toggleLed(): string {
         store.screen = screen === "led" ? "glass" : "led";
         return store.screen;

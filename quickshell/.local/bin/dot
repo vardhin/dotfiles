@@ -12,7 +12,7 @@
   dot era [NAME | next | prev]       no name: list the eras
   dot display --pitch 5 --depth 16 [--size 80] [--wall dots|image|off]
               [--wallpaper ~/w.jpg] [--hue era|wallpaper] [--cascade on|off]
-              [--screen glass|led|off] [--night on|off] [--winfx on|off]
+              [--screen glass|led|board|off] [--night on|off] [--winfx on|off]
   dot raw '{"cmd":"tokens"}'        send one request as-is
 
 Kinds: clock sign note image mpris pixels.
