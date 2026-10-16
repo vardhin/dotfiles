@@ -50,9 +50,9 @@ Pane {
         Line {
             label: "NIGHT WARMTH"
             DotButton {
-                text: Night.on ? "ON" : "OFF"
-                active: Night.on
-                onClicked: Night.toggle()
+                text: ScreenShader.on ? "ON" : "OFF"
+                active: ScreenShader.on
+                onClicked: ScreenShader.toggle()
             }
         }
         Line {

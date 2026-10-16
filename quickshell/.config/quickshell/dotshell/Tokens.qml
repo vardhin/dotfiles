@@ -25,7 +25,11 @@ import Quickshell.Io
 //              glow, shape) always stays the era's
 //   cascade    true: an era change flips every dot over in a wave, like a
 //              flip-disc board; false: switch at once
-//   night      warm screen shader on/off
+//   night      warmth in the screen shader, on/off
+//   screen     glass | led | off: the full-screen shader (services/Screen.qml):
+//              faint dot mask and tint over everything, the whole screen as
+//              LED dots (Super Shift T), or nothing
+//   winfx      true: windows open and close as LED dots (panes/WindowFx.qml)
 Singleton {
     id: root
 
@@ -39,9 +43,12 @@ Singleton {
     readonly property string hue: store.hue === "wallpaper" ? "wallpaper" : "era"
     readonly property bool cascade: store.cascade
     readonly property bool night: store.night
+    readonly property string screen: screens.includes(store.screen) ? store.screen : "glass"
+    readonly property bool winfx: store.winfx
 
     readonly property var walls: ["dots", "image", "off"]
-    readonly property var keys: ["era", "pitch", "dotSize", "depth", "wall", "wallpaper", "hue", "cascade", "night"]
+    readonly property var screens: ["glass", "led", "off"]
+    readonly property var keys: ["era", "pitch", "dotSize", "depth", "wall", "wallpaper", "hue", "cascade", "night", "screen", "winfx"]
 
     // ── What is on screen ───────────────────────────────────────────
     // `current` is the era as displayed: its colors after the wallpaper hue,
@@ -234,6 +241,8 @@ Singleton {
             property string hue: "era"
             property bool cascade: true
             property bool night: false
+            property string screen: "glass"
+            property bool winfx: true
         }
     }
 
@@ -282,6 +291,14 @@ Singleton {
         case "night":
             store.night = truthy(value);
             break;
+        case "screen":
+            if (!screens.includes(value))
+                return "screen is one of: " + screens.join(", ");
+            store.screen = value;
+            break;
+        case "winfx":
+            store.winfx = truthy(value);
+            break;
         default:
             return "unknown token; one of: " + keys.join(", ");
         }
@@ -298,7 +315,9 @@ Singleton {
             wallpaper: store.wallpaper,
             hue: hue,
             cascade: cascade,
-            night: night
+            night: night,
+            screen: screen,
+            winfx: winfx
         };
     }
 
@@ -310,6 +329,12 @@ Singleton {
 
     function toggleNight(): void {
         store.night = !store.night;
+    }
+
+    // Super Shift T: full LED and back to glass (off counts as glass).
+    function toggleLed(): string {
+        store.screen = screen === "led" ? "glass" : "led";
+        return store.screen;
     }
 
     IpcHandler {

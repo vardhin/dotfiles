@@ -18,7 +18,8 @@ import qs
 //   {"cmd":"era","name":"tokyo"}          {"cmd":"era","step":1} next, -1 previous
 //   {"cmd":"eras"}                         ids, names, the applied one
 //   {"cmd":"display","pitch":5,"depth":"16","dotSize":80,"wall":"dots",
-//    "wallpaper":"~/w.jpg","hue":"wallpaper","cascade":true}
+//    "wallpaper":"~/w.jpg","hue":"wallpaper","cascade":true,
+//    "screen":"led","night":true}
 //   {"cmd":"tokens"}
 // Replies: {"ok":true, ...} or {"ok":false,"error":"..."}.
 Singleton {

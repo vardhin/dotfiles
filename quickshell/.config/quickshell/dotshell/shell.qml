@@ -3,7 +3,7 @@
 
 // Dot Shell: every pane on one shared dot grid. Since Phase 3 it is the whole
 // desktop shell: strip, notifications, OSD, launcher, panes, lock, polkit,
-// wallpaper, idle and night warmth. Nothing from AGS remains.
+// wallpaper, idle and the screen shader. Nothing from AGS remains.
 //
 //   qs -p ~/.config/quickshell/dotshell   run (saving any file here hot-reloads the shell)
 //   qs -p ~/.config/quickshell/dotshell ipc show   list IPC targets
@@ -19,10 +19,11 @@ ShellRoot {
     property bool stripVisible: true
 
     // Services with no pane of their own: start them with the shell.
-    readonly property var services: [Power, Idle, Night, DropTerm, Lock, DotBus, Export]
+    readonly property var services: [Power, Idle, ScreenShader, DropTerm, Lock, DotBus, Export]
 
     Wallpaper {}
     World {}
+    WindowFx {}
 
     Variants {
         model: shell.stripVisible ? Quickshell.screens : []
@@ -66,7 +67,7 @@ ShellRoot {
         target: "night"
 
         function toggle(): string {
-            Night.toggle();
+            ScreenShader.toggle();
             return Tokens.night ? "on" : "off";
         }
     }

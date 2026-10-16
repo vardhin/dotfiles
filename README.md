@@ -36,9 +36,10 @@ dotfiles/
 │   ├── scripts/screenshot.sh
 │   └── sounds/boot.wav
 ├── quickshell/.config/quickshell/dotshell/   → ~/.config/quickshell/dotshell
-│   ├── shell.qml               entry point; IPC targets pane, strip, night, shell (tokens, export, …)
+│   ├── shell.qml               entry point; IPC targets pane, strip, night, shell (tokens, screen, export, …)
 │   ├── Tokens.qml / Eras.qml   the seven eras, the era cascade and every display token (pitch,
-│   │                           dot size, depth, wall, wallpaper, hue, cascade, night); persisted
+│   │                           dot size, depth, wall, wallpaper, hue, cascade, night, screen,
+│   │                           winfx); persisted
 │   │                           in ~/.local/state/dotshell/tokens.json (IPC target: tokens)
 │   ├── Ui.qml                  which pane is open, on which screen
 │   ├── DotSurface.qml          low-res QML canvas → LED dots (shaders/dot.frag); optional shape cut
@@ -48,16 +49,17 @@ dotfiles/
 │   ├── DotText DotLabel DotButton DotInput VuBar Marquee FlapText Frame Rule Line StatusWord
 │   ├── services/               Notifs (the notification daemon), Audio, Brightness, Power
 │   │                           (+ battery monitor), Net, Bt, Idle (+ logind bridge), Lock (PAM),
-│   │                           Night, DropTerm, Notify, Panels (desktop panels, panels.json),
+│   │                           ScreenShader, DropTerm, Notify, Panels (desktop panels, panels.json),
 │   │                           DotBus (the `dot` socket), Export (era → Ghostty, Neovim, GTK, Qt)
 │   ├── panes/                  Launcher, Messages, ToastStack, Osd, Session, Cheatsheet,
 │   │                           Calendar, Audio, Brightness, Wifi, Bluetooth, Battery, Eras,
 │   │                           Packages, LockScreen, Polkit, Wallpaper (dots/image/off, parallax), World
-│   │                           (desktop panels; slides with workspaces)
+│   │                           (desktop panels; slides with workspaces), WindowFx (window
+│   │                           open/close as LED dots)
 │   ├── pam/dotshell            PAM stack for the lock screen (pam_unix only)
-│   ├── shaders/                dot.frag(.qsb) for DotSurface; warm.glsl, the Hyprland
-│   │                           night-warmth screen shader (GLSL ES 3.00, like every screen shader)
-│   ├── build-shaders.sh        recompile .qsb after editing dot.frag (qt6-shadertools)
+│   ├── shaders/                dot.frag(.qsb) for DotSurface, winfx.frag(.qsb) for WindowFx;
+│   │                           screen.glsl, the Hyprland screen shader template (GLSL ES 3.00)
+│   ├── build-shaders.sh        recompile .qsb after editing a .frag (qt6-shadertools)
 │   └── (../../.local/bin/dot)  the `dot` CLI, linked to ~/.local/bin/dot
 ├── ghostty/.config/ghostty/    → ~/.config/ghostty  (Departure Mono pixel font, no chrome; era
 │                               colors from the generated dotshell.conf, gitignored)
@@ -98,7 +100,9 @@ hyprlock, hypridle, polkit-gnome, awww and hyprsunset.
 | Launcher | `Alt Space`: departure board. Type, arrows or Ctrl J/K, Enter; Ctrl 1–8 jumps to a gate. Launch counts rank results |
 | Lock | `Super L` (`loginctl lock-session`), idle, the session menu and suspend all lock through logind. PAM stack: `pam/dotshell` |
 | Idle | dim 5 min, lock 7.5 min, screen off 7.75 min. Caffeine (`Super Shift C`, or the brightness pane) holds all three |
-| Night warmth | `Super Shift H` or `dotshell ipc call night toggle`: a Hyprland screen shader, persisted in tokens |
+| Screen shader | Hyprland's `screen_shader`, written by Dot Shell from `shaders/screen.glsl` with the tokens baked in (Hyprland passes screen shaders no custom uniforms). **glass**, always on: faint dot mask on the shell's grid, phosphor tint, vignette. **LED** (`Super Shift T`, `dotshell ipc call screen toggle`): the whole screen sampled once per dot and quantized to the era or the color depth. **off**. Costs nothing measurable at 1080p on the Lucienne iGPU |
+| Night warmth | `Super Shift H` or `dotshell ipc call night toggle`: folded into the screen shader, persisted in tokens |
+| Window effects | Windows open with a raster sweep of dots and close by collapsing to a line, drawn by Dot Shell on a click-through overlay (Hyprland has no per-window shaders); Hyprland's own window animation is cut to a fade. `winfx` token |
 | Wallpaper | `dotshell ipc call tokens set wallpaper ~/wallpaper/x.jpg`; `wall` picks how it shows: `dots` (drawn by the matrix), `image` (plain, parallax), `off` (unlit glass) |
 | Battery monitor | toasts on plug/unplug, at 15 % and 10 %; at 5 % a 60 s grace, then poweroff |
 | Shortcuts | `Super /`: read live from `hyprctl -j binds`, described by the `bindd` descriptions |
@@ -111,10 +115,13 @@ dotshell ipc call tokens set depth 16      # era | 8 | 16 | 24
 dotshell ipc call tokens set wall dots     # dots | image | off
 dotshell ipc call tokens set hue wallpaper # era | wallpaper (matugen picks the hue)
 dotshell ipc call tokens set cascade false # true: era changes flip over in a wave
+dotshell ipc call tokens set screen led    # glass | led | off
+dotshell ipc call tokens set winfx false   # window open/close as dots
 dotshell ipc call strip toggle
 ```
 
 Binds: `Super D` toggles the strip, `Super Shift D` cycles eras, `Super T` opens the era switcher,
+`Super Shift T` toggles full LED,
 `Super I` the package manager (pacman + yay), `Super Ctrl D` restarts the shell.
 
 ### Eras
@@ -130,7 +137,7 @@ Binds: `Super D` toggles the strip, `Super Shift D` cycles eras, `Super T` opens
 | Game Boy | `gameboy` | the four DMG greens, square dots, no glow |
 
 `Super T` shows every era as a card in its own colors. **ERAS** page: arrows or j/k move, Enter
-applies, 1–7 pick directly. Tab goes to **DISPLAY**: pitch, dot size, depth, wall, hue, cascade;
+applies, 1–7 pick directly. Tab goes to **DISPLAY**: pitch, dot size, depth, wall, hue, cascade, screen, windows;
 Up/Down pick a row, Left/Right change it. At coarse pitches the pane narrows and scrolls so it
 always fits under the strip.
 

@@ -1,7 +1,9 @@
 # Ghostty: the terminal half of the LED panel.
 # Colors come from the era on screen: Dot Shell writes them to dotshell.conf
 # next to this file (included at the end) and reloads Ghostty with SIGUSR2.
-# The dot-matrix custom shader arrives in Phase 6.
+# No custom-shader here: the screen shader (Dot Shell, shaders/screen.glsl)
+# already lays the dot mask over every window, and a second one would beat
+# against it.
 
 # ── Font ─────────────────────────────────────────────────────────────
 # Departure Mono: a monospace pixel font drawn on an 11 px grid with

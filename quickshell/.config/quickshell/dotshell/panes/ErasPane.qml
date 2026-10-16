@@ -7,7 +7,7 @@ import qs
 // tubes and its ramp. Arrows (or hjkl) move, Enter applies, 1-9 apply
 // directly; the screen then flips over to the new era (the `cascade` token).
 // DISPLAY: dot pitch, dot size, color depth, wallpaper mode, hue source and
-// the cascade. Up/Down pick a row, Left/Right change it.
+// the cascade, the screen shader, window effects. Up/Down pick a row, Left/Right change it.
 // Every choice is a token, so it persists and applies live.
 //
 // The pane is sized in dots, so it grows with the pitch. At coarse pitches it
@@ -57,7 +57,9 @@ Pane {
         { token: "depth", label: "DEPTH", options: [["era", "ERA"], ["8", "8 BIT"], ["16", "16"], ["24", "24"]] },
         { token: "wall", label: "WALL", options: [["dots", "DOTS"], ["image", "IMAGE"], ["off", "OFF"]] },
         { token: "hue", label: "HUE", options: [["era", "ERA"], ["wallpaper", "WALLPAPER"]] },
-        { token: "cascade", label: "CASCADE", options: [["true", "FLIP"], ["false", "CUT"]] }
+        { token: "cascade", label: "CASCADE", options: [["true", "FLIP"], ["false", "CUT"]] },
+        { token: "screen", label: "SCREEN", options: [["glass", "GLASS"], ["led", "LED"], ["off", "OFF"]] },
+        { token: "winfx", label: "WINDOWS", options: [["true", "DOTS"], ["false", "PLAIN"]] }
     ]
     // Settings rows that fit; the window follows `row`.
     readonly property int shownRows: Math.max(1, Math.min(settings.length, Math.floor((avail - fixedRows) / step)))
