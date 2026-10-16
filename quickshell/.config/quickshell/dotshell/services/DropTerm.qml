@@ -28,16 +28,20 @@ Singleton {
         command: ["hyprctl", "-j", "clients"]
         stdout: StdioCollector {
             onStreamFinished: {
-                let exists = false;
+                let win = null;
                 try {
-                    exists = JSON.parse(text).some(c => (c.class || c.initialClass || "").toLowerCase() === root.cls);
+                    win = JSON.parse(text).find(c => (c.class || c.initialClass || "").toLowerCase() === root.cls) ?? null;
                 } catch (e) {}
 
-                root.graceUntil = Date.now() + 650;
-                if (!exists) {
+                // Decide from where the window really is, not from `hidden`:
+                // the flag resets when the shell restarts, the window does not.
+                root.graceUntil = Date.now() + 1500;
+                if (!win) {
                     root.hidden = false;
-                    Quickshell.execDetached(["ghostty", "--class=" + root.cls, "--title=Dropdown", "--background-opacity=0.95"]);
-                } else if (root.hidden) {
+                    // gtk-single-instance=false: a new process, so the class sticks
+                    // even when another Ghostty is already running.
+                    Quickshell.execDetached(["ghostty", "--gtk-single-instance=false", "--class=" + root.cls, "--title=Dropdown", "--background-opacity=0.95"]);
+                } else if (win.workspace?.name !== Hyprland.focusedWorkspace?.name) {
                     root.show();
                 } else {
                     root.hide();
@@ -67,7 +71,8 @@ Singleton {
                 return;
             if (event.name === "activewindow") {
                 const focusedClass = event.data.split(",")[0].toLowerCase();
-                if (focusedClass !== root.cls)
+                // An empty class is a window still mapping (often the dropdown itself).
+                if (focusedClass !== "" && focusedClass !== root.cls)
                     root.hide();
             } else if (event.name === "workspace") {
                 root.hide();

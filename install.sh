@@ -10,7 +10,7 @@
 set -euo pipefail
 
 DOTFILES="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-MODULES=(hypr quickshell ghostty zsh)
+MODULES=(hypr quickshell ghostty fontconfig zsh)
 BACKUP="$HOME/.dotfiles-backup/$(date +%Y%m%d-%H%M%S)"
 
 log() { printf '\033[1;33m::\033[0m %s\n' "$*"; }

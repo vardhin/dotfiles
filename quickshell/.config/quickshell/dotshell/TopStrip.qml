@@ -28,7 +28,17 @@ PanelWindow {
         left: true
         right: true
     }
-    implicitHeight: rows * Tokens.pitch
+    // Whole physical pixels: at scale 1.2, 11 x 3 = 33 px is 39.6 device px,
+    // and the fractional exclusive zone leaves a sliver between the strip and
+    // the windows below it (and makes Hyprland re-round it as windows map).
+    readonly property real dpr: devicePixelRatio > 0 ? devicePixelRatio : 1
+    implicitHeight: {
+        // Layer sizes are whole logical px; also want whole device px.
+        let h = rows * Tokens.pitch;
+        while (Math.abs(h * dpr - Math.round(h * dpr)) > 0.01 && h < rows * Tokens.pitch + 10)
+            h++;
+        return h;
+    }
     color: Tokens.glass
 
     WlrLayershell.namespace: "dotshell-strip"
@@ -44,6 +54,7 @@ PanelWindow {
     DotSurface {
         id: surface
         anchors.horizontalCenter: parent.horizontalCenter
+        anchors.verticalCenter: parent.verticalCenter
         cols: strip.cols
         rows: strip.rows
 

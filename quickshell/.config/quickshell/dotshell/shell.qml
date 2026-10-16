@@ -41,6 +41,7 @@ ShellRoot {
     WifiPane {}
     BluetoothPane {}
     BatteryPane {}
+    ErasPane {}
     PolkitPane {}
     LockScreen {}
 

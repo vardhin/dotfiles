@@ -81,13 +81,11 @@ Scope {
                     spacing: 6
 
                     // Clock at 3x: 21 x 33 dots per digit.
-                    Text {
+                    DotText {
                         anchors.horizontalCenter: parent.horizontalCenter
+                        size: 3
+                        height: implicitHeight
                         text: Qt.formatDateTime(clock.date, clock.seconds % 2 ? "hh mm" : "hh:mm")
-                        font.family: Tokens.font
-                        font.pixelSize: Tokens.fontPx * 3
-                        renderType: Text.NativeRendering
-                        antialiasing: false
                         color: "white"
                     }
 
