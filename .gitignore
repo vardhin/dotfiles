@@ -7,6 +7,8 @@ ags/.config/ags/browser.json
 node_modules/
 
 # Runtime state
+# Era colors Dot Shell writes for Ghostty (lands here when stow folds the dir)
+ghostty/.config/ghostty/dotshell.conf
 *.log
 *.db
 *.sqlite

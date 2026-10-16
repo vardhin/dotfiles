@@ -19,7 +19,7 @@ ShellRoot {
     property bool stripVisible: true
 
     // Services with no pane of their own: start them with the shell.
-    readonly property var services: [Power, Idle, Night, DropTerm, Lock, DotBus]
+    readonly property var services: [Power, Idle, Night, DropTerm, Lock, DotBus, Export]
 
     Wallpaper {}
     World {}

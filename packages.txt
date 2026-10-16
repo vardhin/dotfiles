@@ -18,6 +18,8 @@ greetd
 quickshell
 qt6-shadertools
 libnotify
+# matugen: picks the wallpaper's hue when the `hue` token is "wallpaper"
+matugen
 
 # Audio, media, display
 pipewire
