@@ -69,12 +69,15 @@ Pane {
         { token: "cascade", label: "CASCADE", options: [["true", "FLIP"], ["false", "CUT"]] },
         { token: "screen", label: "SCREEN", options: [["glass", "GLASS"], ["led", "LED"], ["board", "BOARD"], ["off", "OFF"]] },
         { token: "winfx", label: "WINDOWS", options: [["true", "DOTS"], ["false", "PLAIN"]] },
+        { token: "winshade", label: "WIN SHADE", options: [["off", "OFF"], ["dim", "UNFOCUSED"], ["all", "ALL"]] },
         { token: "wsfx", label: "WORKSPACES", options: [["true", "DISSOLVE"], ["false", "SLIDE"]] },
         { token: "borders", label: "BORDERS", options: [["true", "LED"], ["false", "NONE"]] },
         { token: "ledfx", label: "BORDER FX", options: [["auto", "AUTO"], ["random", "RANDOM"], ["music", "MUSIC"], ["off", "STILL"]] },
         { token: "top", label: "TOP BAR", options: [["true", "ON"], ["false", "OFF"]] },
         { token: "title", label: "TITLE", options: [["true", "ON"], ["false", "OFF"]] },
-        { token: "side", label: "SIDE BAR", options: [["off", "OFF"], ["on", "ON"], ["auto", "AUTO"]] }
+        { token: "side", label: "SIDE BAR", options: [["off", "OFF"], ["on", "ON"], ["auto", "AUTO"]] },
+        { token: "scene", label: "IDLE SCENE", options: [["true", "PLAY"], ["false", "OFF"]] },
+        { token: "sounds", label: "SOUNDS", options: [["off", "OFF"], ["soft", "SOFT"], ["full", "FULL"]] }
     ]
     // Settings rows that fit; the window follows `row`.
     readonly property int shownRows: Math.max(1, Math.min(settings.length, Math.floor((avail - fixedRows) / step)))
@@ -481,7 +484,7 @@ Pane {
             width: pane.inner
             height: Tokens.lineDots
             elide: Text.ElideRight
-            text: !pane.wide ? "TAB PAGE  ENTER" : pane.page === "eras" ? "TAB DISPLAY  ENTER APPLY  1-" + pane.n + " PICK" : pane.page === "walls" ? "TAB ERAS  ARROWS MOVE  ENTER SET  R RANDOM" : "TAB WALLS  LEFT RIGHT CHANGE" + (pane.shownRows < pane.settings.length ? "  UP DOWN MORE" : "")
+            text: !pane.wide ? "TAB PAGE  ENTER" : pane.page === "eras" ? "TAB DISPLAY  ENTER APPLY  1-" + Math.min(9, pane.n) + " PICK" : pane.page === "walls" ? "TAB ERAS  ARROWS MOVE  ENTER SET  R RANDOM" : "TAB WALLS  LEFT RIGHT CHANGE" + (pane.shownRows < pane.settings.length ? "  UP DOWN MORE" : "")
             color: Tokens.slot1
         }
     }
