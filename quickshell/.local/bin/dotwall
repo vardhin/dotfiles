@@ -1,0 +1,91 @@
+#!/usr/bin/env python3
+"""dotwall: send RGB frames to the P10 wall (p10/dotwall-pi.py on the Pi).
+
+  dotwall feed HOST[:PORT] [--size 64x32]     base64 frames on stdin, one per line
+                                              (Dot Shell's services/Wall.qml runs this)
+  dotwall send HOST[:PORT] [--size 64x32] < frame.rgb     one raw RGB frame
+  dotwall test HOST[:PORT] [--size 64x32] [--seconds 10]  color bars and a running dot
+
+One UDP datagram per frame: b"DOTW", version 1, width and height (uint16, big
+endian), then width*height*3 bytes of RGB. Default port 7373.
+"""
+import argparse, base64, math, socket, sys, time
+
+MAGIC = b"DOTW\x01"
+
+
+def target(s):
+    host, _, port = s.partition(":")
+    return host, int(port or 7373)
+
+
+def size(s):
+    w, _, h = s.partition("x")
+    return int(w), int(h)
+
+
+def packet(w, h, rgb):
+    return MAGIC + w.to_bytes(2, "big") + h.to_bytes(2, "big") + rgb
+
+
+def main():
+    ap = argparse.ArgumentParser(description=__doc__.split("\n")[0])
+    ap.add_argument("mode", choices=["feed", "send", "test"])
+    ap.add_argument("host")
+    ap.add_argument("--size", default="64x32")
+    ap.add_argument("--seconds", type=float, default=10)
+    a = ap.parse_args()
+    addr = target(a.host)
+    w, h = size(a.size)
+    n = w * h * 3
+    sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+
+    def send(rgb):
+        try:
+            sock.sendto(packet(w, h, rgb), addr)
+        except OSError as e:
+            # The Pi is away or the network is down: drop the frame, keep going.
+            print(f"dotwall: {e}", file=sys.stderr, flush=True)
+            time.sleep(0.5)
+
+    if a.mode == "feed":
+        for line in sys.stdin:
+            line = line.strip()
+            if not line:
+                continue
+            try:
+                rgb = base64.b64decode(line)
+            except ValueError:
+                continue
+            if len(rgb) == n:
+                send(rgb)
+        return 0
+    if a.mode == "send":
+        rgb = sys.stdin.buffer.read()
+        if len(rgb) < n:
+            print(f"dotwall: {w}x{h} needs {n} bytes of RGB, got {len(rgb)}", file=sys.stderr)
+            return 1
+        send(rgb[:n])
+        return 0
+    # test: eight bars, a white dot running along the rows.
+    bars = [(255, 255, 255), (255, 255, 0), (0, 255, 255), (0, 255, 0), (255, 0, 255), (255, 0, 0), (0, 0, 255), (40, 40, 40)]
+    t0 = time.time()
+    i = 0
+    while time.time() - t0 < a.seconds:
+        buf = bytearray(n)
+        for y in range(h):
+            for x in range(w):
+                c = bars[x * len(bars) // w]
+                k = 0.35 + 0.65 * (y / max(1, h - 1))
+                o = (y * w + x) * 3
+                buf[o:o + 3] = bytes(int(v * k) for v in c)
+        o = ((i // w) % h * w + i % w) * 3
+        buf[o:o + 3] = b"\xff\xff\xff"
+        send(bytes(buf))
+        i += 1
+        time.sleep(1 / 30)
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

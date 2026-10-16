@@ -14,6 +14,12 @@
               [--wallpaper ~/w.jpg] [--hue era|wallpaper] [--cascade on|off]
               [--screen glass|led|board|off] [--night on|off] [--winfx on|off]
               [--borders on|off] [--top on|off] [--title on|off] [--side off|on|auto]
+              [--winshade off|dim|all] [--scene on|off] [--sounds off|soft|full]
+  dot wall [status]                  the P10 wall (p10/ in the dotfiles)
+  dot wall on HOST[:PORT] [--source scene|clock|media|text|pixels]
+              [--text "OPEN 24 HRS"] [--size 64x32] [--fps 15]
+  dot wall off | source SOURCE | text "..." 
+  dot wall pixels < frame.rgb       raw RGB at the wall's size
   dot raw '{"cmd":"tokens"}'        send one request as-is
 
 Kinds: clock sign note image mpris media vis pixels.
@@ -189,6 +195,30 @@ def main(argv):
         for k, v in f.items():
             req["dotSize" if k == "size" else k] = v
         print(json.dumps(call(req)["tokens"]))
+    elif cmd == "wall":
+        act = rest[0] if rest else "status"
+        if act == "status":
+            r = call({"cmd": "wall", "action": "status"})["wall"]
+        elif act == "on":
+            if len(rest) < 2 or rest[1].startswith("--"):
+                die("usage: dot wall on HOST[:PORT] [--source S] [--text T] [--size WxH] [--fps N]")
+            r = call({"cmd": "wall", "action": "on", "fields": {"host": rest[1], **flags(rest[2:])}})["wall"]
+        elif act == "off":
+            r = call({"cmd": "wall", "action": "off"})["wall"]
+        elif act in ("source", "text") and len(rest) >= 2:
+            r = call({"cmd": "wall", "action": "set", "fields": {act: " ".join(rest[1:])}})["wall"]
+        elif act == "pixels":
+            st = call({"cmd": "wall", "action": "status"})["wall"]
+            w, h = map(int, st["size"].split("x"))
+            data = sys.stdin.buffer.read()
+            if len(data) < w * h * 3:
+                die(f"the wall is {w}x{h}: needs {w * h * 3} bytes of RGB, got {len(data)}")
+            call({"cmd": "wall", "action": "pixels", "w": w, "h": h, "data": base64.b64encode(data[: w * h * 3]).decode()})
+            return
+        else:
+            die("usage: dot wall [status | on HOST | off | source S | text T | pixels]")
+        state = "on" if r["on"] else "off"
+        print(f"wall {state}  {r['host'] or '-'}:{r['port']}  {r['source']}  {r['size']} @ {r['fps']} fps" + ("  sending" if r.get("sending") else ""))
     elif cmd == "raw":
         print(json.dumps(call(json.loads(" ".join(rest)))))
     else:

@@ -17,7 +17,7 @@ ShellRoot {
     id: shell
 
     // Services with no pane of their own: start them with the shell.
-    readonly property var services: [Power, Idle, ScreenShader, DropTerm, Lock, DotBus, Export, WsFx, LedFx, Clip, Capture, Sound]
+    readonly property var services: [Power, Idle, ScreenShader, DropTerm, Lock, DotBus, Export, WsFx, LedFx, Clip, Capture, Sound, Wall]
 
     Wallpaper {}
     World {}

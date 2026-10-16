@@ -312,20 +312,21 @@ const scenes = {
     nixie: {
         make(st) {},
         draw(st, ctx, dt, p, now) {
-            // Fit six tubes and two colons across, and the height.
-            const k = Math.max(1, Math.min(Math.floor(st.h / 22), Math.floor(st.w / 80)));
-            const digits = pad(now.getHours()) + pad(now.getMinutes()) + pad(now.getSeconds());
+            // Six tubes and two colons when they fit, else hours and minutes.
+            const n = st.w >= 80 ? 6 : 4;
+            const k = Math.max(1, Math.min(Math.floor(st.h / 22), Math.floor(st.w / (n === 6 ? 80 : 54))));
+            const digits = (pad(now.getHours()) + pad(now.getMinutes()) + pad(now.getSeconds())).slice(0, n);
             const cell = 8 * k, gap = 4 * k;
-            const total = 6 * (cell + gap) - gap + 2 * (3 * k);
+            const total = n * (cell + gap) - gap + (n / 2 - 1) * (3 * k);
             let x = Math.floor((st.w - total) / 2) + cell / 2;
             const y = Math.floor((st.h - 13 * k) / 2);
-            for (let i = 0; i < 6; i++) {
+            for (let i = 0; i < n; i++) {
                 ring(ctx, x, y + 6.5 * k, 5.5 * k, rgba(p.s2, 0.4));
                 // The unlit numerals stacked in the tube, read as one dim 8.
                 bigText(ctx, "8", x, y, k, rgba(p.s2, 0.45));
                 bigText(ctx, digits[i], x, y, k, rgba(p.s0, 1));
                 x += cell + gap;
-                if (i % 2 === 1 && i < 5) {
+                if (i % 2 === 1 && i < n - 1) {
                     const on = now.getMilliseconds() < 500;
                     ctx.fillStyle = rgba(p.s1, on ? 1 : 0.45);
                     ctx.fillRect(x - gap - k, y + 4 * k, k, k);
@@ -425,13 +426,16 @@ const scenes = {
         SPRITE: ["00100000100", "00010001000", "00111111100", "01101110110", "11111111111", "10111111101", "10100000101", "00011011000"],
         make(st) {
             st.ox = 4; st.dir = 1; st.oy = 4; st.acc = 0; st.frame = 0;
+            // As many invaders as the board holds (10 x 4 on a screen, fewer on a wall).
+            st.icols = Math.max(2, Math.min(10, Math.floor((st.w - 8) / 14)));
+            st.irows = Math.max(1, Math.min(4, Math.floor((st.h - 20) / 11)));
             st.alive = [];
-            for (let i = 0; i < 40; i++) st.alive.push(true);
+            for (let i = 0; i < st.icols * st.irows; i++) st.alive.push(true);
             st.shot = null;
             st.ship = st.w / 2;
         },
         draw(st, ctx, dt, p) {
-            const S = scenes.arcade.SPRITE, cols = 10, rows = 4, gx = 14, gy = 11;
+            const S = scenes.arcade.SPRITE, cols = st.icols, rows = st.irows, gx = 14, gy = 11;
             st.acc += dt;
             if (st.acc > 0.35) {
                 st.acc = 0;

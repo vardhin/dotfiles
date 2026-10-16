@@ -98,8 +98,15 @@ Singleton {
             else
                 return { error: "ws takes go or move" };
             return {};
+        case "wall":
+            // The P10 wall (services/Wall.qml): `dot wall on HOST --source clock`.
+            if (q.action === "pixels")
+                return Wall.pixels(parseInt(q.w), parseInt(q.h), q.data ?? "");
+            if (q.action === "status" || q.action === undefined)
+                return Wall.status();
+            return Wall.configure(Object.assign({}, q.fields ?? {}, q.action === "on" ? { on: true } : q.action === "off" ? { on: false } : {}));
         default:
-            return { error: "unknown cmd; one of: spawn rm move set write pixels list era eras display tokens ws" };
+            return { error: "unknown cmd; one of: spawn rm move set write pixels list era eras display tokens ws wall" };
         }
     }
 

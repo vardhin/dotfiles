@@ -1,0 +1,20 @@
+# The P10 wall's receiver. On the Pi:
+#   sudo install -Dm755 dotwall-pi.py /usr/local/bin/dotwall-pi
+#   sudo install -Dm644 dotwall.service /etc/systemd/system/dotwall.service
+#   sudo systemctl enable --now dotwall
+# Panel options go on ExecStart (dotwall-pi --help).
+[Unit]
+Description=Dot Shell P10 wall receiver
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+ExecStart=/usr/local/bin/dotwall-pi --brightness 70
+Restart=on-failure
+RestartSec=3
+# hzeller's library wants real-time scheduling and GPIO: run as root.
+User=root
+Nice=-10
+
+[Install]
+WantedBy=multi-user.target
