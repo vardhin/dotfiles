@@ -252,6 +252,13 @@ PanelWindow {
                 }
             }
             StatusWord {
+                visible: Capture.recording
+                text: strip.word("REC ", "R") + Capture.clock(Capture.elapsed)
+                color: Tokens.slot2
+                opacity: Capture.elapsed % 2 ? 0.55 : 1
+                onClicked: Capture.stop()
+            }
+            StatusWord {
                 visible: Notifs.dnd || Notifs.live.length > 0
                 text: Notifs.dnd ? "DND" : strip.word("MSG ", "M") + Notifs.live.length
                 color: Notifs.dnd ? Tokens.slot1 : Tokens.slot2

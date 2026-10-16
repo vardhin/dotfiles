@@ -52,12 +52,18 @@ networkmanager
 bluez
 bluez-utils
 
-# Screenshots + clipboard
+# Capture + clipboard: the CAPTURE pane (screenshots through grim/slurp/
+# swappy, recordings through gpu-screen-recorder, hyprpicker above) and the
+# CLIP pane's history (wl-paste --watch, wl-copy)
 grim
 slurp
 swappy
+gpu-screen-recorder
 wl-clipboard
 wl-clip-persist
+
+# Browser: Dot Shell writes its userChrome/userContent for the era
+firefox
 
 # Terminal + CLI
 ghostty

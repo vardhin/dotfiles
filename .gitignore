@@ -10,3 +10,4 @@ ghostty/.config/ghostty/dotshell.conf
 *.log
 *.db
 *.sqlite
+__pycache__/

@@ -53,15 +53,18 @@ dotfiles/
 │   ├── TopStrip.qml            workspaces | clock / ticker | status words, tray
 │   ├── DotText DotLabel DotButton DotInput VuBar Marquee FlapText Frame Rule Line StatusWord
 │   │   RailButton RailMeter    (the side rail's glyph buttons and vertical meters)
+│   ├── data/                   symbols.tsv (the SYMBOLS page) and build-symbols.py
 │   ├── services/               Notifs (the notification daemon), Audio, Brightness, Power
 │   │                           (+ battery monitor), Net, Bt, Idle (+ logind bridge), Lock (PAM),
 │   │                           ScreenShader, DropTerm, Notify, Panels (desktop panels, panels.json),
 │   │                           DotBus (the `dot` socket), Export (era → Ghostty, Neovim, GTK, Qt,
-│   │                           Dot TV's LED shader), Media (MPRIS + cava), Tv (Dot TV library,
-│   │                           SCREEN settings), Sys (CPU, memory, temperature)
+│   │                           Firefox, rmpc, cava, Dot TV's LED shader), Media (MPRIS + cava), Tv
+│   │                           (Dot TV library, SCREEN settings), Sys (CPU, memory, temperature),
+│   │                           Capture (screenshots, recording, color picker), Clip (clipboard history)
 │   ├── panes/                  Launcher, Messages, ToastStack, Osd, Session, Cheatsheet,
 │   │                           Calendar, Audio, Brightness, Wifi, Bluetooth, Battery, Eras,
-│   │                           Packages, Media (NOW / TV / LISTS / SCREEN), SideBar,
+│   │                           Packages, Media (NOW / TV / LISTS / SCREEN), Capture, Clip
+│   │                           (CLIP / SYMBOLS), SideBar,
 │   │                           WindowBorders (LED rings), LockScreen, Polkit,
 │   │                           Wallpaper (dots/image/off, parallax), World
 │   │                           (desktop panels; slides with workspaces), WindowFx (window
@@ -78,6 +81,8 @@ dotfiles/
 │                               counts, Endless Mix, L); shaders/dotled.glsl (LED video)
 ├── mpv/.local/bin/dottv        Dot TV, the YouTube library CLI (+ dottv.desktop)
 ├── mpd/.config/mpd/            → ~/.config/mpd  ~/Music over PipeWire (+ rmpc.desktop)
+├── mpd/.config/rmpc/config.ron → ~/.config/rmpc  rmpc defaults + the era theme Dot Shell writes
+├── cava/.config/cava/config    → ~/.config/cava  terminal cava (pipewire, true color, era theme)
 ├── ghostty/.config/ghostty/    → ~/.config/ghostty  (Departure Mono pixel font, no chrome; era
 │                               colors from the generated dotshell.conf, gitignored)
 ├── fontconfig/.config/fontconfig/conf.d/   Departure Mono without antialiasing (hard pixels)
@@ -111,7 +116,7 @@ media center), hyprlock, hypridle, polkit-gnome, awww and hyprsunset.
 
 | Thing | How |
 |---|---|
-| Panes | `dotshell ipc call pane toggle <launcher\|session\|notifs\|cheatsheet\|calendar\|audio\|brightness\|wifi\|bluetooth\|battery>`; strip words open them too |
+| Panes | `dotshell ipc call pane toggle <launcher\|session\|notifs\|cheatsheet\|calendar\|audio\|brightness\|wifi\|bluetooth\|battery\|capture\|clip>`; strip words open them too |
 | Notifications | Dot Shell is the daemon. New ones scroll across the strip and pop top right; `Super N` lists live ones and the log (`~/.local/state/dotshell/notifications.json`); `Super Shift N` is do-not-disturb |
 | Launcher | `Alt Space`: departure board. Type, arrows or Ctrl J/K, Enter; Ctrl 1–8 jumps to a gate. Launch counts rank results |
 | Lock | `Super L` (`loginctl lock-session`), idle, the session menu and suspend all lock through logind. PAM stack: `pam/dotshell` |
@@ -152,6 +157,22 @@ Binds: `Super D` toggles the strip, `Super Shift D` cycles eras, `Super T` opens
 `Super W` the wallpapers, `Super F` files, `Super I` the package manager (pacman + yay), `Super Ctrl D`
 restarts the shell.
 
+### Capture and clipboard
+
+| Key | |
+|---|---|
+| `Super Shift P` / `Super Shift Print` | **CAPTURE** pane. SHOT: area, screen, window, edit (swappy), delay 5. REC: region, full, sound on/off (gpu-screen-recorder, 60 fps, default output audio). PICK: color (hyprpicker, hex to the clipboard). Arrows + Enter, or the underlined letter |
+| `Super Alt P` | record the focused monitor; again stops. While recording the strip shows a blinking `REC 0:12` (click it to stop) |
+| `Super Alt C` | color picker |
+| `Print`, `Super Print`, `Super P` | screenshot full screen / area (straight to `hypr/scripts/screenshot.sh`) |
+| `Super V` | **CLIP** pane: clipboard history, newest first. Type to filter, Enter pastes into the window you came from (Ctrl Shift V in terminals), Ctrl Enter only copies, Ctrl D forgets |
+| `Super .` | the same pane's **SYMBOLS** page: emoji, arrows, math, currency, box drawing, by name (`data/symbols.tsv`, built by `data/build-symbols.py`) |
+
+Screenshots go to `~/Pictures/Screenshots`, recordings to `~/Videos/Recordings`. SCREEN and FULL
+take the focused monitor. The history is text only, kept in `~/.local/state/dotshell/clipboard.json`
+(100 entries); copies a password manager marks secret are never recorded. `dotshell ipc call clip clear`
+empties it; `dotshell ipc call capture rec|stop|shot|pick` drive capture from scripts.
+
 ### Eras
 
 | Era | Id | Look |
@@ -186,6 +207,9 @@ The era on screen is also exported to the apps around the shell, on every change
 | GTK 3 / 4 | `~/.config/gtk-{3,4}.0/gtk.css` | libadwaita named colors; only written when missing or ours (first line says `dotshell:`); also sets the dark/light `color-scheme` |
 | Qt | `~/.config/qt6ct/colors/dotshell.conf` | pick it once in qt6ct |
 | Greeter | `/var/lib/dotshell-greeter/dotshell/` | `tokens.json`, the wallpaper and the user name, once `system/install.sh` has made the folder yours |
+| Firefox | `<profile>/chrome/userChrome.css`, `userContent.css` | every install's default profile; era colors, the pixel font (22 px, `--dot-font-size`), square corners, a lit outline on the selected tab, no titlebar buttons; new tab and `about:` pages in the era. Guarded like GTK. A `dotshell:begin … end` block in `user.js` turns userChrome on. **Firefox reads them at start: restart it after an era change** |
+| rmpc | `~/.config/rmpc/themes/dotshell.ron` | picked by the repo's `config.ron`; hot-reloaded |
+| cava | `~/.config/cava/themes/dotshell` | picked by the repo's `cava/.config/cava/config`; running cavas reload on SIGUSR2 |
 
 `dotshell ipc call export run` rewrites them by hand.
 

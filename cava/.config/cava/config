@@ -1,0 +1,21 @@
+## cava in the terminal. Dot Shell's own spectrum runs cava with its own
+## config (services/Media.qml), not this one.
+##
+## Colors come from the era: Dot Shell writes themes/dotshell (services/Export.qml)
+## and sends SIGUSR2 on every era change, which reloads the colors in place.
+## Everything else is cava's default; `man cava` or /usr/share/doc/cava for the rest.
+
+[general]
+framerate = 60
+bar_width = 2
+bar_spacing = 1
+
+[input]
+method = pipewire
+source = auto
+
+[output]
+method = noncurses
+
+[color]
+theme = 'dotshell'

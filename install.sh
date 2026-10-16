@@ -10,7 +10,7 @@
 set -euo pipefail
 
 DOTFILES="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-MODULES=(hypr quickshell ghostty fontconfig zsh mpv mpd)
+MODULES=(hypr quickshell ghostty fontconfig zsh mpv mpd cava)
 BACKUP="$HOME/.dotfiles-backup/$(date +%Y%m%d-%H%M%S)"
 
 log() { printf '\033[1;33m::\033[0m %s\n' "$*"; }
@@ -112,10 +112,20 @@ enable_services() {
   done
 }
 
+# GTK apps and Firefox read the cursor and icons from gsettings; Hyprland
+# itself sets XCURSOR_THEME (hypr/.config/hypr/config/environment.conf).
+set_theme() {
+  command -v gsettings >/dev/null || return 0
+  log "cursor and icon theme"
+  gsettings set org.gnome.desktop.interface cursor-theme Bibata-Modern-Amber
+  gsettings set org.gnome.desktop.interface cursor-size 24
+  gsettings set org.gnome.desktop.interface icon-theme McMojave-circle-dark
+}
+
 case "${1:-}" in
   --dry-run) link_modules --dry-run ;;
   --link)    link_modules ;;
-  "")        install_packages; install_zsh_framework; link_modules; enable_services ;;
+  "")        install_packages; install_zsh_framework; link_modules; enable_services; set_theme ;;
   *)         echo "usage: $0 [--link|--dry-run]" >&2; exit 2 ;;
 esac
 

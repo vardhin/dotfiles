@@ -109,7 +109,7 @@ case "$1" in
         ;;
         
     "monitor")
-        monitor_name="${2:-$(hyprctl monitors -j | jq -r '.[0].name')}"
+        monitor_name="${2:-$(hyprctl monitors -j | jq -r '.[] | select(.focused) | .name')}"
         temp_file="$TEMP_DIR/screenshot_$DATE.png"
         final_file="$SCREENSHOT_DIR/monitor_${monitor_name}_$DATE.png"
         
@@ -175,35 +175,10 @@ case "$1" in
         ;;
         
     "interactive")
-        # Use fuzzel/rofi/wofi — whichever is available
-        DMENU=""
-        if command -v fuzzel >/dev/null 2>&1; then
-            DMENU="fuzzel --dmenu --prompt=Screenshot:"
-        elif command -v wofi >/dev/null 2>&1; then
-            DMENU="wofi --dmenu --prompt Screenshot: --height=300"
-        elif command -v rofi >/dev/null 2>&1; then
-            DMENU="rofi -dmenu -p Screenshot"
-        else
-            notify-send "Screenshot" "No dmenu-compatible launcher found" --icon="dialog-error"
-            exit 1
-        fi
-
-        choice=$(echo -e "Fullscreen\nArea\nWindow\nMonitor\nEdit Area\nClipboard Only\nDelay 3s\nDelay 5s" | \
-                $DMENU)
-        
-        case "$choice" in
-            "Fullscreen") exec "$0" fullscreen ;;
-            "Area") exec "$0" area ;;
-            "Window") exec "$0" window ;;
-            "Monitor") exec "$0" monitor ;;
-            "Edit Area") exec "$0" edit-area ;;
-            "Clipboard Only") exec "$0" clipboard-only area ;;
-            "Delay 3s") exec "$0" delay 3 ;;
-            "Delay 5s") exec "$0" delay 5 ;;
-            *) exit 0 ;;
-        esac
+        # The Dot Shell CAPTURE pane (screenshots, recording, color picker).
+        exec qs -p "$HOME/.config/quickshell/dotshell" ipc call pane toggle capture
         ;;
-        
+
     *)
         echo "Usage: $0 {fullscreen|area|window|monitor|edit-area|clipboard-only|delay|interactive}"
         echo ""
@@ -211,11 +186,11 @@ case "$1" in
         echo "  fullscreen     - Capture entire screen"
         echo "  area          - Select area to capture"
         echo "  window        - Capture active window"
-        echo "  monitor [name] - Capture specific monitor"
+        echo "  monitor [name] - Capture one monitor (default: the focused one)"
         echo "  edit-area     - Select area and edit before saving"
         echo "  clipboard-only [area] - Copy to clipboard only"
         echo "  delay [seconds] - Delayed screenshot (default 3s)"
-        echo "  interactive   - Show menu to choose option"
+        echo "  interactive   - Open the Dot Shell CAPTURE pane"
         exit 1
         ;;
 esac

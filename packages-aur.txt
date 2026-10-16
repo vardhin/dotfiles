@@ -3,3 +3,7 @@
 # which is where .zshrc expects them.
 
 otf-departure-mono-nerd # Ghostty pixel font (paru also resolves it if it lands in extra)
+
+# Cursor and icons (environment.conf and install.sh pick them)
+bibata-cursor-theme-bin        # Bibata-Modern-Amber
+mcmojave-circle-icon-theme-git # McMojave-circle-dark
