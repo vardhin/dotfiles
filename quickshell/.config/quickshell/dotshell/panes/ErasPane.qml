@@ -77,7 +77,8 @@ Pane {
         { token: "title", label: "TITLE", options: [["true", "ON"], ["false", "OFF"]] },
         { token: "side", label: "SIDE BAR", options: [["off", "OFF"], ["on", "ON"], ["auto", "AUTO"]] },
         { token: "scene", label: "IDLE SCENE", options: [["true", "PLAY"], ["false", "OFF"]] },
-        { token: "sounds", label: "SOUNDS", options: [["off", "OFF"], ["soft", "SOFT"], ["full", "FULL"]] }
+        { token: "sounds", label: "SOUNDS", options: [["off", "OFF"], ["soft", "SOFT"], ["full", "FULL"]] },
+        { token: "frosted", label: "PANE GLASS", options: [["false", "SOLID"], ["true", "FROSTED"]] }
     ]
     // Settings rows that fit; the window follows `row`.
     readonly property int shownRows: Math.max(1, Math.min(settings.length, Math.floor((avail - fixedRows) / step)))

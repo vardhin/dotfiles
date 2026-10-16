@@ -65,6 +65,8 @@ PanelWindow {
         cols: Math.min(pane.cols, pane.maxCols)
         rows: Math.min(pane.rows, pane.maxRows)
         focus: true
+        // Frosted: LEDs on blurred glass (Hyprland blurs dotshell-* panes).
+        glassAlpha: Tokens.frosted ? (Tokens.current.light ? 0.7 : 0.55) : 1
 
         // LED border: the outermost ring of dots, at the dim level, animated
         // by LedFx.

@@ -27,6 +27,8 @@ local defaults = {
     mid = { 0.55, 0.33, 0.1 },
     unlit = { 0.09, 0.05, 0.02 },
     glass = 0.18,
+    frosted = false,        -- panes on blurred glass (the `frosted` token)
+    panes = "launcher|session|notifs|cheatsheet|calendar|audio|brightness|wifi|bluetooth|battery|eras|packages|media|capture|clip|overview|toasts|osd|polkit",
 }
 
 function dotshell.state()
@@ -58,6 +60,18 @@ function dotshell.apply()
     active = {}
 
     local s = dotshell.state()
+
+    -- Frosted panes: Hyprland blurs what is behind them; the shell makes the
+    -- glass between the dots translucent. Fully opaque pixels stay as they are.
+    if s.frosted then
+        active[#active + 1] = hl.layer_rule({
+            name = "dotshell-frosted",
+            match = { namespace = "^dotshell-(" .. s.panes .. ")$" },
+            blur = true,
+            ignore_alpha = 0.05,
+        })
+    end
+
     local shading = dw ~= nil and (s.winshade == "dim" or s.winshade == "all")
 
     -- Brightness is the focus cue without the plugin; the dots replace it.

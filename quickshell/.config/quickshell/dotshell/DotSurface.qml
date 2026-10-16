@@ -43,6 +43,9 @@ Item {
     // How lit the lit dots are, 0 .. 1: below 1 they blend toward the unlit
     // dot (the wallpaper board sits at 0.55).
     property real gain: 1
+    // Opacity of the glass between the dots (frosted panes: under 1, so the
+    // compositor's blur shows through).
+    property real glassAlpha: 1
     // Image mode: spread the four era levels (or the color depth) with a 4x4
     // ordered dither, so album art keeps its shading on a coarse board.
     property bool dither: false
@@ -141,7 +144,7 @@ Item {
         property real shape: root.flat ? 1 : root.shapeCode(Tokens.current.shape)
         property real glow: root.flat ? 0 : Tokens.current.glow
         property color unlitColor: Tokens.unlit
-        property color gapColor: Tokens.glass
+        property color gapColor: Qt.rgba(Tokens.glass.r, Tokens.glass.g, Tokens.glass.b, root.glassAlpha)
         property color ramp0: Tokens.current.ramp[0]
         property color ramp1: Tokens.current.ramp[1]
         property color ramp2: Tokens.current.ramp[2]

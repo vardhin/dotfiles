@@ -54,6 +54,9 @@ import Quickshell.Io
 //              before the screen dims (panes/Scene.qml; Super Shift S now)
 //   sounds     off | soft | full: the era's UI sounds (services/Sound.qml):
 //              panes, toasts, the cascade, workspace switches
+//   frosted    true: panes are LED dots on frosted glass: the glass between
+//              the dots turns translucent and Hyprland blurs what is behind
+//              (a layer rule from hypr/.config/hypr/lua/dotshell.lua)
 Singleton {
     id: root
 
@@ -82,10 +85,11 @@ Singleton {
     readonly property bool scene: store.scene
     readonly property string sounds: soundModes.includes(store.sounds) ? store.sounds : "soft"
     readonly property var soundModes: ["off", "soft", "full"]
+    readonly property bool frosted: store.frosted
 
     readonly property var walls: ["dots", "image", "off"]
     readonly property var screens: ["glass", "led", "board", "off"]
-    readonly property var keys: ["era", "pitch", "dotSize", "depth", "wall", "wallpaper", "hue", "cascade", "night", "screen", "winfx", "wsfx", "borders", "ledfx", "top", "title", "side", "winshade", "scene", "sounds"]
+    readonly property var keys: ["era", "pitch", "dotSize", "depth", "wall", "wallpaper", "hue", "cascade", "night", "screen", "winfx", "wsfx", "borders", "ledfx", "top", "title", "side", "winshade", "scene", "sounds", "frosted"]
 
     // ── What is on screen ───────────────────────────────────────────
     // `current` is the era as displayed: its colors after the wallpaper hue,
@@ -289,6 +293,7 @@ Singleton {
             property string winshade: "dim"
             property bool scene: true
             property string sounds: "soft"
+            property bool frosted: false
         }
     }
 
@@ -375,6 +380,9 @@ Singleton {
         case "scene":
             store.scene = truthy(value);
             break;
+        case "frosted":
+            store.frosted = truthy(value);
+            break;
         case "sounds":
             if (!soundModes.includes(value))
                 return "sounds is one of: " + soundModes.join(", ");
@@ -407,7 +415,8 @@ Singleton {
             side: side,
             winshade: winshade,
             scene: scene,
-            sounds: sounds
+            sounds: sounds,
+            frosted: frosted
         };
     }
 
