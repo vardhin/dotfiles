@@ -40,9 +40,27 @@ Singleton {
         Quickshell.execDetached(["sh", "-c", "sleep 0.3; exec \"$@\"", "capture"].concat(cmd));
     }
 
+    // For services/Sound.qml: "shot" when a picture is taken at once, "rec"
+    // when a recording starts. (Area shots wait on the selection: no sound.)
+    signal captured(string kind)
+
     function shot(mode: string): void {
         const modes = { area: ["area"], screen: ["monitor"], window: ["window"], edit: ["edit-area"], delay: ["delay", "5"] };
         later([shots].concat(modes[mode] ?? ["area"]));
+        if (mode === "screen" || mode === "window")
+            shutterLater.restart();
+        else if (mode === "delay")
+            shutterDelayed.restart();
+    }
+    Timer {
+        id: shutterLater
+        interval: 300
+        onTriggered: root.captured("shot")
+    }
+    Timer {
+        id: shutterDelayed
+        interval: 5300
+        onTriggered: root.captured("shot")
     }
 
     function pick(): void {
@@ -72,6 +90,7 @@ Singleton {
         onStarted: {
             root.startedAt = Date.now();
             root.elapsed = 0;
+            root.captured("rec");
         }
         onExited: (code, status) => {
             const f = root.file;

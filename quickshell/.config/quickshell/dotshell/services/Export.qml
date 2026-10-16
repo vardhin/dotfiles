@@ -467,8 +467,10 @@ menuitem[_moz-menuactive], menu[_moz-menuactive] { background: var(--dot-unlit) 
     function cursorArgs(e: var): string {
         return "--lit " + hex(Qt.color(e.slots[0])) + " --accent " + hex(Qt.color(e.slots[1])) + " --rim " + hex(Qt.color(e.glass)) + " --shape " + (e.shape || "round");
     }
+    // The era's sound pack (services/Sound.qml plays it); only the era on
+    // screen is synthesized, and an era already made is skipped.
     function soundArgs(e: var): string {
-        return "";
+        return Tokens.sounds === "off" ? "" : "--era " + (e.id ?? Tokens.era) + " --dir " + Tokens.dir + "/sounds";
     }
 
     // ── Writing ─────────────────────────────────────────────────────
@@ -607,6 +609,9 @@ exit 0"
             debounce.restart();
         }
         function onWinshadeChanged() {
+            debounce.restart();
+        }
+        function onSoundsChanged() {
             debounce.restart();
         }
     }
