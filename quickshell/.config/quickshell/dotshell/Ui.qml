@@ -13,7 +13,7 @@ Singleton {
     id: root
 
     // "" = nothing open. Names: launcher session notifs cheatsheet calendar
-    // audio brightness wifi bluetooth battery
+    // audio brightness wifi bluetooth battery eras packages media
     property string pane: ""
     property ShellScreen screen: focusedScreen()
 
@@ -21,7 +21,7 @@ Singleton {
     // clicks on the strip through (clicking another glyph switches panes).
     property list<QtObject> strips: []
 
-    readonly property var names: ["launcher", "session", "notifs", "cheatsheet", "calendar", "audio", "brightness", "wifi", "bluetooth", "battery", "eras", "packages"]
+    readonly property var names: ["launcher", "session", "notifs", "cheatsheet", "calendar", "audio", "brightness", "wifi", "bluetooth", "battery", "eras", "packages", "media"]
 
     function focusedScreen(): ShellScreen {
         const name = Hyprland.focusedMonitor?.name;

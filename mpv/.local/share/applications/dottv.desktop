@@ -1,0 +1,10 @@
+[Desktop Entry]
+Type=Application
+Name=Dot TV
+GenericName=Video Library
+Comment=The YouTube library in ~/Video/TV, played by mpv
+Exec=dottv open
+Icon=video-x-generic
+Terminal=false
+Categories=AudioVideo;Video;Player;
+Keywords=youtube;tv;video;mpv;mix;

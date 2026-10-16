@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Install these dotfiles on an Arch machine.
 #
-#   ./install.sh            packages + zsh framework + stow all modules
+#   ./install.sh            packages + zsh framework + stow all modules + user services
 #   ./install.sh --link     only (re)stow the modules
 #   ./install.sh --dry-run  show what stow would do, change nothing
 #
@@ -10,7 +10,7 @@
 set -euo pipefail
 
 DOTFILES="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-MODULES=(hypr quickshell ghostty fontconfig zsh)
+MODULES=(hypr quickshell ghostty fontconfig zsh mpv mpd)
 BACKUP="$HOME/.dotfiles-backup/$(date +%Y%m%d-%H%M%S)"
 
 log() { printf '\033[1;33m::\033[0m %s\n' "$*"; }
@@ -97,10 +97,25 @@ link_modules() {
   done
 }
 
+# mpd keeps its database and state in ~/.local/state/mpd (mpd/.config/mpd/mpd.conf);
+# mpd-mpris puts it on MPRIS for Dot Shell. Units that are not installed are skipped.
+enable_services() {
+  log "user services"
+  mkdir -p "$HOME/.local/state/mpd/playlists"
+  local unit
+  for unit in mpd.service mpd-mpris.service; do
+    if systemctl --user cat "$unit" >/dev/null 2>&1; then
+      systemctl --user enable --now "$unit"
+    else
+      log "no $unit; skipped"
+    fi
+  done
+}
+
 case "${1:-}" in
   --dry-run) link_modules --dry-run ;;
   --link)    link_modules ;;
-  "")        install_packages; install_zsh_framework; link_modules ;;
+  "")        install_packages; install_zsh_framework; link_modules; enable_services ;;
   *)         echo "usage: $0 [--link|--dry-run]" >&2; exit 2 ;;
 esac
 

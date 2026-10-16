@@ -1,6 +1,6 @@
 # dotfiles
 
-Arch Linux rice: Hyprland + the Quickshell "Dot Shell" (a dot-matrix LED shell), Ghostty, zsh. Managed with GNU Stow, one module per top-level folder.
+Arch Linux rice: Hyprland + the Quickshell "Dot Shell" (a dot-matrix LED shell), Ghostty, mpv + Dot TV, mpd, zsh. Managed with GNU Stow, one module per top-level folder.
 
 > Mid re-rice. The plan (Hyprland + Quickshell + the dot-matrix "Dot Shell") lives in the
 > *Arch Rice* doc, tab **Re-rice plan**. This README describes what is in the repo today.
@@ -10,7 +10,8 @@ Arch Linux rice: Hyprland + the Quickshell "Dot Shell" (a dot-matrix LED shell),
 ```bash
 git clone https://github.com/vardhin/dotfiles ~/dotfiles
 cd ~/dotfiles
-./install.sh            # pacman + AUR packages, oh-my-zsh + plugins, stow every module
+./install.sh            # pacman + AUR packages, oh-my-zsh + plugins, stow every module,
+                        # enable mpd + mpd-mpris (user services)
 ./install.sh --link     # only (re)link the modules
 ./install.sh --dry-run  # show what stow would do
 ```
@@ -45,22 +46,30 @@ dotfiles/
 │   ├── DotSurface.qml          low-res QML canvas → LED dots (shaders/dot.frag); optional shape cut
 │   ├── DeskPanel.qml, Shapes.js  one desktop panel (clock sign note image mpris pixels) and its outlines
 │   ├── Pane.qml                a floating LED pane (layer-shell window + DotSurface)
+│   ├── DitherArt.qml, Spectrum.qml  album art in era colors (ordered dither); cava VU bars
 │   ├── TopStrip.qml            workspaces | clock / ticker | status words, tray
 │   ├── DotText DotLabel DotButton DotInput VuBar Marquee FlapText Frame Rule Line StatusWord
 │   ├── services/               Notifs (the notification daemon), Audio, Brightness, Power
 │   │                           (+ battery monitor), Net, Bt, Idle (+ logind bridge), Lock (PAM),
 │   │                           ScreenShader, DropTerm, Notify, Panels (desktop panels, panels.json),
-│   │                           DotBus (the `dot` socket), Export (era → Ghostty, Neovim, GTK, Qt)
+│   │                           DotBus (the `dot` socket), Export (era → Ghostty, Neovim, GTK, Qt,
+│   │                           Dot TV's LED shader), Media (MPRIS + cava), Tv (Dot TV library)
 │   ├── panes/                  Launcher, Messages, ToastStack, Osd, Session, Cheatsheet,
 │   │                           Calendar, Audio, Brightness, Wifi, Bluetooth, Battery, Eras,
-│   │                           Packages, LockScreen, Polkit, Wallpaper (dots/image/off, parallax), World
+│   │                           Packages, Media (NOW / TV / LISTS), LockScreen, Polkit,
+│   │                           Wallpaper (dots/image/off, parallax), World
 │   │                           (desktop panels; slides with workspaces), WindowFx (window
 │   │                           open/close as LED dots)
 │   ├── pam/dotshell            PAM stack for the lock screen (pam_unix only)
-│   ├── shaders/                dot.frag(.qsb) for DotSurface, winfx.frag(.qsb) for WindowFx;
+│   ├── shaders/                dot.frag(.qsb) for DotSurface, winfx.frag(.qsb) for WindowFx,
+│   │                           art.frag(.qsb) for DitherArt;
 │   │                           screen.glsl, the Hyprland screen shader template (GLSL ES 3.00)
 │   ├── build-shaders.sh        recompile .qsb after editing a .frag (qt6-shadertools)
 │   └── (../../.local/bin/dot)  the `dot` CLI, linked to ~/.local/bin/dot
+├── mpv/.config/mpv/            → ~/.config/mpv  mpv.conf; scripts/dottv.lua (Dot TV: titles, play
+│                               counts, Endless Mix, L); shaders/dotled.glsl (LED video)
+├── mpv/.local/bin/dottv        Dot TV, the YouTube library CLI (+ dottv.desktop)
+├── mpd/.config/mpd/            → ~/.config/mpd  ~/Music over PipeWire (+ rmpc.desktop)
 ├── ghostty/.config/ghostty/    → ~/.config/ghostty  (Departure Mono pixel font, no chrome; era
 │                               colors from the generated dotshell.conf, gitignored)
 ├── fontconfig/.config/fontconfig/conf.d/   Departure Mono without antialiasing (hard pixels)
@@ -69,11 +78,6 @@ dotfiles/
 ├── packages-aur.txt            AUR packages
 └── install.sh
 ```
-
-## Secrets
-
-The old AGS Media Center kept YouTube Music request headers in `ags/.config/ags/browser.json`.
-It stays gitignored for as long as a local copy exists; never commit it.
 
 ## Paths
 
@@ -90,8 +94,8 @@ alias dotshell='qs -p ~/.config/quickshell/dotshell'   # already in .zshrc
 dotshell ipc show                          # every IPC target and function
 ```
 
-It replaces, one for one: AGS (bar, popovers, launcher, notifications, OSD, session menu),
-hyprlock, hypridle, polkit-gnome, awww and hyprsunset.
+It replaces, one for one: AGS (bar, popovers, launcher, notifications, OSD, session menu,
+media center), hyprlock, hypridle, polkit-gnome, awww and hyprsunset.
 
 | Thing | How |
 |---|---|
@@ -106,6 +110,7 @@ hyprlock, hypridle, polkit-gnome, awww and hyprsunset.
 | Wallpaper | `dotshell ipc call tokens set wallpaper ~/wallpaper/x.jpg`; `wall` picks how it shows: `dots` (drawn by the matrix), `image` (plain, parallax), `off` (unlit glass) |
 | Battery monitor | toasts on plug/unplug, at 15 % and 10 %; at 5 % a 60 s grace, then poweroff |
 | Shortcuts | `Super /`: read live from `hyprctl -j binds`, described by the `bindd` descriptions |
+| Media | `Super M`, or the now-playing word on the strip (middle click plays/pauses, wheel skips). See [Media](#media) |
 
 ```bash
 dotshell ipc call tokens set era tokyo     # phosphor tokyo nineties matrix vfd aero gameboy
@@ -168,12 +173,50 @@ away with it. Drag one to move it; it snaps to the 12 px grid. They persist in
 ```bash
 dot spawn sign --id rain --shape strip --at 28,6 --size 40x6 --text "RAIN CITY"
 dot spawn note --shape circle --at 72,6 --size 30x26 --ws 2 --text "hello"
+dot spawn media --at 60,4 --size 48x14     # now playing: art, title, progress, spectrum
+dot spawn vis --shape strip --at 60,20 --size 48x8   # spectrum analyser
 dot write rain "NEW TEXT";  dot move rain 30 8;  dot set rain --slot 2 --dot false
 dot pixels vis < frame.rgb     # raw RGB at the panel's dot size (dot list shows it)
 dot era;  dot era tokyo;  dot era next
 dot display --pitch 5 --depth 16 --wall dots --hue wallpaper
 dot list;  dot rm rain
 ```
+
+### Media
+
+Players play, the shell renders. Anything on MPRIS shows up: mpv (mpv-mpris), mpd (mpd-mpris),
+browsers. Dot Shell follows the player that is playing (or the last one that did); `S` in the pane
+pins another. The media keys go to that same player (`dotshell ipc call media toggle|next|previous`).
+
+| Where | What |
+|---|---|
+| Strip | focused window's title after the workspaces; now-playing word on the right |
+| `Super M` | MEDIA pane, **NOW**: art dithered into the era's colors, title, artist, seek bar, transport, spectrum (cava, only while shown and playing), Dot TV's up-next. Space, ← →, N/P, S |
+| `Super Shift M` | MEDIA pane, **TV** page: the Dot TV library, most played first. Type to filter, `Ctrl S` searches YouTube. Enter plays, `Ctrl Q` queues, `Ctrl E` plays next, `Ctrl L` adds to the target list, `Ctrl D` deletes (twice), `Ctrl M` Endless Mix, `Ctrl G` saves a search result |
+| **LISTS** page | playlists: Enter plays, `Ctrl R` shuffles, `Ctrl T` sets the target list, `Ctrl O` makes a list from the typed name |
+| Panels | `media` (now-playing board, click to play/pause), `vis` (spectrum), `mpris` (title, dithered art) |
+| `Super Ctrl M` | the Dot TV window |
+
+**Dot TV** is the old AGS Media Center, rebuilt as a standalone app: mpv plays, `dottv` keeps the
+library. The library stays in `~/Video/TV` in the Media Center's own format (`<id>-480.mp4`,
+`video-meta.json`, `playlists.json`, `play-counts.json`), plus `thumbs/`.
+
+```bash
+dottv search daft punk         # YouTube, via yt-dlp
+dottv play K0HSD_i2DvA         # not saved yet: streams now, saves in the background
+dottv play <id> --queue        # or --next
+dottv mix on                   # Endless Mix: the library shuffled, never stops
+dottv list play anime --shuffle
+dottv led                      # LED dot shader on the video (L in the window)
+dottv lib; dottv queue; dottv rm <id>; dottv thumbs
+```
+
+The LED shader (`mpv/.config/mpv/shaders/dotled.glsl`) draws the video as dots in the era's ramp,
+ordered-dithered, at twice the shell's pitch; Dot Shell rewrites its colors on every era or display
+change (`~/.local/state/dotshell/mpv-led.conf`) and pushes them to a running Dot TV.
+
+Music: mpd serves `~/Music` (`mpd/.config/mpd/mpd.conf`, state in `~/.local/state/mpd`); `rmpc` in
+the launcher opens it in Ghostty.
 
 If you have your own `~/.config/fontconfig/fonts.conf` that sets antialiasing for every font,
 put the Departure Mono rule from `fontconfig/` at its end too: fontconfig applies edits in

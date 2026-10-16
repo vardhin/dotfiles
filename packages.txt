@@ -28,7 +28,14 @@ wireplumber
 pavucontrol
 playerctl
 brightnessctl
+# Players: mpv for video and Dot TV (dottv), with mpv-mpris for MPRIS; mpd for
+# the music library, rmpc as its client, mpd-mpris for MPRIS. cava feeds Dot
+# Shell's spectrum; yt-dlp + ffmpeg fetch and merge Dot TV downloads.
 mpv
+mpv-mpris
+mpd
+mpd-mpris
+rmpc
 yt-dlp
 ffmpeg
 cava

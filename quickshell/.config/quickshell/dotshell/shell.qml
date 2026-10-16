@@ -45,6 +45,7 @@ ShellRoot {
     BatteryPane {}
     ErasPane {}
     PackagesPane {}
+    MediaPane {}
     PolkitPane {}
     LockScreen {}
 

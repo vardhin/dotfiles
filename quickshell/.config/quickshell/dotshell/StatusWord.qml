@@ -9,6 +9,7 @@ Item {
     property color color: Tokens.slot0
     property bool dim: false
     signal clicked
+    signal middleClicked
     signal wheel(bool up)
 
     width: label.implicitWidth
@@ -35,7 +36,8 @@ Item {
         anchors.fill: parent
         hoverEnabled: true
         cursorShape: Qt.PointingHandCursor
-        onClicked: root.clicked()
+        acceptedButtons: Qt.LeftButton | Qt.MiddleButton
+        onClicked: mouse => mouse.button === Qt.MiddleButton ? root.middleClicked() : root.clicked()
         onWheel: event => root.wheel(event.angleDelta.y > 0)
     }
 }

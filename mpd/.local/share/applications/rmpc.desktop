@@ -1,0 +1,10 @@
+[Desktop Entry]
+Type=Application
+Name=rmpc
+GenericName=Music Player
+Comment=The mpd music library in a terminal
+Exec=ghostty --class=dotshell.rmpc -e rmpc
+Icon=multimedia-audio-player
+Terminal=false
+Categories=AudioVideo;Audio;Player;
+Keywords=music;mpd;player;

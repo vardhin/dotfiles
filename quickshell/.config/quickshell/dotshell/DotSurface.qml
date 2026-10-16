@@ -43,6 +43,9 @@ Item {
     // How lit the lit dots are, 0 .. 1: below 1 they blend toward the unlit
     // dot (the wallpaper board sits at 0.55).
     property real gain: 1
+    // Image mode: spread the four era levels (or the color depth) with a 4x4
+    // ordered dither, so album art keeps its shading on a coarse board.
+    property bool dither: false
 
     default property alias content: canvas.data
     readonly property alias canvas: canvas
@@ -144,6 +147,7 @@ Item {
         property color ramp2: Tokens.current.ramp[2]
         property color ramp3: Tokens.current.ramp[3]
         property real gain: root.gain
+        property real dither: root.dither ? 1 : 0
         property real useMask: root.shape ? 1 : 0
         property variant mask: root.shape ? maskBuffer : buffer
 

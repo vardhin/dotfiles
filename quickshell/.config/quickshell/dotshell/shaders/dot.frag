@@ -38,26 +38,36 @@ layout(std140, binding = 0) uniform buf {
     vec4 oldRamp2;
     vec4 oldRamp3;
     float gain;       // lit dots blend toward unlit by 1 - gain (wallpaper board: 0.55)
+    float dither;     // 1 = image mode spreads levels with a 4x4 ordered dither (album art)
 };
 
 layout(binding = 1) uniform sampler2D source;
 layout(binding = 2) uniform sampler2D mask;      // panel shape, one texel per dot
 layout(binding = 3) uniform sampler2D oldSource; // canvas grabbed before the era swap
 
-vec3 quantize(vec3 c, vec3 bits) {
+// `t` (-0.5 .. 0.5) is the ordered-dither offset, in steps of the output level.
+vec3 quantize(vec3 c, vec3 bits, float t) {
     vec3 n = exp2(bits) - 1.0;
-    return floor(c * n + 0.5) / n;
+    return clamp(floor(c * n + 0.5 + t) / n, 0.0, 1.0);
 }
 
-vec3 toDepth(vec3 c) {
+vec3 toDepth(vec3 c, float t) {
     if (depth > 20.0) return c;
-    if (depth > 12.0) return quantize(c, vec3(5.0, 6.0, 5.0));
-    return quantize(c, vec3(3.0, 3.0, 2.0));
+    if (depth > 12.0) return quantize(c, vec3(5.0, 6.0, 5.0), t);
+    return quantize(c, vec3(3.0, 3.0, 2.0), t);
 }
 
-vec3 eraRamp(vec3 c, vec4 r0, vec4 r1, vec4 r2, vec4 r3) {
+// 4x4 Bayer threshold for a dot, -0.5 .. 0.5.
+float bayer4(vec2 cell) {
+    vec2 p = mod(cell, 4.0);
+    int i = int(p.x) + int(p.y) * 4;
+    const float m[16] = float[16](0.0, 8.0, 2.0, 10.0, 12.0, 4.0, 14.0, 6.0, 3.0, 11.0, 1.0, 9.0, 15.0, 7.0, 13.0, 5.0);
+    return (m[i] + 0.5) / 16.0 - 0.5;
+}
+
+vec3 eraRamp(vec3 c, vec4 r0, vec4 r1, vec4 r2, vec4 r3, float t) {
     float l = dot(c, vec3(0.30, 0.59, 0.11));
-    float lv = min(3.0, floor(l * 4.2));
+    float lv = clamp(floor(l * 4.2 + t), 0.0, 3.0);
     if (lv < 0.5) return r0.rgb;
     if (lv < 1.5) return r1.rgb;
     if (lv < 2.5) return r2.rgb;
@@ -106,15 +116,16 @@ void main() {
     vec3 col;
     if (imageMode > 0.5) {
         lit = a > 0.05;
+        float t = dither > 0.5 ? bayer4(cell) : 0.0;
         if (depth < 1.0)
-            col = old ? eraRamp(rgb, oldRamp0, oldRamp1, oldRamp2, oldRamp3) : eraRamp(rgb, ramp0, ramp1, ramp2, ramp3);
+            col = old ? eraRamp(rgb, oldRamp0, oldRamp1, oldRamp2, oldRamp3, t) : eraRamp(rgb, ramp0, ramp1, ramp2, ramp3, t);
         else
-            col = toDepth(rgb);
+            col = toDepth(rgb, t);
     } else {
         // Content mode: two brightness levels, like a real panel.
         lit = a > 0.35;
         col = rgb * (a > 0.7 ? 1.0 : 0.7);
-        if (depth > 1.0) col = toDepth(col);
+        if (depth > 1.0) col = toDepth(col, 0.0);
     }
     // Toward the unlit dot, not black, so light eras fade toward their glass.
     col = mix(unlit, col, gain);

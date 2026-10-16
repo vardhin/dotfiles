@@ -15,7 +15,11 @@
               [--screen glass|led|board|off] [--night on|off] [--winfx on|off]
   dot raw '{"cmd":"tokens"}'        send one request as-is
 
-Kinds: clock sign note image mpris pixels.
+Kinds: clock sign note image mpris media vis pixels.
+  mpris  title and artist of a player (--source PLAYER), dithered art when wide
+  media  now playing: art, title, artist, progress, a spectrum when tall;
+         click it to play or pause
+  vis    a spectrum analyser (cava) of whatever plays
 Shapes: rect circle hex diamond strip, or an SVG path in a 0..100 box.
 Positions and sizes are grid units (12 px each).
 """

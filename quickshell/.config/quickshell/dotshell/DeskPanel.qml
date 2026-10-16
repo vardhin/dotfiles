@@ -63,6 +63,7 @@ Item {
         flat: root.raw
         visible: !(root.raw && root.photo)
         imageMode: root.panel.kind === "image" || root.panel.kind === "mpris"
+        dither: root.panel.kind === "mpris"
         shape: Shapes.path(root.panel.shape, root.cols, root.rows)
 
         // Dots nothing lights stay unlit, so the board's shape shows when dark.
@@ -153,6 +154,102 @@ Item {
             }
         }
 
+        // ── media: art, title, artist, progress; a spectrum below when tall ──
+        Item {
+            id: media
+            visible: root.panel.kind === "media"
+            width: root.cols
+            height: root.rows
+            readonly property bool wide: root.cols > root.rows * 1.4
+            // Wide: art on the left, full height. Otherwise art on top.
+            readonly property int artSize: wide ? root.rows - 2 : Math.max(0, Math.min(root.cols - 2, root.rows - Tokens.lineDots * 2 - 4))
+            readonly property int textX: wide ? artSize + 4 : 2
+            readonly property int textY: wide ? 1 : artSize + 3
+            readonly property int textW: root.cols - textX - 2
+
+            DitherArt {
+                visible: root.panel.kind === "media" && media.artSize >= 8
+                x: 1
+                y: 1
+                width: media.artSize
+                height: media.artSize
+                source: visible ? Media.art : ""
+            }
+            Column {
+                x: media.textX
+                y: media.textY
+                width: media.textW
+
+                Item {
+                    width: parent.width
+                    height: Tokens.lineDots
+                    readonly property string text: (Media.title || (Media.active ? "NOTHING PLAYING" : "NO PLAYER")).toUpperCase()
+                    readonly property bool long: fitTitle.implicitWidth > width
+
+                    DotText {
+                        id: fitTitle
+                        width: parent.width
+                        visible: !parent.long
+                        text: parent.text
+                        color: root.tube
+                    }
+                    Marquee {
+                        width: parent.width
+                        height: parent.height
+                        visible: parent.long && root.panel.kind === "media"
+                        passes: 1000000
+                        stepMs: 40
+                        text: parent.text
+                        color: root.tube
+                        onTextChanged: if (visible) run()
+                        onVisibleChanged: if (visible) run()
+                    }
+                }
+                DotText {
+                    width: parent.width
+                    height: Tokens.lineDots
+                    elide: Text.ElideRight
+                    text: Media.artist.toUpperCase()
+                    color: Tokens.slot1
+                }
+                // Progress: lit up to where the track is.
+                Item {
+                    width: parent.width
+                    height: 4
+                    Rectangle {
+                        y: 1
+                        width: parent.width
+                        height: 1
+                        color: Tokens.slot1
+                        opacity: 0.5
+                    }
+                    Rectangle {
+                        y: 1
+                        width: Math.round(parent.width * Media.progress)
+                        height: 1
+                        color: root.tube
+                    }
+                }
+                Spectrum {
+                    readonly property int room: root.rows - 1 - media.textY - Tokens.lineDots * 2 - 4
+                    visible: root.panel.kind === "media" && room >= 6
+                    width: parent.width
+                    height: Math.max(0, room)
+                    bars: Math.max(4, Math.min(32, Math.floor(parent.width / 3)))
+                }
+            }
+        }
+
+        // ── vis: a spectrum analyser over the whole board ──
+        Spectrum {
+            visible: root.panel.kind === "vis"
+            x: 1
+            y: 1
+            width: root.cols - 2
+            height: root.rows - 2
+            bars: Math.max(4, Math.min(32, Math.floor((root.cols - 2) / 3)))
+        }
+
         // ── pixels: last frame from `dot pixels` (a PPM image, panel resolution) ──
         Image {
             readonly property var frame: Panels.frames[root.panel.id] ?? null
@@ -220,10 +317,14 @@ Item {
         }
         onReleased: {
             const dx = Math.round(root.drag.x / root.unit), dy = Math.round(root.drag.y / root.unit);
+            // Barely moved: a click. A media board plays or pauses.
+            const click = Math.abs(root.drag.x) < 4 && Math.abs(root.drag.y) < 4;
             root.dragging = false;
             root.drag = Qt.point(0, 0);
             if (dx || dy)
                 Panels.move(root.panel.id, root.panel.x + dx, root.panel.y + dy);
+            else if (click && root.panel.kind === "media")
+                Media.toggle();
         }
     }
 }

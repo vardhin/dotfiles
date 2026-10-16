@@ -1,6 +1,4 @@
-# Secrets: YouTube Music auth headers of the old AGS Media Center. AGS is gone
-# (Phase 3) but a local copy may still sit here until Phase 7; never commit it.
-ags/.config/ags/browser.json
+# Secrets
 *.secret
 .env
 

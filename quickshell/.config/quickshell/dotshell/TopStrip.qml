@@ -8,9 +8,10 @@ import Quickshell.Wayland
 import Quickshell.Widgets
 import qs.services
 
-// Top LED strip: workspaces | clock or ticker | status words, tray glyphs.
-// Everything inside the DotSurface is measured in dots, not pixels.
-// Status words open their pane on click; VOL and BRT also take the wheel.
+// Top LED strip: workspaces, window title | clock or ticker | now playing,
+// status words, tray glyphs. Everything inside the DotSurface is measured in
+// dots, not pixels. Status words open their pane on click; VOL and BRT also
+// take the wheel, the now-playing word skips tracks with it.
 PanelWindow {
     id: strip
 
@@ -108,6 +109,19 @@ PanelWindow {
             }
         }
 
+        // The focused window's title, in whatever room is left before the
+        // clock; gone when that is under four letters, and on narrow strips.
+        DotText {
+            readonly property int room: clockRow.x - x - 8
+            x: workspaces.x + workspaces.width + 8
+            width: Math.max(0, room)
+            visible: !strip.compact && !ticker.visible && room >= Tokens.charDots * 4 && text !== ""
+            elide: Text.ElideRight
+            text: (ToplevelManager.activeToplevel?.activated ? ToplevelManager.activeToplevel.title : "").toUpperCase()
+            color: Tokens.slot1
+            opacity: 0.5
+        }
+
         // ── Center: clock, or the ticker when a message arrives ─────
         SystemClock {
             id: clock
@@ -181,6 +195,17 @@ PanelWindow {
             height: strip.rows
             spacing: strip.compact ? 4 : 6
 
+            // Now playing: play or pause glyph and the title. Click opens
+            // MEDIA, middle click plays or pauses, the wheel skips tracks.
+            StatusWord {
+                visible: Media.active && (Media.title !== "" || Media.isPlaying)
+                text: (Media.isPlaying ? "\uf04b" : "\uf04c") + (strip.compact ? "" : " " + (Media.title.length > 16 ? Media.title.slice(0, 15).replace(/[\s\-|:,.]+$/, "") + "." : Media.title).toUpperCase())
+                color: Tokens.slot2
+                dim: !Media.isPlaying
+                onClicked: Ui.toggle("media", strip.screen)
+                onMiddleClicked: Media.toggle()
+                onWheel: up => up ? Media.previous() : Media.next()
+            }
             StatusWord {
                 visible: Notifs.dnd || Notifs.live.length > 0
                 text: Notifs.dnd ? "DND" : strip.word("MSG ", "M") + Notifs.live.length

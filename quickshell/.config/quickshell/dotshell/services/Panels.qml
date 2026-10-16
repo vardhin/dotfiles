@@ -12,14 +12,18 @@ import qs
 //
 // A panel:
 //   { id, kind, shape, x, y, w, h, workspace, slot, dot, source, text }
-//   kind      clock | sign | note | image | mpris | pixels
+//   kind      clock | sign | note | image | mpris | media | vis | pixels
+//             mpris: title and artist (dithered art when wide); media: the
+//             now-playing board (art, title, artist, progress, a spectrum when
+//             tall enough; click to play or pause); vis: a spectrum analyser
 //   shape     rect | circle | hex | diamond | strip | <svg path in a 0..100 box>
 //   x y w h   grid units (Panels.unit px each), so a panel keeps its place and
 //             size at any dot pitch; only its dots get finer or coarser
 //   workspace Hyprland workspace id it sits on
 //   slot      era color tube: 0 primary, 1 secondary, 2 accent
 //   dot       false renders the panel raw (crisp image, art) clipped to its shape
-//   source    image: a file path; mpris: a player name ("" = the first player)
+//   source    image: a file path; mpris: a player name ("" = the first player);
+//             media and vis follow the player the shell follows (services/Media.qml)
 //   text      sign / note text
 // `pixels` panels show the last frame pushed with `dot pixels <id>`; frames are
 // not persisted (they are live data).
@@ -29,7 +33,7 @@ Singleton {
     // One grid unit in logical px. 12 is the coarsest pitch, so every pitch
     // divides a unit evenly except 5 and 8, which round to whole dots.
     readonly property int unit: 12
-    readonly property var kinds: ["clock", "sign", "note", "image", "mpris", "pixels"]
+    readonly property var kinds: ["clock", "sign", "note", "image", "mpris", "media", "vis", "pixels"]
 
     readonly property var panels: store.panels
     // id -> { w, h, data: base64 PPM (P6) } for pixels panels; not saved.

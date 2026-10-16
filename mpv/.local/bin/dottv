@@ -1,0 +1,585 @@
+#!/usr/bin/env python3
+"""dottv: Dot TV, a YouTube library played by mpv (the old AGS Media Center).
+
+  dottv open                      start or focus the player window
+  dottv play ID|URL [--queue|--next]
+                                  play now; --queue appends, --next plays after
+                                  this one. Not in the library yet: streams it
+                                  and saves it in the background
+  dottv get ID|URL                save to the library (no playback)
+  dottv search QUERY [-n 8] [--json]
+  dottv lib [--json]              the library, most played first
+  dottv rm ID                     delete a saved video (and its list entries)
+  dottv mix [on|off|toggle]       Endless Mix: shuffled library, never stops
+  dottv queue [--json]            what plays next
+  dottv clear                     empty the queue (keeps what is playing)
+  dottv list [--json]             playlists
+  dottv list NAME                 its tracks
+  dottv list new NAME | drop NAME
+  dottv list add|del|toggle NAME ID...
+  dottv list play NAME [--shuffle]
+  dottv led [on|off|toggle|reload]  the LED dot shader (era colors from Dot Shell)
+  dottv thumbs                    fetch missing thumbnails
+  dottv status --json             player state for Dot Shell
+
+The library is ${DOTTV_DIR:-~/Video/TV}: <id>-<height>.mp4, video-meta.json,
+playlists.json, play-counts.json, thumbs/<id>.jpg. The player is mpv on
+$XDG_RUNTIME_DIR/dottv.sock with scripts/dottv.lua (titles, play counts,
+Endless Mix, the L key); mpv-mpris puts it on MPRIS like any player.
+"""
+import fcntl
+import json
+import os
+import random
+import re
+import shutil
+import socket
+import subprocess
+import sys
+import time
+import urllib.request
+import uuid
+
+HOME = os.path.expanduser("~")
+LIB = os.path.expanduser(os.environ.get("DOTTV_DIR", "~/Video/TV"))
+META = os.path.join(LIB, "video-meta.json")
+LISTS = os.path.join(LIB, "playlists.json")
+COUNTS = os.path.join(LIB, "play-counts.json")
+THUMBS = os.path.join(LIB, "thumbs")
+OLD_THUMBS = os.path.join(os.environ.get("XDG_CACHE_HOME", HOME + "/.cache"), "ags-yt-thumbs")
+RUNTIME = os.environ.get("XDG_RUNTIME_DIR", "/tmp")
+SOCK = os.path.join(RUNTIME, "dottv.sock")
+STATE = os.path.join(os.environ.get("XDG_STATE_HOME", HOME + "/.local/state"), "dotshell")
+LED_OPTS = os.path.join(STATE, "mpv-led.conf")
+SHADER = "~~/shaders/dotled.glsl"
+FILE_RE = re.compile(r"^(.+)-(\d{3,4})\.mp4$")
+ID_RE = re.compile(r"^[A-Za-z0-9_-]{11}$")
+# Progressive or merged mp4 up to 480p, as the Media Center kept them.
+FORMAT = "bv*[height<=480][ext=mp4]+ba[ext=m4a]/b[height<=480][ext=mp4]/bv*[height<=480]+ba/b[height<=480]/b"
+
+
+def die(msg, code=1):
+    print(f"dottv: {msg}", file=sys.stderr)
+    sys.exit(code)
+
+
+# ── Library files ───────────────────────────────────────────────────────
+def load(path, default):
+    try:
+        with open(path) as f:
+            return json.load(f)
+    except (OSError, ValueError):
+        return default
+
+
+def save(path, value):
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    tmp = f"{path}.{os.getpid()}.tmp"
+    with open(tmp, "w") as f:
+        json.dump(value, f, indent=2, ensure_ascii=False)
+    os.replace(tmp, path)
+
+
+class Locked:
+    """Read-modify-write of one JSON file, safe across dottv processes."""
+
+    def __init__(self, path, default):
+        self.path, self.default = path, default
+
+    def __enter__(self):
+        os.makedirs(LIB, exist_ok=True)
+        self.lock = open(os.path.join(LIB, ".dottv.lock"), "w")
+        fcntl.flock(self.lock, fcntl.LOCK_EX)
+        self.value = load(self.path, self.default)
+        return self.value
+
+    def __exit__(self, kind, *_):
+        if kind is None:
+            save(self.path, self.value)
+        fcntl.flock(self.lock, fcntl.LOCK_UN)
+        self.lock.close()
+
+
+def files():
+    """id -> {quality: path}, plus the earliest mtime as `added`."""
+    out = {}
+    try:
+        names = os.listdir(LIB)
+    except FileNotFoundError:
+        return out
+    for name in names:
+        m = FILE_RE.match(name)
+        if not m:
+            continue
+        path = os.path.join(LIB, name)
+        e = out.setdefault(m[1], {"q": {}, "added": float("inf")})
+        e["q"][int(m[2])] = path
+        e["added"] = min(e["added"], os.path.getmtime(path))
+    return out
+
+
+def best_file(vid):
+    e = files().get(vid)
+    return e["q"][max(e["q"])] if e else None
+
+
+def thumb(vid):
+    for p in (os.path.join(THUMBS, vid + ".jpg"), os.path.join(OLD_THUMBS, vid + ".jpg")):
+        if os.path.exists(p):
+            return p
+    return ""
+
+
+def library():
+    meta, counts = load(META, {}), load(COUNTS, {})
+    rows = []
+    for vid, e in files().items():
+        m = meta.get(vid, {})
+        rows.append({
+            "id": vid,
+            "title": m.get("title") or vid,
+            "channel": m.get("channel", ""),
+            "duration": m.get("duration", ""),
+            "plays": int(counts.get(vid, 0) or 0),
+            "added": int(e["added"]),
+            "quality": max(e["q"]),
+            "path": e["q"][max(e["q"])],
+            "thumb": thumb(vid),
+        })
+    rows.sort(key=lambda r: (-r["plays"], r["title"].lower()))
+    return rows
+
+
+def video_id(s):
+    s = s.strip()
+    if ID_RE.match(s):
+        return s
+    m = re.search(r"(?:v=|youtu\.be/|shorts/|/embed/)([A-Za-z0-9_-]{11})", s)
+    if m:
+        return m[1]
+    die(f"not a YouTube id or link: {s!r}")
+
+
+def watch(vid):
+    return f"https://www.youtube.com/watch?v={vid}"
+
+
+# ── mpv ─────────────────────────────────────────────────────────────────
+class Mpv:
+    def __init__(self, start=True):
+        self.sock = None
+        self.req = 0
+        if not self.connect() and start:
+            self.launch()
+
+    def connect(self):
+        s = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+        try:
+            s.connect(SOCK)
+        except OSError:
+            return False
+        self.sock, self.buf = s, b""
+        return True
+
+    def launch(self):
+        args = [
+            "mpv", "--idle=yes", "--force-window=yes", "--wayland-app-id=dottv",
+            "--title=${?media-title:${media-title}}${!media-title:DOT TV}",
+            f"--input-ipc-server={SOCK}", f"--script-opts=dottv-library={LIB}",
+            f"--ytdl-format={FORMAT}", "--really-quiet",
+        ]
+        if os.path.exists(LED_OPTS):
+            args.append(f"--include={LED_OPTS}")
+        subprocess.Popen(args, stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL,
+                         stderr=subprocess.DEVNULL, start_new_session=True)
+        for _ in range(50):
+            time.sleep(0.1)
+            if self.connect():
+                return
+        die("mpv did not start (is mpv installed?)")
+
+    @property
+    def up(self):
+        return self.sock is not None
+
+    def __call__(self, *cmd):
+        self.req += 1
+        rid = self.req
+        self.sock.sendall((json.dumps({"command": list(cmd), "request_id": rid}) + "\n").encode())
+        while True:
+            while b"\n" not in self.buf:
+                chunk = self.sock.recv(65536)
+                if not chunk:
+                    die("mpv closed the connection")
+                self.buf += chunk
+            line, self.buf = self.buf.split(b"\n", 1)
+            msg = json.loads(line)
+            if msg.get("request_id") == rid:
+                if msg.get("error") not in ("success", None):
+                    raise RuntimeError(msg["error"])
+                return msg.get("data")
+
+    def get(self, prop, default=None):
+        try:
+            return self(*["get_property", prop])
+        except RuntimeError:
+            return default
+
+
+def focus():
+    subprocess.run(["hyprctl", "dispatch", "focuswindow", "class:^(dottv)$"],
+                   stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+
+
+def notify(summary, body=""):
+    subprocess.run(["notify-send", "-a", "Dot TV", "-i", "video-x-generic", summary, body],
+                   stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+
+
+# ── Saving videos ───────────────────────────────────────────────────────
+def get(vid, quiet=False):
+    """Download one video into the library with its title and thumbnail."""
+    if best_file(vid):
+        return True
+    os.makedirs(THUMBS, exist_ok=True)
+    out = subprocess.run([
+        "yt-dlp", "--no-warnings", "--no-playlist", "--no-progress", "-f", FORMAT,
+        "--merge-output-format", "mp4", "--embed-metadata",
+        "--write-thumbnail", "--convert-thumbnails", "jpg",
+        "-o", os.path.join(LIB, f"{vid}-480.%(ext)s"),
+        "-o", f"thumbnail:{os.path.join(THUMBS, vid)}.%(ext)s",
+        "--print", "after_move:%(title)s\t%(channel)s\t%(duration_string)s",
+        watch(vid),
+    ], capture_output=True, text=True)
+    lines = [l for l in out.stdout.splitlines() if "\t" in l]
+    if out.returncode != 0 or not best_file(vid):
+        err = (out.stderr.strip().splitlines() or ["download failed"])[-1]
+        if not quiet:
+            print(err, file=sys.stderr)
+        notify("Could not save the video", err)
+        return False
+    title, channel, duration = (lines[-1].split("\t") + ["", "", ""])[:3] if lines else ("", "", "")
+    with Locked(META, {}) as meta:
+        meta[vid] = {"title": title, "channel": channel, "duration": duration}
+    notify("Saved to the TV library", title)
+    if not quiet:
+        print(title or vid)
+    return True
+
+
+def get_in_background(vid):
+    subprocess.Popen([sys.argv[0], "get", vid, "--quiet"], stdin=subprocess.DEVNULL,
+                     stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, start_new_session=True)
+
+
+# ── Commands ────────────────────────────────────────────────────────────
+def cmd_open(args):
+    Mpv()
+    focus()
+
+
+def cmd_play(args):
+    how = "replace"
+    if "--queue" in args:
+        how = "append-play"
+    elif "--next" in args:
+        how = "insert-next-play"
+    rest = [a for a in args if not a.startswith("--")]
+    if not rest:
+        die("play what? an id or a link")
+    vid = video_id(rest[0])
+    path = best_file(vid)
+    if not path:
+        path = watch(vid)
+        get_in_background(vid)
+    mpv = Mpv()
+    mpv("loadfile", path, how)
+    if how == "replace":
+        mpv("set_property", "pause", False)
+
+
+def cmd_get(args):
+    rest = [a for a in args if not a.startswith("--")]
+    if not rest:
+        die("get what? an id or a link")
+    sys.exit(0 if get(video_id(rest[0]), quiet="--quiet" in args) else 1)
+
+
+def cmd_search(args):
+    n, words, as_json = 8, [], False
+    it = iter(args)
+    for a in it:
+        if a == "-n":
+            n = int(next(it, "8"))
+        elif a == "--json":
+            as_json = True
+        else:
+            words.append(a)
+    q = " ".join(words).strip()
+    if not q:
+        die("search for what?")
+    out = subprocess.run(["yt-dlp", "--flat-playlist", "--dump-json", "--no-warnings",
+                          f"ytsearch{n}:{q}"], capture_output=True, text=True)
+    saved = files()
+    rows = []
+    for line in out.stdout.splitlines():
+        try:
+            o = json.loads(line)
+        except ValueError:
+            continue
+        if not o.get("id"):
+            continue
+        secs = int(o.get("duration") or 0)
+        rows.append({
+            "id": o["id"],
+            "title": o.get("title") or "?",
+            "channel": o.get("channel") or o.get("uploader") or "",
+            "duration": f"{secs // 60}:{secs % 60:02d}" if secs else "",
+            "saved": o["id"] in saved,
+        })
+    if as_json:
+        print(json.dumps(rows))
+        return
+    for r in rows:
+        print(f"{r['id']}  {r['duration']:>6}  {'*' if r['saved'] else ' '} {r['title']}  ({r['channel']})")
+
+
+def cmd_lib(args):
+    rows = library()
+    if "--json" in args:
+        print(json.dumps(rows))
+        return
+    for r in rows:
+        print(f"{r['id']}  {r['plays']:>3}x  {r['duration']:>6}  {r['title']}")
+
+
+def cmd_rm(args):
+    if not args:
+        die("rm what?")
+    vid = video_id(args[0])
+    e = files().get(vid)
+    if not e:
+        die(f"{vid} is not in the library")
+    mpv = Mpv(start=False)
+    if mpv.up and mpv.get("path") in e["q"].values():
+        mpv("playlist-next", "force")
+    for p in [*e["q"].values(), os.path.join(THUMBS, vid + ".jpg")]:
+        if os.path.exists(p):
+            os.remove(p)
+    with Locked(META, {}) as meta:
+        meta.pop(vid, None)
+    with Locked(LISTS, []) as lists:
+        for pl in lists:
+            pl["itemIds"] = [i for i in pl.get("itemIds", []) if i != vid]
+            if pl.get("coverVideoId") == vid:
+                pl["coverVideoId"] = pl["itemIds"][0] if pl["itemIds"] else None
+
+
+def cmd_mix(args):
+    mpv = Mpv()
+    on = mpv.get("user-data/dottv/mix") is True
+    want = args[0] if args else "toggle"
+    on = {"on": True, "off": False}.get(want, not on)
+    mpv("set_property", "user-data/dottv/mix", on)
+    if not on:
+        # Stopping the mix drops what it queued, as the Media Center did.
+        mpv("playlist-clear")
+    print("on" if on else "off")
+
+
+def entries(mpv):
+    meta = load(META, {})
+    out = []
+    for i, e in enumerate(mpv.get("playlist", []) or []):
+        name = os.path.basename(e.get("filename", ""))
+        m = FILE_RE.match(name)
+        vid = m[1] if m else None
+        if not vid and "youtube.com/watch?v=" in e.get("filename", ""):
+            vid = e["filename"].split("v=")[1][:11]
+        title = (meta.get(vid, {}) if vid else {}).get("title") or e.get("title") or name
+        out.append({"index": i, "id": vid or "", "title": title,
+                    "current": bool(e.get("current")), "playing": bool(e.get("playing"))})
+    return out
+
+
+def cmd_queue(args):
+    mpv = Mpv(start=False)
+    rows = entries(mpv) if mpv.up else []
+    pos = next((r["index"] for r in rows if r["current"]), -1)
+    rows = [r for r in rows if r["index"] > pos]
+    if "--json" in args:
+        print(json.dumps(rows))
+        return
+    for n, r in enumerate(rows, 1):
+        print(f"{n:>2}  {r['title']}")
+
+
+def cmd_clear(args):
+    mpv = Mpv(start=False)
+    if mpv.up:
+        mpv("set_property", "user-data/dottv/mix", False)
+        mpv("playlist-clear")
+
+
+def find_list(lists, name):
+    low = name.lower()
+    return next((p for p in lists if p["id"] == name or p["name"].lower() == low), None)
+
+
+def cmd_list(args):
+    if not args or args[0] == "--json":
+        lists = load(LISTS, [])
+        if args:
+            print(json.dumps([{"id": p["id"], "name": p["name"], "count": len(p.get("itemIds", [])),
+                               "itemIds": p.get("itemIds", []), "cover": p.get("coverVideoId")} for p in lists]))
+        else:
+            for p in lists:
+                print(f"{p['name']}  ({len(p.get('itemIds', []))})")
+        return
+    verb, rest = args[0], args[1:]
+    if verb == "new":
+        if not rest:
+            die("list new NAME")
+        with Locked(LISTS, []) as lists:
+            if find_list(lists, rest[0]):
+                die(f"there is a list called {rest[0]}")
+            lists.append({"id": str(uuid.uuid4()), "name": rest[0], "itemIds": [],
+                          "coverVideoId": None, "coverImagePath": None})
+    elif verb == "drop":
+        with Locked(LISTS, []) as lists:
+            pl = find_list(lists, rest[0] if rest else "")
+            if not pl:
+                die("no such list")
+            lists.remove(pl)
+    elif verb in ("add", "del", "toggle"):
+        if len(rest) < 2:
+            die(f"list {verb} NAME ID...")
+        with Locked(LISTS, []) as lists:
+            pl = find_list(lists, rest[0])
+            if not pl:
+                die(f"no list called {rest[0]}")
+            items = pl.setdefault("itemIds", [])
+            for vid in map(video_id, rest[1:]):
+                has = vid in items
+                if verb == "add" or (verb == "toggle" and not has):
+                    if not has:
+                        items.append(vid)
+                elif has:
+                    items.remove(vid)
+            if pl.get("coverVideoId") not in items:
+                pl["coverVideoId"] = items[0] if items else None
+            print(json.dumps({"name": pl["name"], "count": len(items)}))
+    elif verb == "play":
+        lists = load(LISTS, [])
+        pl = find_list(lists, rest[0] if rest else "")
+        if not pl:
+            die("no such list")
+        ids = [i for i in pl.get("itemIds", []) if best_file(i)]
+        if not ids:
+            die(f"{pl['name']} has no saved videos")
+        if "--shuffle" in rest:
+            random.shuffle(ids)
+        mpv = Mpv()
+        mpv("set_property", "user-data/dottv/mix", False)
+        for n, vid in enumerate(ids):
+            mpv("loadfile", best_file(vid), "replace" if n == 0 else "append")
+        mpv("set_property", "pause", False)
+    else:
+        lists = load(LISTS, [])
+        pl = find_list(lists, verb)
+        if not pl:
+            die(f"no list called {verb}")
+        meta = load(META, {})
+        for vid in pl.get("itemIds", []):
+            print(f"{vid}  {meta.get(vid, {}).get('title', vid)}")
+
+
+def led_opts():
+    try:
+        with open(LED_OPTS) as f:
+            for line in f:
+                if line.startswith("glsl-shader-opts="):
+                    return line.split("=", 1)[1].strip()
+    except OSError:
+        pass
+    return None
+
+
+def cmd_led(args):
+    mpv = Mpv(start=False)
+    if not mpv.up:
+        if args and args[0] == "reload":
+            return
+        die("Dot TV is not running")
+    want = args[0] if args else "toggle"
+    opts = led_opts()
+    if opts:
+        mpv("set_property", "glsl-shader-opts", opts)
+    if want == "reload":
+        return
+    shaders = mpv.get("glsl-shaders", []) or []
+    on = any(s.endswith("dotled.glsl") for s in shaders)
+    on = {"on": True, "off": False}.get(want, not on)
+    rest = [s for s in shaders if not s.endswith("dotled.glsl")]
+    mpv("set_property", "glsl-shaders", rest + ([SHADER] if on else []))
+    print("on" if on else "off")
+
+
+def cmd_thumbs(args):
+    os.makedirs(THUMBS, exist_ok=True)
+    got = 0
+    for vid in files():
+        dest = os.path.join(THUMBS, vid + ".jpg")
+        if os.path.exists(dest):
+            continue
+        old = os.path.join(OLD_THUMBS, vid + ".jpg")
+        try:
+            if os.path.exists(old):
+                shutil.copyfile(old, dest)
+            else:
+                urllib.request.urlretrieve(f"https://i.ytimg.com/vi/{vid}/hqdefault.jpg", dest)
+            got += 1
+        except OSError as e:
+            print(f"{vid}: {e}", file=sys.stderr)
+    print(f"{got} thumbnails fetched")
+
+
+def cmd_status(args):
+    mpv = Mpv(start=False)
+    if not mpv.up:
+        print(json.dumps({"running": False, "mix": False, "led": False, "queue": [], "current": None}))
+        return
+    rows = entries(mpv)
+    cur = next((r for r in rows if r["current"]), None)
+    print(json.dumps({
+        "running": True,
+        "mix": mpv.get("user-data/dottv/mix") is True,
+        "led": any(s.endswith("dotled.glsl") for s in (mpv.get("glsl-shaders", []) or [])),
+        "current": cur,
+        "queue": [r for r in rows if cur is None or r["index"] > cur["index"]],
+    }))
+
+
+COMMANDS = {
+    "open": cmd_open, "play": cmd_play, "get": cmd_get, "search": cmd_search,
+    "lib": cmd_lib, "rm": cmd_rm, "mix": cmd_mix, "queue": cmd_queue, "clear": cmd_clear,
+    "list": cmd_list, "led": cmd_led, "thumbs": cmd_thumbs, "status": cmd_status,
+}
+
+
+def main():
+    args = sys.argv[1:]
+    if not args or args[0] in ("-h", "--help", "help"):
+        print(__doc__.strip())
+        return
+    fn = COMMANDS.get(args[0])
+    if not fn:
+        die(f"unknown command {args[0]!r}; one of: {' '.join(COMMANDS)}")
+    try:
+        fn(args[1:])
+    except RuntimeError as e:
+        die(f"mpv: {e}")
+
+
+if __name__ == "__main__":
+    main()
