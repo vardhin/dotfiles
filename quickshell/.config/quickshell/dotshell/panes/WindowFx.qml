@@ -11,7 +11,7 @@ import qs.services
 // openwindow / closewindow it puts a short-lived, click-through overlay over
 // the window's rect and plays shaders/winfx.frag there, in era colors, on the
 // shell's dot grid. Hyprland's own windowsIn/Out are cut down to a fade
-// (hypr/config/decorations.conf) so the two do not fight.
+// (hypr/.config/hypr/lua/look.lua) so the two do not fight.
 //
 // Close needs the rect of a window that is already gone, so rects are cached
 // from `hyprctl -j clients` after every event that can move a window.

@@ -3,7 +3,7 @@
 #   dotws go 3 | e+1 | e-1 | previous | empty
 #   dotws move 3      move the focused window there and follow it
 # Sends {"cmd":"ws",…} on the dot socket (socat: ~5 ms, against ~30 ms for
-# `qs ipc`). Without Dot Shell it falls back to hyprctl.
+# `qs ipc`). Without Dot Shell it falls back to hyprdo (either config language).
 set -u
 verb=${1:-go} arg=${2:-}
 sock=${XDG_RUNTIME_DIR:-/tmp}/dotshell.sock
@@ -11,6 +11,6 @@ if [[ -S $sock ]] && printf '{"cmd":"ws","%s":"%s"}\n' "$verb" "$arg" | socat -t
   exit 0
 fi
 case $verb in
-  move) exec hyprctl dispatch movetoworkspace "$arg" ;;
-  *) exec hyprctl dispatch workspace "$arg" ;;
+  move) exec hyprdo move "$arg" ;;
+  *) exec hyprdo ws "$arg" ;;
 esac

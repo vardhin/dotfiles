@@ -37,7 +37,7 @@ Singleton {
         enabled: !root.caffeine
         timeout: 465
         onIsIdleChanged: {
-            Hyprland.dispatch(isIdle ? "dpms off" : "dpms on");
+            Hypr.dpms(!isIdle);
             if (!isIdle)
                 Brightness.restore();
         }
@@ -68,7 +68,7 @@ Singleton {
                 const closed = /closed/i.test(text);
                 if (closed !== root.lidClosed) {
                     root.lidClosed = closed;
-                    Hyprland.dispatch(closed ? "dpms off" : "dpms on");
+                    Hypr.dpms(!closed);
                 }
             }
         }
@@ -114,7 +114,7 @@ Singleton {
                 } else if (line.includes(".PrepareForSleep (false")) {
                     root.sleeping = false;
                     root.holdSleep = true;
-                    Hyprland.dispatch("dpms on");
+                    Hypr.dpms(true);
                 }
             }
         }

@@ -1,0 +1,35 @@
+#!/usr/bin/env bash
+# hyprdo: one Hyprland dispatch, in whichever config language Hyprland runs.
+# Under hyprland.lua (0.55+) `hyprctl dispatch` takes hl.dsp.* calls; under
+# hyprland.conf the old dispatcher strings. Scripts call this instead of
+# picking one (Dot Shell has the same switch in services/Hypr.qml).
+#
+#   hyprdo ws ARG          workspace: 3, e+1, previous, empty, name:x
+#   hyprdo move ARG        focused window there, following it
+#   hyprdo send ARG        focused window there, staying put
+#   hyprdo focus SELECTOR  focus a window: class:^(dottv)$
+#   hyprdo exit
+set -u
+verb=${1:-} arg=${2:-}
+
+q() { local s=${1//\\/\\\\}; s=${s//\"/\\\"}; printf '"%s"' "$s"; }
+
+if hyprctl -j status 2>/dev/null | grep -q '"configProvider": *"lua"'; then
+  case $verb in
+    ws) exec hyprctl dispatch "hl.dsp.focus({ workspace = $(q "$arg") })" ;;
+    move) exec hyprctl dispatch "hl.dsp.window.move({ workspace = $(q "$arg") })" ;;
+    send) exec hyprctl dispatch "hl.dsp.window.move({ workspace = $(q "$arg"), follow = false })" ;;
+    focus) exec hyprctl dispatch "hl.dsp.focus({ window = $(q "$arg") })" ;;
+    exit) exec hyprctl dispatch "hl.dsp.exit()" ;;
+  esac
+else
+  case $verb in
+    ws) exec hyprctl dispatch workspace "$arg" ;;
+    move) exec hyprctl dispatch movetoworkspace "$arg" ;;
+    send) exec hyprctl dispatch movetoworkspacesilent "$arg" ;;
+    focus) exec hyprctl dispatch focuswindow "$arg" ;;
+    exit) exec hyprctl dispatch exit ;;
+  esac
+fi
+echo "usage: hyprdo ws|move|send ARG | focus SELECTOR | exit" >&2
+exit 2

@@ -4,6 +4,7 @@
 #   ./install.sh            packages + zsh framework + stow all modules + user services
 #   ./install.sh --link     only (re)stow the modules
 #   ./install.sh --dry-run  show what stow would do, change nothing
+#   ./install.sh --plugins  only build and enable the Hyprland plugins (hyprpm)
 #
 # Existing files that would block a symlink are moved to
 # ~/.dotfiles-backup/<timestamp>/ before stowing.
@@ -131,12 +132,43 @@ install_icons() {
   rm -rf "$tmp"
 }
 
+# Hyprland plugins, built by hyprpm against the running Hyprland's headers:
+# Hypr-DarkWindow (Dot Shell's per-window LED shading, the `winshade` token)
+# and dynamic-cursors (stretch, shake to find). Their config lives in
+# hypr/.config/hypr/lua/dotshell.lua and runs only once they are loaded, so a
+# failed build leaves the desktop exactly as it was. Rerun after a Hyprland
+# update: `hyprpm update` rebuilds them.
+PLUGINS=(
+  "https://github.com/micha4w/Hypr-DarkWindow Hypr-DarkWindow"
+  "https://github.com/VirtCode/hypr-dynamic-cursors dynamic-cursors"
+)
+install_plugins() {
+  command -v hyprpm >/dev/null || { log "no hyprpm (comes with hyprland); plugins skipped"; return 0; }
+  log "Hyprland plugins (hyprpm)"
+  if ! hyprpm update; then
+    log "hyprpm update failed (headers for this Hyprland); plugins skipped"
+    return 0
+  fi
+  local entry url name
+  for entry in "${PLUGINS[@]}"; do
+    read -r url name <<<"$entry"
+    hyprpm list 2>/dev/null | grep -q "$name" || yes | hyprpm add "$url" || { log "could not add $name"; continue; }
+    hyprpm enable "$name" || log "could not enable $name"
+  done
+  [[ -n ${HYPRLAND_INSTANCE_SIGNATURE:-} ]] && hyprpm reload -n
+  return 0
+}
+
 # GTK apps and Firefox read the cursor and icons from gsettings; Hyprland
-# itself sets XCURSOR_THEME (hypr/.config/hypr/config/environment.conf).
+# itself sets XCURSOR_THEME (hypr/.config/hypr/lua/environment.lua). The
+# cursor is Dot Shell's own DotShell theme once Export has drawn it (it also
+# sets gsettings then); Bibata Amber until that first run.
 set_theme() {
   command -v gsettings >/dev/null || return 0
   log "cursor and icon theme"
-  gsettings set org.gnome.desktop.interface cursor-theme Bibata-Modern-Amber
+  local cursor=Bibata-Modern-Amber
+  [[ -f $HOME/.local/share/icons/DotShell/index.theme ]] && cursor=DotShell
+  gsettings set org.gnome.desktop.interface cursor-theme "$cursor"
   gsettings set org.gnome.desktop.interface cursor-size 24
   gsettings set org.gnome.desktop.interface icon-theme McMojave-circle-dark
 }
@@ -144,8 +176,9 @@ set_theme() {
 case "${1:-}" in
   --dry-run) link_modules --dry-run ;;
   --link)    link_modules ;;
-  "")        install_packages; install_zsh_framework; link_modules; enable_services; install_icons; set_theme ;;
-  *)         echo "usage: $0 [--link|--dry-run]" >&2; exit 2 ;;
+  --plugins) install_plugins ;;
+  "")        install_packages; install_zsh_framework; link_modules; enable_services; install_icons; install_plugins; set_theme ;;
+  *)         echo "usage: $0 [--link|--dry-run|--plugins]" >&2; exit 2 ;;
 esac
 
 log "done"

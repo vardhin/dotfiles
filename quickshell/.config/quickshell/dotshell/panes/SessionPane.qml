@@ -14,7 +14,7 @@ Pane {
 
     readonly property var actions: [
         { key: "L", label: "LOCK", run: () => Lock.lock() },
-        { key: "O", label: "LOGOUT", run: () => Hyprland.dispatch("exit") },
+        { key: "O", label: "LOGOUT", run: () => Hypr.exit() },
         { key: "S", label: "SUSPEND", run: () => Quickshell.execDetached(["systemctl", "suspend"]) },
         { key: "R", label: "REBOOT", run: () => Quickshell.execDetached(["systemctl", "reboot"]) },
         { key: "P", label: "POWER OFF", run: () => Quickshell.execDetached(["systemctl", "poweroff"]) }

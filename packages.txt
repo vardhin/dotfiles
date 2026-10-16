@@ -11,6 +11,11 @@ base-devel
 hyprland
 hyprpicker
 xdg-desktop-portal-hyprland
+# hyprpm builds the plugins (install.sh --plugins): DarkWindow, dynamic-cursors
+cmake
+meson
+cpio
+pkgconf
 # Login: greetd runs Dot Shell's greeter (greetd/) in a bare Hyprland;
 # plymouth draws the boot splash (plymouth/).
 greetd

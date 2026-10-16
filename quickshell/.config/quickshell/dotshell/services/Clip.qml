@@ -3,6 +3,7 @@ pragma Singleton
 import QtQuick
 import Quickshell
 import Quickshell.Io
+import Quickshell.Wayland
 import qs
 
 // Clipboard history for the CLIP pane (Super V): every text copy, newest
@@ -25,7 +26,19 @@ Singleton {
         Ui.close();
         Quickshell.execDetached(["wl-copy", "--", text]);
         if (paste)
-            Quickshell.execDetached(["sh", "-c", "sleep 0.2; c=$(hyprctl activewindow -j | jq -r '.class // \"\"'); case $c in *ghostty*|*kitty*|foot*|*lacritty*|*wezterm*|*konsole*) m='CTRL SHIFT' ;; *) m=CTRL ;; esac; hyprctl dispatch sendshortcut \"$m, V, activewindow\" >/dev/null"]);
+            pasteLater.restart();
+    }
+
+    // Once the pane has closed and focus is back on the window: Ctrl Shift V
+    // in terminals, Ctrl V everywhere else.
+    Timer {
+        id: pasteLater
+        interval: 200
+        onTriggered: {
+            const app = String(ToplevelManager.activeToplevel?.appId ?? "").toLowerCase();
+            const term = /ghostty|kitty|foot|alacritty|wezterm|konsole/.test(app);
+            Hypr.sendShortcut(term ? "CTRL SHIFT" : "CTRL", "V");
+        }
     }
 
     function remove(text: string): void {

@@ -29,7 +29,7 @@ Scope {
     // ── Gaps ────────────────────────────────────────────────────────
     function gaps(): void {
         const inner = on ? pitch : 2, outer = on ? pitch : 0;
-        Quickshell.execDetached(["hyprctl", "--batch", `keyword general:gaps_in ${inner} ; keyword general:gaps_out ${outer}`]);
+        Hypr.set({ general: { gaps_in: inner, gaps_out: outer } });
     }
     onOnChanged: {
         gaps();

@@ -64,14 +64,14 @@ Singleton {
         const ws = Hyprland.focusedWorkspace?.name;
         if (!ws)
             return;
-        Hyprland.dispatch(`movetoworkspacesilent name:${ws},class:^(${clsRe})$`);
+        Hypr.moveTo("name:" + ws, false, `class:^(${clsRe})$`);
         hidden = false;
         hadFocus = false;
-        Hyprland.dispatch(`focuswindow class:^(${clsRe})$`);
+        Hypr.focusWindow(`class:^(${clsRe})$`);
     }
 
     function hide(): void {
-        Hyprland.dispatch(`movetoworkspacesilent name:${parking},class:^(${clsRe})$`);
+        Hypr.moveTo("name:" + parking, false, `class:^(${clsRe})$`);
         hidden = true;
         hadFocus = false;
     }

@@ -17,30 +17,28 @@ Singleton {
     id: root
 
     readonly property bool on: Tokens.wsfx
-    // Hyprland's own animation, as hypr/config/decorations.conf has it.
-    readonly property string hyprAnim: "workspaces,1,5,breathing,slidefade"
-
-    // A switch to make: "workspace 3", "movetoworkspace e+1", …
-    signal requested(string dispatch)
+    // A switch to make, as data for services/Hypr.qml: { kind: "go" | "move", arg }.
+    signal requested(var req)
 
     // `arg`: anything Hyprland's workspace dispatcher takes (3, e+1, previous, empty).
     function go(arg: string): void {
-        request("workspace " + arg);
+        request({ kind: "go", arg: arg });
     }
     // Move the focused window there and follow it.
     function move(arg: string): void {
-        request("movetoworkspace " + arg);
+        request({ kind: "move", arg: arg });
     }
 
-    function request(d: string): void {
+    function request(req: var): void {
         if (on)
-            requested(d);
+            requested(req);
         else
-            Hyprland.dispatch(d);
+            Hypr.run(req);
     }
 
+    // Hyprland's own workspace animation, as hypr/lua/look.lua has it.
     function applyAnim(): void {
-        Quickshell.execDetached(["hyprctl", "keyword", "animation", on ? "workspaces,0" : hyprAnim]);
+        Hypr.animation("workspaces", !on, 5, "breathing", "slidefade");
     }
     onOnChanged: applyAnim()
     Component.onCompleted: applyAnim()
@@ -50,6 +48,13 @@ Singleton {
         function onRawEvent(event) {
             if (event.name === "configreloaded")
                 root.applyAnim();
+        }
+    }
+    // Hypr learns the config language after startup; say it again in that one.
+    Connections {
+        target: Hypr
+        function onKnownChanged() {
+            root.applyAnim();
         }
     }
 }

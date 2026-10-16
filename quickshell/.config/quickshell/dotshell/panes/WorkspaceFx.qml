@@ -30,7 +30,7 @@ Scope {
     property var runs: []
     property int serial: 0
     property real lastAt: 0
-    property string pending: ""
+    property var pending: null
     property real now: Date.now()
 
     // Delegates keyed by run id: a ListModel only adds and removes, where an
@@ -72,7 +72,7 @@ Scope {
         }
     }
 
-    function start(d: string): void {
+    function start(d: var): void {
         const t = Date.now();
         const ms = Math.max(minMs, Math.min(fullMs, (t - lastAt) * 0.8));
         lastAt = t;
@@ -116,8 +116,8 @@ Scope {
                 return;
             root.update(r.id, { state: "armed" });
             armTimeout.restart();
-            Hyprland.dispatch(root.pending);
-            root.pending = "";
+            Hypr.run(root.pending);
+            root.pending = null;
         }
     }
 
@@ -129,9 +129,8 @@ Scope {
             const r = root.latest();
             if (r && r.state === "capture")
                 root.drop(r.id);
-            if (root.pending)
-                Hyprland.dispatch(root.pending);
-            root.pending = "";
+            Hypr.run(root.pending);
+            root.pending = null;
         }
     }
 

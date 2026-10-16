@@ -4,7 +4,7 @@
 #   sudo system/install.sh greetd     Dot Shell's greeter for greetd
 #   sudo system/install.sh plymouth   the dot-matrix boot splash
 #
-# greetd:   /etc/greetd/{config.toml,hyprland.conf}; a copy of Dot Shell in
+# greetd:   /etc/greetd/{config.toml,hyprland.lua}; a copy of Dot Shell in
 #           /usr/local/share/dotshell (the greeter user cannot read ~; rerun
 #           after changing greeter.qml or anything it uses); the shared state
 #           folder /var/lib/dotshell-greeter/dotshell, owned by you, where Dot
@@ -35,7 +35,8 @@ install_greetd() {
   echo ":: greetd: Dot Shell greeter"
   backup /etc/greetd/config.toml
   install -Dm644 "$SYS/greetd/config.toml" /etc/greetd/config.toml
-  install -Dm644 "$SYS/greetd/hyprland.conf" /etc/greetd/hyprland.conf
+  install -Dm644 "$SYS/greetd/hyprland.lua" /etc/greetd/hyprland.lua
+  rm -f /etc/greetd/hyprland.conf
 
   rsync -a --delete --chmod=Da+rx,Fa+r "$DOTFILES/quickshell/.config/quickshell/dotshell/" /usr/local/share/dotshell/
 

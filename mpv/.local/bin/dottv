@@ -264,7 +264,7 @@ class Mpv:
 
 
 def focus():
-    subprocess.run(["hyprctl", "dispatch", "focuswindow", "class:^(dottv)$"],
+    subprocess.run(["hyprdo", "focus", "class:^(dottv)$"],
                    stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
 
 

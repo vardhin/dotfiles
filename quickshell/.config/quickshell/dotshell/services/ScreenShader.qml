@@ -42,7 +42,7 @@ Singleton {
         if (defs === "") {
             if (applied !== "off") {
                 applied = "off";
-                Quickshell.execDetached(["hyprctl", "keyword", "decoration:screen_shader", "[[EMPTY]]"]);
+                Hypr.set({ decoration: { screen_shader: "" } });
             }
             return;
         }
@@ -58,7 +58,7 @@ Singleton {
     }
 
     function hand(path: string): void {
-        Quickshell.execDetached(["hyprctl", "keyword", "decoration:screen_shader", path]);
+        Hypr.set({ decoration: { screen_shader: path } });
     }
 
     // Settle first, so a burst of changes writes once.
@@ -72,6 +72,13 @@ Singleton {
     }
 
     onNightChanged: schedule()
+    Connections {
+        target: Hypr
+        function onKnownChanged() {
+            root.applied = "";
+            root.schedule();
+        }
+    }
     Connections {
         target: Tokens
         function onDirReadyChanged() {
