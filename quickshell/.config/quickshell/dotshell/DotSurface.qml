@@ -16,8 +16,16 @@ import QtQuick.Shapes
 //
 // `shape` (an SVG path in dots, see Shapes.js) cuts the panel to that outline:
 // dots outside it are not drawn at all, not even as unlit dots.
+//
+// Era cascade: when Tokens.flipStarting fires, the canvas is grabbed into
+// `oldBuffer` before the era swaps; dot.frag then turns each dot over from the
+// old snapshot (and old era uniforms) to the live canvas as Tokens.flip runs.
 Item {
     id: root
+
+    function shapeCode(s: string): real {
+        return s === "square" ? 1 : s === "bubble" ? 2 : 0;
+    }
 
     property int cols: 1
     property int rows: 1
@@ -32,6 +40,9 @@ Item {
     property bool flat: false
     // SVG path in canvas dots; "" = the whole rectangle.
     property string shape: ""
+    // How lit the lit dots are, 0 .. 1: below 1 they blend toward the unlit
+    // dot (the wallpaper board sits at 0.55).
+    property real gain: 1
 
     default property alias content: canvas.data
     readonly property alias canvas: canvas
@@ -89,6 +100,31 @@ Item {
         visible: false
     }
 
+    // The canvas as it was in the old era, grabbed once per cascade.
+    ShaderEffectSource {
+        id: oldBuffer
+        sourceItem: root.dot && !root.flat ? canvas : null
+        live: false
+        smooth: false
+        textureSize: Qt.size(root.cols, root.rows)
+        width: 0
+        height: 0
+        visible: false
+    }
+
+    // Only surfaces on screen at the swap have an old picture to flip from;
+    // one that appears mid-cascade just shows the new era.
+    property bool grabbed: false
+
+    Connections {
+        target: Tokens
+        function onFlipStarting() {
+            root.grabbed = root.dot && !root.flat && root.visible;
+            if (root.grabbed)
+                oldBuffer.scheduleUpdate();
+        }
+    }
+
     ShaderEffect {
         anchors.fill: parent
         visible: root.dot
@@ -99,7 +135,7 @@ Item {
         property real dotSize: root.flat ? 1.2 : Tokens.dotSize   // >1: no seams at fractional pitch
         property real depth: root.flat ? 24 : Tokens.depthBits
         property real imageMode: root.imageMode ? 1 : 0
-        property real shape: root.flat || Tokens.current.shape === "square" ? 1 : Tokens.current.shape === "bubble" ? 2 : 0
+        property real shape: root.flat ? 1 : root.shapeCode(Tokens.current.shape)
         property real glow: root.flat ? 0 : Tokens.current.glow
         property color unlitColor: Tokens.unlit
         property color gapColor: Tokens.glass
@@ -107,8 +143,22 @@ Item {
         property color ramp1: Tokens.current.ramp[1]
         property color ramp2: Tokens.current.ramp[2]
         property color ramp3: Tokens.current.ramp[3]
+        property real gain: root.gain
         property real useMask: root.shape ? 1 : 0
         property variant mask: root.shape ? maskBuffer : buffer
+
+        // Cascade. Flat surfaces (raw drawn content) do not flip.
+        readonly property var was: Tokens.previous
+        property real flip: root.grabbed ? Tokens.flip : 1
+        property real oldShape: root.flat ? 1 : root.shapeCode(was.shape)
+        property real oldGlow: root.flat ? 0 : was.glow
+        property color oldUnlit: was.unlit
+        property color oldGap: was.glass
+        property color oldRamp0: was.ramp[0]
+        property color oldRamp1: was.ramp[1]
+        property color oldRamp2: was.ramp[2]
+        property color oldRamp3: was.ramp[3]
+        property variant oldSource: root.dot && !root.flat ? oldBuffer : buffer
 
         fragmentShader: Qt.resolvedUrl("shaders/dot.frag.qsb")
     }
