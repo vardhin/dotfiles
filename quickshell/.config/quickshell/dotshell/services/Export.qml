@@ -462,8 +462,10 @@ menuitem[_moz-menuactive], menu[_moz-menuactive] { background: var(--dot-unlit) 
 
     // ── Cursor and sounds: arguments for the dotcursor / dotsound scripts ──
     // (filled in by their own sections below; "" skips the step)
+    // The cursor: the era's first tube lit, the second as accent, a rim of
+    // its glass so it reads over any window; dots shaped like the era's.
     function cursorArgs(e: var): string {
-        return "";
+        return "--lit " + hex(Qt.color(e.slots[0])) + " --accent " + hex(Qt.color(e.slots[1])) + " --rim " + hex(Qt.color(e.glass)) + " --shape " + (e.shape || "round");
     }
     function soundArgs(e: var): string {
         return "";

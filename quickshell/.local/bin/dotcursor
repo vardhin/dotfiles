@@ -1,0 +1,422 @@
+#!/usr/bin/env python3
+"""dotcursor: Dot Shell's cursor theme, drawn as LEDs in the era's colors.
+
+Every cursor is pixel art on a 12x12 grid; each art pixel becomes one LED
+dot (round, square or bubble, like the era's dots) with a dark rim around
+the lit shape so it reads on any window. Written as one theme that both
+cursor systems read:
+
+    ~/.local/share/icons/DotShell/
+        index.theme                 XCursor theme (cursors/, with aliases)
+        cursors/<name>              XCursor files, 24 36 48 72 96 px
+        manifest.hl                 hyprcursor theme
+        hyprcursors/<shape>.hlc     hyprcursor shapes (meta.hl + PNGs),
+                                    resize_algorithm = nearest
+
+The busy cursors are animated: an LED chaser running round a ring.
+Dot Shell's Export runs this on every era change, then
+`hyprctl setcursor DotShell 24` and gsettings pick it up. Exits 3 without
+touching anything when the colors are the same as last time.
+
+    dotcursor --lit '#ffb347' --accent '#ffd68c' --rim '#0c0906' [--shape round|square|bubble]
+              [--dest ~/.local/share/icons/DotShell]
+
+Python standard library only (zlib, struct, zipfile).
+"""
+import argparse, os, shutil, struct, sys, tempfile, zipfile, zlib
+from pathlib import Path
+
+# ── Art ─────────────────────────────────────────────────────────────
+# '#' lit dot, '+' accent dot, 'X' rim (dark), '.' empty. (hx, hy) is the
+# hotspot in grid cells.
+ART = {
+    "left_ptr": ((0, 0), """
+X...........
+XX..........
+X#X.........
+X##X........
+X###X.......
+X####X......
+X#####X.....
+X######X....
+X###XXXX....
+X#XX#X......
+XX..X#X.....
+.....XX.....
+"""),
+    "hand2": ((4, 0), """
+....XX......
+...X#+X.....
+...X##X.....
+...X##XXX...
+...X##X##XX.
+.XXX##X##X#X
+X##X######X#
+X##########X
+.X########X.
+..X#######X.
+...X#####X..
+...XXXXXXX..
+"""),
+    "xterm": ((5, 6), """
+..XXX.XXX...
+..X#+X+#X...
+...XX#XX....
+....X#X.....
+....X#X.....
+....X#X.....
+....X#X.....
+....X#X.....
+....X#X.....
+...XX#XX....
+..X#+X+#X...
+..XXX.XXX...
+"""),
+    "crosshair": ((5, 5), """
+.....X......
+....X#X.....
+....X#X.....
+....X#X.....
+.XXX.+.XXX..
+X####+####X.
+.XXX.+.XXX..
+....X#X.....
+....X#X.....
+....X#X.....
+.....X......
+............
+"""),
+    "fleur": ((5, 5), """
+.....X......
+....X#X.....
+...X###X....
+....X#X.....
+.X..X#X..X..
+X##XX+XX##X.
+.X..X#X..X..
+....X#X.....
+...X###X....
+....X#X.....
+.....X......
+............
+"""),
+    "grab": ((5, 5), """
+............
+...XX.XX....
+..X#XX#XXX..
+..X#XX#X#X..
+XXX#XX#X#XX.
+X##X##X##X#X
+X##########X
+.X########X.
+..X#######X.
+...X#####X..
+...XXXXXXX..
+............
+"""),
+    "grabbing": ((5, 5), """
+............
+............
+............
+...XXXXXX...
+..X#X#X#XX..
+.XX########X
+X##########X
+X##########X
+.X########X.
+..X#######X.
+...XXXXXXX..
+............
+"""),
+    "not-allowed": ((5, 5), """
+...XXXXX....
+..X#####X...
+.X##XXX##X..
+X##X..X+#X..
+X#X..X+X#X..
+X#X.X+X.X#X.
+X#XX+X..X#X.
+X#+X...X##X.
+.X##XXX##X..
+..X#####X...
+...XXXXX....
+............
+"""),
+    "question_arrow": ((0, 0), """
+X......XXX..
+XX....X+++X.
+X#X...XX.+X.
+X##X.....+X.
+X###X...+X..
+X####X..+X..
+X#####X.XX..
+X######X+X..
+X###XXXXX...
+X#XX#X......
+XX..X#X.....
+.....XX.....
+"""),
+    "sb_h_double_arrow": ((5, 5), """
+............
+............
+..X......X..
+.X#X....X#X.
+X##XXXXXX##X
+X##########X
+X##XXXXXX##X
+.X#X....X#X.
+..X......X..
+............
+............
+............
+"""),
+    "sb_v_double_arrow": ((5, 5), """
+.....XX.....
+....X##X....
+...X####X...
+....X##X....
+....X##X....
+....X##X....
+....X##X....
+....X##X....
+...X####X...
+....X##X....
+.....XX.....
+............
+"""),
+    "fd_double_arrow": ((5, 5), """
+XXXXX.......
+X###X.......
+X##X........
+X#X#X.......
+XX.X#X......
+....X#X.....
+.....X#X.XX.
+......X#X#X.
+.......X##X.
+......X###X.
+......XXXXX.
+............
+"""),
+    "bd_double_arrow": ((5, 5), """
+......XXXXX.
+......X###X.
+.......X##X.
+......X#X#X.
+.....X#X.XX.
+....X#X.....
+XX.X#X......
+X#X#X.......
+X##X........
+X###X.......
+XXXXX.......
+............
+"""),
+}
+
+# The busy ring (wait), and the arrow with a small ring (progress): built in
+# code, 8 frames each, so the lit dot runs round.
+RING = [(5, 1), (7, 2), (8, 4), (8, 6), (7, 8), (5, 9), (3, 8), (2, 6), (2, 4), (3, 2)]
+SMALL_RING = [(9, 7), (10, 8), (10, 9), (9, 10), (8, 10), (7, 9), (7, 8), (8, 7)]
+
+# Every name each cursor answers to: XCursor names (aliases are symlinks)
+# and the Wayland cursor-shape / CSS names (hyprcursor overrides).
+NAMES = {
+    "left_ptr": ["default", "arrow", "top_left_arrow", "left_arrow", "context-menu", "alias", "copy", "dnd-copy", "dnd-link", "link", "pencil", "draft", "vertical-text", "center_ptr", "right_ptr", "X_cursor", "pirate"],
+    "hand2": ["pointer", "hand1", "hand", "pointing_hand", "e29285e634086352946a0e7090d73106"],
+    "xterm": ["text", "ibeam"],
+    "watch": ["wait"],
+    "left_ptr_watch": ["progress", "half-busy", "00000000000000020006000e7e9ffc3f", "08e8e1c95fe2fc01f976f1e063a24ccd", "3ecb610c1bf2410f44200f48c40d3599"],
+    "crosshair": ["cross", "tcross", "cell", "zoom-in", "zoom-out", "plus", "color-picker"],
+    "fleur": ["move", "all-scroll", "size_all", "dnd-move", "4498f0e0c1937ffe01fd06f973665830", "9081237383d90e509aa00f00170e968f"],
+    "grab": ["openhand", "fleur-open", "5aca4d189052212118709018842178c0"],
+    "grabbing": ["closedhand", "dnd-none", "208530c400c041818281048008011002"],
+    "not-allowed": ["crossed_circle", "forbidden", "no-drop", "dnd-no-drop", "circle", "03b6e0fcb3499374a867c041f52298f0"],
+    "question_arrow": ["help", "whats_this", "left_ptr_help", "5c6cd98b3f3ebcb1f9c7f1c204630408", "d9ce0ab605698f320427677b458ad60b"],
+    "sb_h_double_arrow": ["ew-resize", "col-resize", "e-resize", "w-resize", "size_hor", "h_double_arrow", "right_side", "left_side", "split_h", "14fef782d02440884392942c11205230", "028006030e0e7ebffc7f7070c0600140"],
+    "sb_v_double_arrow": ["ns-resize", "row-resize", "n-resize", "s-resize", "size_ver", "v_double_arrow", "top_side", "bottom_side", "split_v", "2870a09082c103050810ffdffffe0204", "00008160000006810000408080010102"],
+    "fd_double_arrow": ["nwse-resize", "se-resize", "nw-resize", "size_fdiag", "bottom_right_corner", "top_left_corner", "c7088f0f3e6c8088236ef8e1e3e70000"],
+    "bd_double_arrow": ["nesw-resize", "ne-resize", "sw-resize", "size_bdiag", "bottom_left_corner", "top_right_corner", "fcf1c3c7cd4491d801f1e1c78f100000"],
+}
+
+SIZES = [24, 36, 48, 72, 96]   # 2, 3, 4, 6, 8 px per art pixel
+FRAME_MS = 90
+
+
+def parse(art):
+    rows = [r for r in art.strip("\n").split("\n")]
+    return [list(r.ljust(12, ".")[:12]) for r in rows[:12]] + [["."] * 12 for _ in range(12 - len(rows))]
+
+
+def ring_frames(base, ring, frame, rim=True):
+    g = [row[:] for row in base]
+    n = len(ring)
+    for i, (x, y) in enumerate(ring):
+        age = (frame - i) % n
+        g[y][x] = "#" if age == 0 else "+" if age <= 2 else "o"
+        if rim:
+            for dx, dy in ((1, 0), (-1, 0), (0, 1), (0, -1)):
+                xx, yy = x + dx, y + dy
+                if 0 <= xx < 12 and 0 <= yy < 12 and g[yy][xx] == ".":
+                    g[yy][xx] = "X"
+    return g
+
+
+def hexrgb(h):
+    h = h.lstrip("#")
+    return tuple(int(h[i:i + 2], 16) for i in (0, 2, 4))
+
+
+# ── Rendering ───────────────────────────────────────────────────────
+def render(grid, size, pal, shape):
+    """grid (12x12 chars) -> size x size premultiplied ARGB, row-major list."""
+    k = size // 12
+    px = [(0, 0, 0, 0)] * (size * size)
+    for gy in range(12):
+        for gx in range(12):
+            c = grid[gy][gx]
+            if c == ".":
+                continue
+            if c == "X":
+                col, a, full = pal["rim"], 235, True
+            else:
+                col = {"#": pal["lit"], "+": pal["accent"], "o": pal["dim"]}[c]
+                a, full = 255, False
+            for y in range(k):
+                for x in range(k):
+                    # Lit dots are drawn as dots; the rim fills its cell, so
+                    # the shape has a solid edge between the dots.
+                    if not full:
+                        fx, fy = (x + 0.5) / k - 0.5, (y + 0.5) / k - 0.5
+                        r = max(abs(fx), abs(fy)) if shape == "square" else (fx * fx + fy * fy) ** 0.5
+                        if r > (0.5 if shape == "square" else 0.46) and k > 2:
+                            # The gap between dots shows the rim color.
+                            col2, a2 = pal["rim"], 235
+                            put(px, size, gx * k + x, gy * k + y, col2, a2)
+                            continue
+                        if shape == "bubble" and k > 3 and fx < -0.1 and fy < -0.1 and r < 0.25:
+                            col_h = tuple(min(255, v + 90) for v in col)
+                            put(px, size, gx * k + x, gy * k + y, col_h, a)
+                            continue
+                    put(px, size, gx * k + x, gy * k + y, col, a)
+    return px
+
+
+def put(px, size, x, y, col, a):
+    if 0 <= x < size and 0 <= y < size:
+        px[y * size + x] = (col[0], col[1], col[2], a)
+
+
+def png(px, size):
+    raw = bytearray()
+    for y in range(size):
+        raw.append(0)
+        for x in range(size):
+            r, g, b, a = px[y * size + x]
+            raw += bytes((r, g, b, a))
+    def chunk(t, d):
+        c = struct.pack(">I", len(d)) + t + d
+        return c + struct.pack(">I", zlib.crc32(t + d) & 0xffffffff)
+    return b"\x89PNG\r\n\x1a\n" + chunk(b"IHDR", struct.pack(">IIBBBBB", size, size, 8, 6, 0, 0, 0)) + chunk(b"IDAT", zlib.compress(bytes(raw), 9)) + chunk(b"IEND", b"")
+
+
+def xcursor(images):
+    """images: [(size, hx, hy, delay, px)] -> XCursor file bytes."""
+    n = len(images)
+    header = struct.pack("<4sIII", b"Xcur", 16, 0x10000, n)
+    toc, chunks = b"", b""
+    pos = 16 + n * 12
+    for size, hx, hy, delay, px in images:
+        body = struct.pack("<IIIIIIIII", 36, 0xfffd0002, size, 1, size, size, hx, hy, delay)
+        for r, g, b, a in px:
+            # premultiplied ARGB
+            body += struct.pack("<I", (a << 24) | ((r * a // 255) << 16) | ((g * a // 255) << 8) | (b * a // 255))
+        toc += struct.pack("<III", 0xfffd0002, size, pos)
+        chunks += body
+        pos += len(body)
+    return header + toc + chunks
+
+
+# ── Theme ───────────────────────────────────────────────────────────
+def cursors():
+    """name -> (hotspot, [frames as grids])"""
+    out = {k: (hot, [parse(art)]) for k, (hot, art) in ART.items()}
+    blank = parse("")
+    out["watch"] = ((5, 5), [ring_frames(blank, RING, f) for f in range(len(RING))])
+    arrow = parse(ART["left_ptr"][1])
+    out["left_ptr_watch"] = ((0, 0), [ring_frames(arrow, SMALL_RING, f) for f in range(len(SMALL_RING))])
+    return out
+
+
+def build(dest, pal, shape):
+    dest = Path(dest).expanduser()
+    tmp = Path(tempfile.mkdtemp(prefix="dotcursor.", dir=dest.parent))
+    (tmp / "cursors").mkdir()
+    (tmp / "hyprcursors").mkdir()
+    for name, (hot, frames) in cursors().items():
+        images = []
+        # Arrows click at their very tip; the rest at the middle of their cell.
+        mid = 0 if hot == (0, 0) else 0.5
+        meta = ["resize_algorithm = nearest", f"hotspot_x = {(hot[0] + mid) / 12:.4f}", f"hotspot_y = {(hot[1] + mid) / 12:.4f}", "nominal_size = 1.0"]
+        for alias in [name] + NAMES.get(name, []):
+            meta.append(f"define_override = {alias}")
+        files = {}
+        for size in SIZES:
+            k = size // 12
+            for i, g in enumerate(frames):
+                px = render(g, size, pal, shape)
+                delay = FRAME_MS if len(frames) > 1 else 0
+                images.append((size, hot[0] * k + int(mid * k), hot[1] * k + int(mid * k), delay, px))
+                fn = f"{size}-{i}.png"
+                files[fn] = png(px, size)
+                meta.append(f"define_size = {size}, {fn}" + (f", {FRAME_MS}" if len(frames) > 1 else ""))
+        (tmp / "cursors" / name).write_bytes(xcursor(images))
+        for alias in NAMES.get(name, []):
+            link = tmp / "cursors" / alias
+            if not link.exists():
+                link.symlink_to(name)
+        with zipfile.ZipFile(tmp / "hyprcursors" / f"{name}.hlc", "w", zipfile.ZIP_DEFLATED) as z:
+            z.writestr("meta.hl", "\n".join(meta) + "\n")
+            for fn, data in files.items():
+                z.writestr(fn, data)
+    (tmp / "manifest.hl").write_text("name = DotShell\ndescription = Dot Shell LED cursor in the era's colors (generated by dotcursor)\nversion = 1.0\ncursors_directory = hyprcursors\n")
+    (tmp / "index.theme").write_text("[Icon Theme]\nName=DotShell\nComment=Dot Shell LED cursor in the era's colors (generated by dotcursor)\n")
+    # Swap in as one move, so nothing ever reads a half-written theme.
+    tmp.chmod(0o755)
+    old = None
+    if dest.exists():
+        old = dest.with_name(dest.name + ".old")
+        shutil.rmtree(old, ignore_errors=True)
+        dest.rename(old)
+    tmp.rename(dest)
+    if old:
+        shutil.rmtree(old, ignore_errors=True)
+
+
+def main():
+    ap = argparse.ArgumentParser(description=__doc__.split("\n")[0])
+    ap.add_argument("--lit", default="#ffb347")
+    ap.add_argument("--accent", default="#ffd68c")
+    ap.add_argument("--rim", default="#0c0906")
+    ap.add_argument("--shape", default="round", choices=["round", "square", "bubble"])
+    ap.add_argument("--dest", default=os.path.join(os.environ.get("XDG_DATA_HOME", os.path.expanduser("~/.local/share")), "icons/DotShell"))
+    a = ap.parse_args()
+    # Same colors as last time: nothing to do (exit 3, so callers skip the
+    # cursor reload too).
+    key = f"{a.lit} {a.accent} {a.rim} {a.shape} v1"
+    stamp = Path(a.dest).expanduser() / ".dotcursor"
+    try:
+        if stamp.read_text().strip() == key:
+            return 3
+    except OSError:
+        pass
+    lit, acc, rim = hexrgb(a.lit), hexrgb(a.accent), hexrgb(a.rim)
+    dim = tuple((l + r) // 2 for l, r in zip(lit, rim))
+    Path(a.dest).expanduser().parent.mkdir(parents=True, exist_ok=True)
+    build(a.dest, {"lit": lit, "accent": acc, "rim": rim, "dim": dim}, a.shape)
+    stamp.write_text(key + "\n")
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())
