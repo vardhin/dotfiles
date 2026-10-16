@@ -14,6 +14,7 @@ Singleton {
 
     // "" = nothing open. Names: launcher session notifs cheatsheet calendar
     // audio brightness wifi bluetooth battery eras packages media capture clip
+    // overview
     property string pane: ""
     // Which page a pane with pages opens on ("" = its own default), e.g.
     // the era switcher's "walls"; set by openPage / togglePage.
@@ -24,7 +25,7 @@ Singleton {
     // clicks on the strip through (clicking another glyph switches panes).
     property list<QtObject> strips: []
 
-    readonly property var names: ["launcher", "session", "notifs", "cheatsheet", "calendar", "audio", "brightness", "wifi", "bluetooth", "battery", "eras", "packages", "media", "capture", "clip"]
+    readonly property var names: ["launcher", "session", "notifs", "cheatsheet", "calendar", "audio", "brightness", "wifi", "bluetooth", "battery", "eras", "packages", "media", "capture", "clip", "overview"]
 
     function focusedScreen(): ShellScreen {
         const name = Hyprland.focusedMonitor?.name;

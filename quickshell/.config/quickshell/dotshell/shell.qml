@@ -50,6 +50,7 @@ ShellRoot {
     MediaPane {}
     CapturePane {}
     ClipPane {}
+    OverviewPane {}
     PolkitPane {}
     Scene {}
     LockScreen {}
