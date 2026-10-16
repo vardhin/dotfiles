@@ -7,11 +7,12 @@
 
 # ── Font ─────────────────────────────────────────────────────────────
 # Departure Mono: a monospace pixel font drawn on an 11 px grid with
-# 5×7-style capitals. 8.25 pt = 11 px, one font pixel per screen pixel.
-# Pixel fonts are only perfectly crisp at an integer monitor scale; at the
-# current 1.2 they render slightly soft (see monitor.conf).
+# 5×7-style capitals. 8.25 pt = 11 px is one font pixel per screen pixel;
+# 9.75 pt = 13 px matches the rest of the desktop's 11 -> 13 bump. Pixel
+# fonts are only perfectly crisp at whole multiples of 11 device px: at the
+# current scale 1.2, 13.75 pt is exactly 2x (see monitor.conf).
 font-family = DepartureMono Nerd Font
-font-size = 8.25
+font-size = 9.75
 font-feature = -calt
 font-feature = -liga
 
