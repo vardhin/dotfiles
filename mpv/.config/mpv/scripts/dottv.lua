@@ -1,7 +1,8 @@
 -- Dot TV, the player side (the library side is ~/.local/bin/dottv).
 --
 -- Does nothing unless mpv was started by `dottv` (script-opts dottv-library=DIR).
--- Then, for files in the library (DIR/<youtube id>-<height>.mp4):
+-- Then, for files in the library (DIR/<youtube id>-<height>.mp4, and the
+-- YouTube Music songs, MUSIC/<youtube id>.mp3 with script-opts dottv-music):
 --   titles      the title from DIR/video-meta.json becomes the media title,
 --               so MPRIS and the window show it instead of the file name
 --   play counts DIR/play-counts.json, +1 each time a file starts
@@ -15,13 +16,14 @@ local mp = require "mp"
 local utils = require "mp.utils"
 local options = require "mp.options"
 
-local opts = { library = "" }
+local opts = { library = "", music = "" }
 options.read_options(opts, "dottv")
 if opts.library == "" then
     return
 end
 
 local lib = opts.library:gsub("/$", "")
+local music = opts.music:gsub("/$", "")
 local META = lib .. "/video-meta.json"
 local COUNTS = lib .. "/play-counts.json"
 local SHADER = "~~/shaders/dotled.glsl"
@@ -48,26 +50,36 @@ local function write_json(path, value)
     os.rename(tmp, path)
 end
 
--- "<lib>/<id>-480.mp4" -> "<id>"; nil outside the library.
+-- "<lib>/<id>-480.mp4" or "<music>/<id>.mp3" -> "<id>"; nil outside the library.
 local function library_id(path)
     if not path then
         return nil
     end
     local dir, file = utils.split_path(path)
-    if dir:gsub("/$", "") ~= lib then
-        return nil
+    dir = dir:gsub("/$", "")
+    if dir == lib then
+        return file:match("^(.+)%-%d%d%d%d?%.mp4$")
+    elseif music ~= "" and dir == music then
+        return file:match("^([%w_%-]+)%.mp3$")
     end
-    return file:match("^(.+)%-%d%d%d%d?%.mp4$")
+    return nil
 end
 
--- Highest-quality file per id.
+-- Highest-quality file per id; a song is quality 0, so a saved video wins.
 local function scan()
-    local files = utils.readdir(lib, "files") or {}
     local best = {}
-    for _, f in ipairs(files) do
+    for _, f in ipairs(utils.readdir(lib, "files") or {}) do
         local id, q = f:match("^(.+)%-(%d%d%d%d?)%.mp4$")
         if id and (not best[id] or tonumber(q) > best[id].q) then
             best[id] = { q = tonumber(q), path = lib .. "/" .. f }
+        end
+    end
+    if music ~= "" then
+        for _, f in ipairs(utils.readdir(music, "files") or {}) do
+            local id = f:match("^([%w_%-]+)%.mp3$")
+            if id and #id == 11 and not best[id] then
+                best[id] = { q = 0, path = music .. "/" .. f }
+            end
         end
     end
     return best

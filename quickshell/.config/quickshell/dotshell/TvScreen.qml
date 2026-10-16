@@ -16,7 +16,7 @@ Item {
 
     // Set false while hidden: decoding stops.
     property bool active: visible
-    readonly property string path: Media.isTv ? (Tv.byId[Media.tvId]?.path ?? "") : ""
+    readonly property string path: Media.isVideo ? (Tv.byId[Media.tvId]?.path ?? "") : ""
     readonly property bool hasVideo: path !== "" && player.hasVideo
     readonly property real dpr: QsWindow.window?.devicePixelRatio ?? 1
 

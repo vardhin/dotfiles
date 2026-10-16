@@ -238,7 +238,7 @@ pins another. The media keys go to that same player (`dotshell ipc call media to
 | Strip | focused window's title after the workspaces; now-playing word on the right |
 | `Super M` | MEDIA pane, **NOW**: art dithered into the era's colors (or Dot TV's video, playing right in the pane), title, artist, seek bar, transport, spectrum (cava, only while shown and playing), Dot TV's up-next. Space, ← →, N/P, S |
 | `Super Shift M` | MEDIA pane, **TV** page: the Dot TV library, most played first. Type to filter, `Ctrl S` searches YouTube. Enter plays, `Ctrl Q` queues, `Ctrl E` plays next, `Ctrl L` adds to the target list, `Ctrl D` deletes (twice), `Ctrl M` Endless Mix, `Ctrl G` saves a search result |
-| **LISTS** page | playlists: Enter plays, `Ctrl R` shuffles, `Ctrl T` sets the target list, `Ctrl O` makes a list from the typed name |
+| **LISTS** page | playlists, then the YouTube Music stations (♪, read-only): Enter plays, `Ctrl R` shuffles, `Ctrl T` sets the target list, `Ctrl O` makes a list from the typed name. **SYNC** (or `Ctrl Y`) fetches new songs and stations |
 | **SCREEN** page | the video's dot matrix, with a live preview: pitch (2–16 px), dot size, shape (era, round, square, bubble), color (era ramp, mono, 8 bit, 16 bit, full, raw), glow, dither. Saved in `~/.local/state/dotshell/tv.json` |
 | Panels | `media` (now-playing board, click to play/pause), `vis` (spectrum), `mpris` (title, dithered art) |
 | `Super Ctrl M` | the Dot TV window (mpv, same dot matrix as the pane) |
@@ -247,6 +247,18 @@ pins another. The media keys go to that same player (`dotshell ipc call media to
 library. mpv runs without a window (sound, queue, Endless Mix, MPRIS); the MEDIA pane plays the
 saved file itself, muted, as LED dots, kept in time with mpv. `dottv open` gives mpv a window too. The library stays in `~/Video/TV` in the Media Center's own format (`<id>-480.mp4`,
 `video-meta.json`, `playlists.json`, `play-counts.json`), plus `thumbs/`.
+
+**YouTube Music** comes from [ytmusic-helper](~/Documents/git/ytmusic-helper) (`sync_ytmusic.py`),
+linked at `~/Music/ytmusic` (or `$DOTTV_MUSIC`). Its `.music-cache/<id>.mp3` join the library as
+songs (♪), keyed by the same YouTube id, so play counts, lists and Endless Mix take them too; its
+`stations/*/station.json` become read-only lists. `dottv sync` runs the sync in the background
+(log in `~/.local/state/dotshell/ytmusic-sync.log`) and notifies when done.
+
+```bash
+ln -s ~/Documents/git/ytmusic-helper ~/Music/ytmusic   # once
+dottv sync                     # or --here to wait and watch
+dottv music                    # reindex; fill in missing titles, durations, art
+```
 
 ```bash
 dottv search daft punk         # YouTube, via yt-dlp

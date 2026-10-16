@@ -22,6 +22,10 @@
   dottv led [on|off|toggle|reload]  the LED dot shader (era colors from Dot Shell)
   dottv thumbs                    fetch missing thumbnails
   dottv status --json             player state for Dot Shell
+  dottv sync [--here]             fetch new songs from YouTube Music (in the
+                                  background; --here waits and prints)
+  dottv music                     reindex the songs and stations; fill in
+                                  missing titles, durations and thumbnails
 
 The library is ${DOTTV_DIR:-~/Video/TV}: <id>-<height>.mp4, video-meta.json,
 playlists.json, play-counts.json, thumbs/<id>.jpg. The player is mpv on
@@ -29,6 +33,11 @@ $XDG_RUNTIME_DIR/dottv.sock with scripts/dottv.lua (titles, play counts,
 Endless Mix, the L key); mpv-mpris puts it on MPRIS like any player. It runs
 without video until `dottv open`: the MEDIA pane plays the saved file itself,
 muted and kept in time with mpv.
+
+Songs come from ytmusic-helper (its sync_ytmusic.py), linked at
+${DOTTV_MUSIC:-~/Music/ytmusic}: .music-cache/<id>.mp3 join the library as
+audio, keyed by the same YouTube id, and stations/*/station.json become
+read-only lists (LIB/stations.json, rebuilt by `lib`, `music` and `sync`).
 """
 import fcntl
 import json
@@ -40,6 +49,7 @@ import socket
 import subprocess
 import sys
 import time
+import urllib.parse
 import urllib.request
 import uuid
 
@@ -55,7 +65,14 @@ SOCK = os.path.join(RUNTIME, "dottv.sock")
 STATE = os.path.join(os.environ.get("XDG_STATE_HOME", HOME + "/.local/state"), "dotshell")
 LED_OPTS = os.path.join(STATE, "mpv-led.conf")
 SHADER = "~~/shaders/dotled.glsl"
+MUSIC = os.path.expanduser(os.environ.get("DOTTV_MUSIC", "~/Music/ytmusic")).rstrip("/")
+SONGS = os.path.join(MUSIC, ".music-cache")
+STATION_DIR = os.path.join(MUSIC, "stations")
+STATIONS = os.path.join(LIB, "stations.json")
+SYNC_LOG = os.path.join(STATE, "ytmusic-sync.log")
+SYNC_LOCK = os.path.join(STATE, "ytmusic-sync.lock")
 FILE_RE = re.compile(r"^(.+)-(\d{3,4})\.mp4$")
+SONG_RE = re.compile(r"^([A-Za-z0-9_-]{11})\.mp3$")
 ID_RE = re.compile(r"^[A-Za-z0-9_-]{11}$")
 # Progressive or merged mp4 up to 480p, as the Media Center kept them.
 FORMAT = "bv*[height<=480][ext=mp4]+ba[ext=m4a]/b[height<=480][ext=mp4]/bv*[height<=480]+ba/b[height<=480]/b"
@@ -103,22 +120,36 @@ class Locked:
         self.lock.close()
 
 
-def files():
-    """id -> {quality: path}, plus the earliest mtime as `added`."""
-    out = {}
+def listdir(path):
     try:
-        names = os.listdir(LIB)
-    except FileNotFoundError:
-        return out
-    for name in names:
-        m = FILE_RE.match(name)
+        return os.listdir(path)
+    except (FileNotFoundError, NotADirectoryError):
+        return []
+
+
+def files():
+    """id -> {quality: path}, plus the earliest mtime as `added`. A song from
+    YouTube Music is quality 0: any saved video of the same id wins."""
+    out = {}
+    found = [(os.path.join(LIB, n), FILE_RE.match(n)) for n in listdir(LIB)]
+    found += [(os.path.join(SONGS, n), SONG_RE.match(n)) for n in listdir(SONGS)]
+    for path, m in found:
         if not m:
             continue
-        path = os.path.join(LIB, name)
         e = out.setdefault(m[1], {"q": {}, "added": float("inf")})
-        e["q"][int(m[2])] = path
+        e["q"][int(m[2]) if m.re is FILE_RE else 0] = path
         e["added"] = min(e["added"], os.path.getmtime(path))
     return out
+
+
+def path_id(path):
+    """The YouTube id of a library file, or None."""
+    name = os.path.basename(path or "")
+    m = FILE_RE.match(name)
+    if m:
+        return m[1]
+    m = SONG_RE.match(name)
+    return m[1] if m and os.path.dirname(path) == SONGS else None
 
 
 def best_file(vid):
@@ -146,6 +177,7 @@ def library():
             "plays": int(counts.get(vid, 0) or 0),
             "added": int(e["added"]),
             "quality": max(e["q"]),
+            "audio": max(e["q"]) == 0,
             "path": e["q"][max(e["q"])],
             "thumb": thumb(vid),
         })
@@ -190,7 +222,7 @@ class Mpv:
             "--force-window=yes" if window else "--force-window=no",
             "--vid=auto" if window else "--vid=no",
             "--title=${?media-title:${media-title}}${!media-title:DOT TV}",
-            f"--input-ipc-server={SOCK}", f"--script-opts=dottv-library={LIB}",
+            f"--input-ipc-server={SOCK}", f"--script-opts=dottv-library={LIB},dottv-music={SONGS}",
             f"--ytdl-format={FORMAT}", "--really-quiet",
         ]
         if os.path.exists(LED_OPTS):
@@ -355,6 +387,7 @@ def cmd_search(args):
 
 
 def cmd_lib(args):
+    index_music()
     rows = library()
     if "--json" in args:
         print(json.dumps(rows))
@@ -402,8 +435,7 @@ def entries(mpv):
     out = []
     for i, e in enumerate(mpv.get("playlist", []) or []):
         name = os.path.basename(e.get("filename", ""))
-        m = FILE_RE.match(name)
-        vid = m[1] if m else None
+        vid = path_id(e.get("filename", ""))
         if not vid and "youtube.com/watch?v=" in e.get("filename", ""):
             vid = e["filename"].split("v=")[1][:11]
         title = (meta.get(vid, {}) if vid else {}).get("title") or e.get("title") or name
@@ -438,13 +470,14 @@ def find_list(lists, name):
 
 def cmd_list(args):
     if not args or args[0] == "--json":
-        lists = load(LISTS, [])
+        lists = load(LISTS, []) + load(STATIONS, [])
         if args:
             print(json.dumps([{"id": p["id"], "name": p["name"], "count": len(p.get("itemIds", [])),
-                               "itemIds": p.get("itemIds", []), "cover": p.get("coverVideoId")} for p in lists]))
+                               "itemIds": p.get("itemIds", []), "cover": p.get("coverVideoId"),
+                               "station": bool(p.get("station"))} for p in lists]))
         else:
             for p in lists:
-                print(f"{p['name']}  ({len(p.get('itemIds', []))})")
+                print(f"{'♪ ' if p.get('station') else ''}{p['name']}  ({len(p.get('itemIds', []))})")
         return
     verb, rest = args[0], args[1:]
     if verb == "new":
@@ -467,6 +500,8 @@ def cmd_list(args):
         with Locked(LISTS, []) as lists:
             pl = find_list(lists, rest[0])
             if not pl:
+                if find_list(load(STATIONS, []), rest[0]):
+                    die(f"{rest[0]} is a YouTube Music station: `dottv sync` keeps it")
                 die(f"no list called {rest[0]}")
             items = pl.setdefault("itemIds", [])
             for vid in map(video_id, rest[1:]):
@@ -480,7 +515,7 @@ def cmd_list(args):
                 pl["coverVideoId"] = items[0] if items else None
             print(json.dumps({"name": pl["name"], "count": len(items)}))
     elif verb == "play":
-        lists = load(LISTS, [])
+        lists = load(LISTS, []) + load(STATIONS, [])
         pl = find_list(lists, rest[0] if rest else "")
         if not pl:
             die("no such list")
@@ -495,7 +530,7 @@ def cmd_list(args):
             mpv("loadfile", best_file(vid), "replace" if n == 0 else "append")
         mpv("set_property", "pause", False)
     else:
-        lists = load(LISTS, [])
+        lists = load(LISTS, []) + load(STATIONS, [])
         pl = find_list(lists, verb)
         if not pl:
             die(f"no list called {verb}")
@@ -572,7 +607,8 @@ def cmd_thumbs(args):
 def cmd_status(args):
     mpv = Mpv(start=False)
     if not mpv.up:
-        print(json.dumps({"running": False, "mix": False, "led": False, "queue": [], "current": None}))
+        print(json.dumps({"running": False, "mix": False, "led": False, "queue": [], "current": None,
+                          "sync": sync_state()}))
         return
     rows = entries(mpv)
     cur = next((r for r in rows if r["current"]), None)
@@ -582,13 +618,173 @@ def cmd_status(args):
         "led": any(s.endswith("dotled.glsl") for s in (mpv.get("glsl-shaders", []) or [])),
         "current": cur,
         "queue": [r for r in rows if cur is None or r["index"] > cur["index"]],
+        "sync": sync_state(),
     }))
+
+
+# ── YouTube Music ───────────────────────────────────────────────────────
+def index_music():
+    """Stations into LIB/stations.json, and song titles from their manifests
+    into video-meta.json where it has none. Writes only what changed, so the
+    shell, which watches both, does not go round in circles."""
+    if not os.path.isdir(STATION_DIR):
+        if os.path.exists(STATIONS):
+            os.remove(STATIONS)
+        return
+    order = [s.get("directory") for s in load(os.path.join(STATION_DIR, "stations.json"), {}).get("stations", [])]
+    dirs = sorted(d for d in listdir(STATION_DIR) if os.path.isdir(os.path.join(STATION_DIR, d)))
+    dirs = [d for d in order if d in dirs] + [d for d in dirs if d not in order]
+    stations, info = [], {}
+    for d in dirs:
+        m = load(os.path.join(STATION_DIR, d, "station.json"), None)
+        if not m:
+            continue
+        ids = []
+        for t in m.get("tracks", []):
+            vid = t.get("videoId")
+            if not vid or vid in ids:
+                continue
+            ids.append(vid)
+            info.setdefault(vid, {"title": t.get("title") or "", "channel": t.get("artist") or "",
+                                  "duration": t.get("duration") or ""})
+        if ids:
+            stations.append({"id": "station:" + d, "name": m.get("name") or d, "itemIds": ids,
+                             "coverVideoId": ids[0], "station": True})
+    if load(STATIONS, None) != stations:
+        save(STATIONS, stations)
+    meta = load(META, {})
+    if any(not meta.get(v, {}).get("title") for v in info):
+        with Locked(META, {}) as meta:
+            for vid, i in info.items():
+                if not meta.get(vid, {}).get("title"):
+                    meta[vid] = i
+
+
+def songs():
+    return {m[1] for m in map(SONG_RE.match, listdir(SONGS)) if m}
+
+
+def fill_songs():
+    """What a manifest leaves out: titles of songs no station lists any more
+    (from YouTube), durations (from the file), thumbnails."""
+    meta = load(META, {})
+    found = {}
+    for vid in songs():
+        m = dict(meta.get(vid) or {})
+        if not m.get("title"):
+            try:
+                with urllib.request.urlopen("https://www.youtube.com/oembed?format=json&url="
+                                            + urllib.parse.quote(watch(vid)), timeout=10) as r:
+                    o = json.load(r)
+                m["title"] = o.get("title") or ""
+                m["channel"] = re.sub(r" - Topic$", "", o.get("author_name") or "")
+            except (OSError, ValueError):
+                pass
+        if not m.get("duration"):
+            try:
+                secs = int(float(subprocess.run(
+                    ["ffprobe", "-v", "quiet", "-show_entries", "format=duration", "-of", "csv=p=0",
+                     os.path.join(SONGS, vid + ".mp3")], capture_output=True, text=True).stdout.strip()))
+                m["duration"] = f"{secs // 60}:{secs % 60:02d}"
+            except (OSError, ValueError):
+                pass
+        if m != (meta.get(vid) or {}):
+            found[vid] = m
+    if found:
+        with Locked(META, {}) as meta:
+            for vid, m in found.items():
+                meta[vid] = {**m, **{k: v for k, v in (meta.get(vid) or {}).items() if v}}
+    cmd_thumbs([])
+    return len(found)
+
+
+def sync_running():
+    try:
+        f = open(SYNC_LOCK, "a")
+    except OSError:
+        return False
+    with f:
+        try:
+            fcntl.flock(f, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        except OSError:
+            return True
+    return False
+
+
+def sync_state():
+    line = ""
+    try:
+        with open(SYNC_LOG, "rb") as f:
+            f.seek(0, os.SEEK_END)
+            f.seek(max(0, f.tell() - 4096))
+            tail = [l.strip() for l in f.read().decode(errors="replace").splitlines()]
+            line = next((l for l in reversed(tail) if l.strip("= ")), "")
+    except OSError:
+        pass
+    return {"available": os.path.exists(os.path.join(MUSIC, "sync_ytmusic.py")),
+            "running": sync_running(), "line": line[:160]}
+
+
+def cmd_sync(args):
+    if not os.path.exists(os.path.join(MUSIC, "sync_ytmusic.py")):
+        die(f"no ytmusic-helper at {MUSIC}: link it there, or set DOTTV_MUSIC")
+    os.makedirs(STATE, exist_ok=True)
+    if "--here" not in args:
+        if sync_running():
+            die("a sync is already running")
+        subprocess.Popen([sys.argv[0], "sync", "--here", "--quiet"], stdin=subprocess.DEVNULL,
+                         stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, start_new_session=True)
+        # Back once it holds the lock, so `status` says it runs from now on.
+        for _ in range(30):
+            if sync_running():
+                return
+            time.sleep(0.1)
+        return
+    lock = open(SYNC_LOCK, "a")
+    try:
+        fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
+    except OSError:
+        die("a sync is already running")
+    quiet = "--quiet" in args
+    before = songs()
+    py = os.path.join(MUSIC, ".venv", "bin", "python")
+    cmd = [py, "-u", "sync_ytmusic.py"] if os.access(py, os.X_OK) else ["uv", "run", "python", "-u", "sync_ytmusic.py"]
+    last = ""
+    with open(SYNC_LOG, "w") as log:
+        proc = subprocess.Popen(cmd, cwd=MUSIC, stdin=subprocess.DEVNULL, stdout=subprocess.PIPE,
+                                stderr=subprocess.STDOUT, text=True, errors="replace")
+        for line in proc.stdout:
+            log.write(line)
+            log.flush()
+            if line.strip("=\n "):
+                last = line.strip()
+            if not quiet:
+                print(line, end="", flush=True)
+        code = proc.wait()
+    index_music()
+    fill_songs()
+    new = len(songs() - before)
+    if code != 0:
+        notify("YouTube Music sync failed", last)
+        die(f"sync_ytmusic.py exited {code}: {last}")
+    notify("YouTube Music synced", f"{new} new song{'' if new == 1 else 's'}" if new else "Nothing new")
+    if not quiet:
+        print(f"{new} new songs")
+
+
+def cmd_music(args):
+    index_music()
+    filled = fill_songs()
+    rows = library()
+    print(f"{sum(r['audio'] for r in rows)} songs, {len(load(STATIONS, []))} stations"
+          + (f", {filled} filled in" if filled else ""))
 
 
 COMMANDS = {
     "open": cmd_open, "play": cmd_play, "get": cmd_get, "search": cmd_search,
     "lib": cmd_lib, "rm": cmd_rm, "mix": cmd_mix, "queue": cmd_queue, "clear": cmd_clear,
     "list": cmd_list, "led": cmd_led, "thumbs": cmd_thumbs, "status": cmd_status,
+    "sync": cmd_sync, "music": cmd_music,
 }
 
 

@@ -10,10 +10,15 @@ import qs
 // owns the files in ~/Video/TV and drives mpv. The shell only shows and asks;
 // playback keeps going when the shell reloads.
 //
-//   library   [{id, title, channel, duration, plays, added, quality, path, thumb}]
-//             most played first; reread when the library's JSON files change
+//   library   [{id, title, channel, duration, plays, added, quality, audio,
+//             path, thumb}] most played first; reread when the library's JSON
+//             files change. `audio`: a song from YouTube Music (the
+//             ytmusic-helper sync, linked at ~/Music/ytmusic), an mp3
 //   lists     playlists.json as is: [{id, name, itemIds, coverVideoId}]
-//   status    {running, mix, led, current, queue}, polled while `watching`
+//   stations  the YouTube Music stations, read-only lists of songs that
+//             `dottv sync` rewrites: [{id, name, itemIds, station: true}]
+//   status    {running, mix, led, current, queue, sync: {available, running,
+//             line}}, polled while `watching` or a sync runs
 //   results   the last YouTube search, [{id, title, channel, duration, saved}]
 //   screen    how the video is drawn as dots, in the MEDIA pane and in the Dot TV
 //             window alike (persisted in ${XDG_STATE_HOME}/dotshell/tv.json):
@@ -37,7 +42,14 @@ Singleton {
         return m;
     }
     property var lists: []
-    property var status: ({ running: false, mix: false, led: false, current: null, queue: [] })
+    property var stations: []
+    property var status: ({ running: false, mix: false, led: false, current: null, queue: [], sync: { available: false, running: false, line: "" } })
+    readonly property bool syncing: status.sync?.running ?? false
+    // A sync that ends leaves new songs and titles: read the library again.
+    onSyncingChanged: {
+        if (!syncing)
+            reload();
+    }
     property var results: []
     property bool searching: false
     property string searched: ""
@@ -148,6 +160,21 @@ Singleton {
             }
         }
     }
+    FileView {
+        path: root.dir + "/stations.json"
+        watchChanges: true
+        printErrors: false
+        onFileChanged: reload()
+        onLoaded: {
+            try {
+                const l = JSON.parse(text());
+                root.stations = Array.isArray(l) ? l : [];
+            } catch (e) {
+                root.stations = [];
+            }
+        }
+        onLoadFailed: root.stations = []
+    }
     Timer {
         id: reloadTimer
         interval: 400
@@ -172,7 +199,7 @@ Singleton {
         }
     }
     Timer {
-        running: root.watching
+        running: root.watching || root.syncing
         triggeredOnStart: true
         interval: 1500
         repeat: true
@@ -245,6 +272,14 @@ Singleton {
     function clear(): void {
         run(["clear"]);
     }
+    // Fetch new songs and stations from YouTube Music, in the background.
+    function sync(): void {
+        if (syncing || !(status.sync?.available ?? false))
+            return;
+        status = Object.assign({}, status, { sync: { available: true, running: true, line: "STARTING" } });
+        run(["sync"]);
+    }
+    // name: a list's name or id (stations go by id: "station:<dir>")
     function listPlay(name: string, shuffle: bool): void {
         run(shuffle ? ["list", "play", name, "--shuffle"] : ["list", "play", name]);
     }

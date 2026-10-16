@@ -12,7 +12,8 @@ import qs
 //
 // `player` is the one pinned in the pane (Tab on NOW), else the one playing,
 // else the last that played. Dot TV tracks carry no artist or art over MPRIS;
-// they are looked up in the TV library by their YouTube id.
+// they are looked up in the TV library by their YouTube id. That goes for its
+// YouTube Music songs too (isAudio): mp3s, so no picture, just the art.
 //
 // `bars` is a live spectrum from cava, 0 .. 1 per band. cava only runs while
 // something on screen wants it (want(key, true)) and a player is playing.
@@ -38,14 +39,18 @@ Singleton {
     readonly property bool active: player !== null
     readonly property bool isPlaying: player?.isPlaying ?? false
 
-    // A Dot TV file: ~/Video/TV/<id>-<height>.mp4.
+    // A Dot TV file: ~/Video/TV/<id>-<height>.mp4, or a song,
+    // ~/Music/ytmusic/.music-cache/<id>.mp3.
     readonly property string url: String(player?.metadata?.["xesam:url"] ?? "")
+    readonly property bool isSong: /\/\.music-cache\/[A-Za-z0-9_-]{11}\.mp3$/.test(url)
     readonly property string tvId: {
-        const m = url.match(/\/([A-Za-z0-9_-]{11})-\d{3,4}\.mp4$/) ?? url.match(/[?&]v=([A-Za-z0-9_-]{11})/);
+        const m = url.match(/\/([A-Za-z0-9_-]{11})-\d{3,4}\.mp4$/) ?? url.match(/\/\.music-cache\/([A-Za-z0-9_-]{11})\.mp3$/) ?? url.match(/[?&]v=([A-Za-z0-9_-]{11})/);
         return m ? m[1] : "";
     }
     readonly property var tvEntry: tvId ? Tv.byId[tvId] ?? null : null
     readonly property bool isTv: (player?.identity ?? "").toLowerCase().includes("mpv") && tvId !== ""
+    readonly property bool isAudio: isTv && isSong
+    readonly property bool isVideo: isTv && !isSong
 
     readonly property string title: player?.trackTitle || tvEntry?.title || ""
     readonly property string artist: player?.trackArtist || tvEntry?.channel || ""

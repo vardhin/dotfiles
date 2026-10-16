@@ -12,12 +12,15 @@ import qs.services
 // playing, the video plays right here (TvScreen) over the art, with what is up
 // next and M for Endless Mix.
 // TV: the Dot TV library (services/Tv.qml, the `dottv` CLI), most played
-// first. Type to filter; Ctrl S searches YouTube for the text instead.
+// first, with the YouTube Music songs (♪) among the videos. Type to filter;
+// Ctrl S searches YouTube for the text instead.
 // Enter plays, Ctrl Q queues, Ctrl E plays next, Ctrl L adds to or drops from
 // the target list, Ctrl D deletes (twice), Ctrl G saves a YouTube result
 // without playing it. A YouTube result that is not saved streams and saves.
-// LISTS: playlists. Enter plays, Ctrl R shuffles, Ctrl T makes it the target
-// for Ctrl L, Ctrl O makes a new list named after the text, Ctrl D drops it.
+// LISTS: playlists, then the YouTube Music stations (♪, read-only). Enter
+// plays, Ctrl R shuffles, Ctrl T makes it the target for Ctrl L, Ctrl O makes
+// a new list named after the text, Ctrl D drops it. SYNC (or Ctrl Y, here and
+// on TV) runs `dottv sync`: new songs and stations from YouTube Music.
 // SCREEN: how the video is drawn as dots (Tv.screen: pitch, dot size, shape,
 // color mode, glow, dither), with a live preview. Up/Down pick, Left/Right
 // change. The Dot TV window (O, Super Ctrl M) follows the same settings.
@@ -55,7 +58,7 @@ Pane {
     }
     readonly property int screenH: Math.max(0, Math.min(Math.round(inner * 9 / 16), avail - reserve))
     readonly property int screenW: Math.min(inner, Math.round(screenH * 16 / 9))
-    readonly property bool tvShown: (page === "screen" || Media.isTv && (page === "now" || page === "tv")) && screenH >= 18
+    readonly property bool tvShown: (page === "screen" || Media.isVideo && (page === "now" || page === "tv")) && screenH >= 18
     readonly property int slots: Math.max(3, Math.min(10, Math.floor((avail - 5 * Tokens.lineDots - 30 - (tvShown ? screenH + 3 : 0)) / Tokens.lineDots)))
     property int screenRow: 0
 
@@ -88,7 +91,7 @@ Pane {
     property int listPick: 0
     readonly property var rowsLists: {
         const q = listQuery.trim().toLowerCase();
-        return Tv.lists.filter(l => !q || l.name.toLowerCase().includes(q));
+        return Tv.lists.concat(Tv.stations).filter(l => !q || l.name.toLowerCase().includes(q));
     }
     readonly property string targetName: Tv.lists.some(l => l.name === target) ? target : (Tv.lists[0]?.name ?? "")
 
@@ -115,7 +118,7 @@ Pane {
         page = p;
         first = 0;
         confirm = "";
-        Tv.watching = shown && p !== "lists";
+        Tv.watching = shown;
         if (p === "tv")
             tvInput.forceActiveFocus();
         else if (p === "lists")
@@ -137,7 +140,7 @@ Pane {
         show(page);
     }
     onShownChanged: {
-        Tv.watching = shown && page !== "lists";
+        Tv.watching = shown;
     }
 
     function pad(s: string, n: int): string {
@@ -183,8 +186,11 @@ Pane {
             if (!l)
                 return;
             if (what === "play" || what === "shuffle") {
-                Tv.listPlay(l.name, what === "shuffle");
+                Tv.listPlay(l.id, what === "shuffle");
                 show("now");
+            } else if (l.station) {
+                // Stations are YouTube Music's: a sync rewrites them.
+                return;
             } else if (what === "target") {
                 target = l.name;
             } else if (what === "delete") {
@@ -264,6 +270,8 @@ Pane {
                 act("new");
             else if (ctrl && k === Qt.Key_M)
                 Tv.mix(!Tv.status.mix);
+            else if (ctrl && k === Qt.Key_Y)
+                Tv.sync();
             else
                 return;
         }
@@ -333,11 +341,23 @@ Pane {
                 color: Tokens.slot1
                 onClicked: Media.cycle()
             }
-            DotText {
+            Row {
                 anchors.right: parent.right
                 visible: pane.page === "tv" || pane.page === "lists"
-                text: pane.page === "tv" ? (Tv.searching ? "SEARCHING" : pane.online ? "YOUTUBE" : Tv.library.length + " SAVED") : Tv.lists.length + " LISTS"
-                color: Tokens.slot1
+                spacing: 2 * Tokens.charDots
+
+                DotText {
+                    text: pane.page === "tv" ? (Tv.searching ? "SEARCHING" : pane.online ? "YOUTUBE" : Tv.library.length + " SAVED") : Tv.lists.length + " LISTS" + (Tv.stations.length && pane.wide ? " " + Tv.stations.length + " ♪" : "")
+                    color: Tokens.slot1
+                }
+                // YouTube Music: new songs and stations.
+                DotButton {
+                    visible: Tv.status.sync?.available ?? false
+                    text: Tv.syncing ? "SYNCING" : "SYNC"
+                    color: Tokens.slot2
+                    active: Tv.syncing
+                    onClicked: Tv.sync()
+                }
             }
         }
 
@@ -357,9 +377,9 @@ Pane {
 
             Item {
                 id: now
-                readonly property int art: Media.isTv ? 0 : Tokens.lineDots * 4
+                readonly property int art: Media.isVideo ? 0 : Tokens.lineDots * 4
                 width: pane.inner
-                height: Media.isTv ? Tokens.lineDots * 4 : art
+                height: Media.isVideo ? Tokens.lineDots * 4 : art
 
                 // Unlit until the art loads; a frame marks where it goes.
                 Frame {
@@ -468,7 +488,7 @@ Pane {
                         onClicked: Tv.mix(!Tv.status.mix)
                     }
                     DotButton {
-                        visible: Media.isTv
+                        visible: Media.isVideo
                         text: "SCREEN"
                         onClicked: pane.show("screen")
                     }
@@ -546,6 +566,7 @@ Pane {
                     required property int index
                     readonly property int at: pane.first + index
                     readonly property var e: pane.rowsTv[at] ?? null
+                    readonly property string mark: e?.audio ? "♪ " : ""
                     readonly property bool picked: at === pane.pick && e !== null
                     readonly property int titleChars: pane.chars - 6 - 7 - 2
                     width: pane.inner
@@ -565,7 +586,7 @@ Pane {
                         x: pane.online ? 1 : 6 * Tokens.charDots
                         width: (pane.online ? pane.chars - 8 : tvRow.titleChars) * Tokens.charDots
                         elide: Text.ElideRight
-                        text: tvRow.e ? (pane.online && tvRow.e.saved ? "* " : "") + tvRow.e.title.toUpperCase() : ""
+                        text: tvRow.e ? (pane.online && tvRow.e.saved ? "* " : tvRow.mark) + tvRow.e.title.toUpperCase() : ""
                         color: Tokens.slot0
                     }
                     DotText {
@@ -622,13 +643,13 @@ Pane {
                         x: 1
                         width: parent.width - 10 * Tokens.charDots
                         elide: Text.ElideRight
-                        text: listRow.l ? (listRow.l.name === pane.targetName ? "* " : "  ") + listRow.l.name.toUpperCase() : ""
+                        text: listRow.l ? (listRow.l.station ? "♪ " : listRow.l.name === pane.targetName ? "* " : "  ") + listRow.l.name.toUpperCase() : ""
                         color: Tokens.slot0
                     }
                     DotText {
                         anchors.right: parent.right
                         anchors.rightMargin: 1
-                        text: !listRow.l ? "" : pane.confirm === listRow.l.id ? "DROP?" : (listRow.l.itemIds ?? []).length + ((listRow.l.itemIds ?? []).length === 1 ? " TRACK" : " TRACKS")
+                        text: !listRow.l ? "" : pane.confirm === listRow.l.id ? "DROP?" : (listRow.l.itemIds ?? []).length + (listRow.l.station ? " SONGS" : (listRow.l.itemIds ?? []).length === 1 ? " TRACK" : " TRACKS")
                         color: pane.confirm === listRow.l?.id ? Tokens.slot2 : Tokens.slot1
                     }
                     MouseArea {
@@ -690,13 +711,14 @@ Pane {
 
         Rule {}
 
-        // Mode line: Endless Mix and the target list, then key hints.
+        // Mode line: Endless Mix and the target list (or how a sync is
+        // going), then key hints.
         DotText {
-            visible: (pane.page === "tv" || pane.page === "lists") && pane.wide
+            visible: (pane.page === "tv" || pane.page === "lists") && (pane.wide || Tv.syncing)
             width: pane.inner
             height: Tokens.lineDots
             elide: Text.ElideRight
-            text: "MIX " + (Tv.status.mix ? "ON" : "OFF") + "   LIST " + (pane.targetName ? pane.targetName.toUpperCase() : "NONE") + (Tv.status.queue.length ? "   UP NEXT " + Tv.status.queue.length : "")
+            text: Tv.syncing ? "SYNC  " + (Tv.status.sync?.line ?? "").toUpperCase() : "MIX " + (Tv.status.mix ? "ON" : "OFF") + "   LIST " + (pane.targetName ? pane.targetName.toUpperCase() : "NONE") + (Tv.status.queue.length ? "   UP NEXT " + Tv.status.queue.length : "")
             color: Tokens.slot2
         }
         // Key hints, two lines at most.
@@ -710,7 +732,7 @@ Pane {
                     return ["UP DOWN PICK  LEFT RIGHT CHANGE", "THE TV WINDOW (O) LOOKS THE SAME"];
                 if (pane.page === "tv")
                     return pane.online ? ["ENTER PLAY  ^Q QUEUE  ^E NEXT  ^G SAVE"] : ["ENTER PLAY  ^Q QUEUE  ^E NEXT  ^S YOUTUBE", "^L ADD TO LIST  ^D DELETE  ^M ENDLESS MIX"];
-                return ["ENTER PLAY  ^R SHUFFLE  ^T TARGET", "^O NEW LIST  ^D DROP"];
+                return ["ENTER PLAY  ^R SHUFFLE  ^T TARGET", "^O NEW LIST  ^D DROP  ^Y SYNC"];
             }
 
             DotText {
