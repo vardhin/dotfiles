@@ -51,6 +51,7 @@ ShellRoot {
     CapturePane {}
     ClipPane {}
     PolkitPane {}
+    Scene {}
     LockScreen {}
 
     IpcHandler {
