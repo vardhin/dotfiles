@@ -45,6 +45,15 @@ import Quickshell.Io
 //   title      true: the focused window's title on the top strip
 //   side       off | on | auto: the right side bar (panes/SideBar.qml); auto
 //              hides it until the pointer touches the right edge
+//   winshade   off | dim | all: windows on the dot grid, drawn by Hyprland
+//              through the Hypr-DarkWindow plugin (hypr/.config/hypr/lua/
+//              dotshell.lua): unfocused windows as LED dots in the era ramp
+//              (dim), plus a faint dot mask on the focused one (all). Without
+//              the plugin, unfocused windows are dimmed as before
+//   scene      true: the era's scene plays full screen after a minute idle,
+//              before the screen dims (panes/Scene.qml; Super Shift S now)
+//   sounds     off | soft | full: the era's UI sounds (services/Sound.qml):
+//              panes, toasts, the cascade, workspace switches
 Singleton {
     id: root
 
@@ -68,10 +77,15 @@ Singleton {
     readonly property bool title: store.title
     readonly property string side: sides.includes(store.side) ? store.side : "auto"
     readonly property var sides: ["off", "on", "auto"]
+    readonly property string winshade: winshades.includes(store.winshade) ? store.winshade : "dim"
+    readonly property var winshades: ["off", "dim", "all"]
+    readonly property bool scene: store.scene
+    readonly property string sounds: soundModes.includes(store.sounds) ? store.sounds : "soft"
+    readonly property var soundModes: ["off", "soft", "full"]
 
     readonly property var walls: ["dots", "image", "off"]
     readonly property var screens: ["glass", "led", "board", "off"]
-    readonly property var keys: ["era", "pitch", "dotSize", "depth", "wall", "wallpaper", "hue", "cascade", "night", "screen", "winfx", "wsfx", "borders", "ledfx", "top", "title", "side"]
+    readonly property var keys: ["era", "pitch", "dotSize", "depth", "wall", "wallpaper", "hue", "cascade", "night", "screen", "winfx", "wsfx", "borders", "ledfx", "top", "title", "side", "winshade", "scene", "sounds"]
 
     // ── What is on screen ───────────────────────────────────────────
     // `current` is the era as displayed: its colors after the wallpaper hue,
@@ -272,6 +286,9 @@ Singleton {
             property bool top: true
             property bool title: true
             property string side: "auto"
+            property string winshade: "dim"
+            property bool scene: true
+            property string sounds: "soft"
         }
     }
 
@@ -350,6 +367,19 @@ Singleton {
                 return "side is one of: " + sides.join(", ");
             store.side = value;
             break;
+        case "winshade":
+            if (!winshades.includes(value))
+                return "winshade is one of: " + winshades.join(", ");
+            store.winshade = value;
+            break;
+        case "scene":
+            store.scene = truthy(value);
+            break;
+        case "sounds":
+            if (!soundModes.includes(value))
+                return "sounds is one of: " + soundModes.join(", ");
+            store.sounds = value;
+            break;
         default:
             return "unknown token; one of: " + keys.join(", ");
         }
@@ -374,7 +404,10 @@ Singleton {
             ledfx: ledfx,
             top: top,
             title: title,
-            side: side
+            side: side,
+            winshade: winshade,
+            scene: scene,
+            sounds: sounds
         };
     }
 
@@ -386,6 +419,12 @@ Singleton {
 
     function toggleNight(): void {
         store.night = !store.night;
+    }
+
+    // Super Shift W: off → dim → all → off.
+    function cycleWinshade(): string {
+        store.winshade = winshades[(winshades.indexOf(winshade) + 1) % winshades.length];
+        return store.winshade;
     }
 
     // Super Shift T: LED and back to glass (from board or off: to LED).
@@ -405,6 +444,21 @@ Singleton {
         }
         function cycleEra(): string {
             return root.cycleEra(1);
+        }
+    }
+
+    IpcHandler {
+        target: "winshade"
+
+        // dotshell ipc call winshade cycle | set dim
+        function cycle(): string {
+            return root.cycleWinshade();
+        }
+        function set(mode: string): string {
+            return root.set("winshade", mode);
+        }
+        function get(): string {
+            return root.winshade;
         }
     }
 }
