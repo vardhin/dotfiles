@@ -9,8 +9,9 @@
   dot set player --dot false        any panel field: --shape hex --ws 3 ...
   dot rm note
   dot list [--json]
-  dot era tokyo
-  dot display --pitch 5 --depth 16 [--size 80] [--wallpaper ~/w.jpg]
+  dot era [NAME | next | prev]       no name: list the eras
+  dot display --pitch 5 --depth 16 [--size 80] [--wall dots|image|off]
+              [--wallpaper ~/w.jpg] [--hue era|wallpaper] [--cascade on|off]
   dot raw '{"cmd":"tokens"}'        send one request as-is
 
 Kinds: clock sign note image mpris pixels.
@@ -165,9 +166,17 @@ def main(argv):
         else:
             show(r["panels"])
     elif cmd == "era":
-        if len(rest) != 1:
-            die("usage: dot era NAME")
-        call({"cmd": "era", "name": rest[0]})
+        if len(rest) > 1:
+            die("usage: dot era [NAME | next | prev]")
+        if not rest:
+            r = call({"cmd": "eras"})
+            for e in r["eras"]:
+                mark = "*" if e["id"] == r["era"] else " "
+                print(f"{mark} {e['id']:10} {e['name']:15} {e['blurb'].lower()}")
+        elif rest[0] in ("next", "prev"):
+            print(call({"cmd": "era", "step": 1 if rest[0] == "next" else -1})["era"])
+        else:
+            call({"cmd": "era", "name": rest[0]})
     elif cmd == "display":
         f = flags(rest)
         req = {"cmd": "display"}

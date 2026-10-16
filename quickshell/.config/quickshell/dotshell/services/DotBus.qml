@@ -15,8 +15,10 @@ import qs
 //   {"cmd":"set","id":"player","fields":{"dot":false}}
 //   {"cmd":"rm","id":"todo"}
 //   {"cmd":"list"}
-//   {"cmd":"era","name":"tokyo"}
-//   {"cmd":"display","pitch":5,"depth":"16","dotSize":80,"wallpaper":"~/w.jpg"}
+//   {"cmd":"era","name":"tokyo"}          {"cmd":"era","step":1} next, -1 previous
+//   {"cmd":"eras"}                         ids, names, the applied one
+//   {"cmd":"display","pitch":5,"depth":"16","dotSize":80,"wall":"dots",
+//    "wallpaper":"~/w.jpg","hue":"wallpaper","cascade":true}
 //   {"cmd":"tokens"}
 // Replies: {"ok":true, ...} or {"ok":false,"error":"..."}.
 Singleton {
@@ -64,9 +66,18 @@ Singleton {
                 }))
             };
         case "era":
+            if (q.step !== undefined && q.name === undefined)
+                return { era: Tokens.cycleEra(parseInt(q.step) || 1) };
             return msg(Tokens.set("era", String(q.name)));
+        case "eras":
+            return {
+                era: Tokens.era,
+                eras: Eras.ids.map(id => ({ id: id, name: Eras.all[id].name, blurb: Eras.all[id].blurb ?? "", light: !!Eras.all[id].light }))
+            };
         case "display":
-            for (const k of ["pitch", "depth", "dotSize", "wallpaper", "night"]) {
+            for (const k of Tokens.keys) {
+                if (k === "era")
+                    continue;
                 if (q[k] === undefined)
                     continue;
                 const m = Tokens.set(k, String(q[k]));
@@ -77,7 +88,7 @@ Singleton {
         case "tokens":
             return tokens();
         default:
-            return { error: "unknown cmd; one of: spawn rm move set write pixels list era display tokens" };
+            return { error: "unknown cmd; one of: spawn rm move set write pixels list era eras display tokens" };
         }
     }
 
@@ -87,7 +98,7 @@ Singleton {
     }
 
     function tokens(): var {
-        return { tokens: { era: Tokens.era, pitch: Tokens.pitch, dotSize: Math.round(Tokens.dotSize * 100), depth: Tokens.depth, wallpaper: Tokens.wallpaper, night: Tokens.night } };
+        return { tokens: Tokens.snapshot() };
     }
 
     SocketServer {
