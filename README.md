@@ -15,6 +15,7 @@ cd ~/dotfiles
                         # (3 variants, from git), cursor + icon theme in gsettings
 ./install.sh --link     # only (re)link the modules (then reloads a running Hyprland)
 ./install.sh --dry-run  # show what stow would do
+./install.sh --plugins  # build + enable the Hyprland plugins (hyprpm): Hypr-DarkWindow, dynamic-cursors
 sudo system/install.sh  # greeter (greetd) + boot splash (plymouth); see Login and boot
 ```
 
@@ -25,25 +26,29 @@ Re-running is safe.
 
 ```
 dotfiles/
-├── hypr/.config/hypr/          → ~/.config/hypr
-│   ├── hyprland.conf           entry point, sources config/* (defaults.conf first)
-│   ├── config/
-│   │   ├── defaults.conf       $TERMINAL, $BROWSER, $EDITOR, $scriptPath, $dotshell
-│   │   ├── autostart.conf      session env, boot sound, Dot Shell, clipboard
-│   │   ├── decorations.conf    zero chrome: one-dot gutter, focus by dim, blur, animations
-│   │   ├── environment.conf    env vars
-│   │   ├── input.conf          keyboard, touchpad, gestures
-│   │   ├── keybinds.conf       every bind, as `bindd` with a description (cheatsheet)
-│   │   ├── monitor.conf        outputs
-│   │   └── windowrules.conf    window rules
+├── hypr/.config/hypr/          → ~/.config/hypr   (Lua config, Hyprland 0.55+)
+│   ├── hyprland.lua            entry point: require()s each module below (errors stay per module)
+│   ├── lua/
+│   │   ├── defaults.lua        programs, the Dot Shell command (shared table D)
+│   │   ├── environment.lua     env vars; cursor theme (DotShell once drawn, else Bibata)
+│   │   ├── monitor.lua         outputs (scale 1)
+│   │   ├── input.lua           keyboard, touchpad
+│   │   ├── look.lua            zero chrome: one-dot gutter, focus by dim, blur, curves, animations
+│   │   ├── rules.lua           window and layer rules
+│   │   ├── binds.lua           every bind, each with a description (cheatsheet); zoom in plain Lua
+│   │   ├── autostart.lua       session start: env, boot sound, plugins, Dot Shell, clipboard
+│   │   └── dotshell.lua        plugins (Hypr-DarkWindow, dynamic-cursors) and dotshell.apply():
+│   │                           window shading and frosted panes from Dot Shell's hypr.lua state
+│   ├── shaders/dotled.glsl, dotglass.glsl   per-window LED shaders (Hypr-DarkWindow)
 │   ├── scripts/screenshot.sh
 │   └── sounds/boot.wav
+├── hypr/.local/bin/hyprdo      one dispatch in whichever config language Hyprland runs
 ├── quickshell/.config/quickshell/dotshell/   → ~/.config/quickshell/dotshell
 │   ├── shell.qml               entry point; IPC targets pane, strip, night, shell (tokens, screen, export, …)
 │   ├── greeter.qml             the login screen (greetd), a second entry point; see Login and boot
-│   ├── Tokens.qml / Eras.qml   the seven eras, the era cascade and every display token (pitch,
+│   ├── Tokens.qml / Eras.qml   the thirteen eras, the era cascade and every display token (pitch,
 │   │                           dot size, depth, wall, wallpaper, hue, cascade, night, screen,
-│   │                           winfx); persisted
+│   │                           winfx, winshade, scene, sounds, frosted); persisted
 │   │                           in ~/.local/state/dotshell/tokens.json (IPC target: tokens)
 │   ├── Ui.qml                  which pane is open, on which screen
 │   ├── DotSurface.qml          low-res QML canvas → LED dots (shaders/dot.frag); optional shape cut
@@ -61,7 +66,9 @@ dotfiles/
 │   │                           DotBus (the `dot` socket), Export (era → Ghostty, Neovim, GTK, Qt,
 │   │                           Firefox, rmpc, cava, Dot TV's LED shader), Media (MPRIS + cava), Tv
 │   │                           (Dot TV library, SCREEN settings), Sys (CPU, memory, temperature),
-│   │                           Capture (screenshots, recording, color picker), Clip (clipboard history)
+│   │                           Capture (screenshots, recording, color picker), Clip (clipboard history),
+│   │                           Hypr (every call into Hyprland, Lua or hyprlang), Sound (era UI sounds),
+│   │                           Wall + WallCtx.js (the P10 wall: sources, software canvas, sender)
 │   ├── panes/                  Launcher, Messages, ToastStack, Osd, Session, Cheatsheet,
 │   │                           Calendar, Audio, Brightness, Wifi, Bluetooth, Battery, Eras,
 │   │                           Packages, Media (NOW / TV / LISTS / SCREEN), Capture, Clip
@@ -69,15 +76,17 @@ dotfiles/
 │   │                           WindowBorders (LED rings), LockScreen, Polkit,
 │   │                           Wallpaper (dots/image/off, parallax), World
 │   │                           (desktop panels; slides with workspaces), WindowFx (window
-│   │                           open/close as LED dots)
+│   │                           open/close as LED dots), Scene + Scenes.js (the era scenes),
+│   │                           Overview (the switchboard)
 │   ├── pam/dotshell            PAM stack for the lock screen (pam_unix only)
 │   ├── shaders/                dot.frag(.qsb) for DotSurface, winfx.frag(.qsb) for WindowFx,
 │   │                           art.frag(.qsb) for DitherArt, wall.frag(.qsb) the screen look
 │   │                           on the wallpaper; screen.glsl, night warmth for Hyprland's
 │   │                           screen shader (GLSL ES 3.00)
 │   ├── build-shaders.sh        recompile .qsb after editing a .frag (qt6-shadertools)
-│   └── (../../.local/bin/dot, dotws)  the `dot` CLI, and `dotws` (workspace switches
-│                               through the shell), linked to ~/.local/bin
+│   └── (../../.local/bin/dot, dotws, dotcursor, dotsound, dotwall)  the `dot` CLI, `dotws`
+│                               (workspace switches through the shell), the cursor and sound
+│                               makers, the wall sender; linked to ~/.local/bin
 ├── mpv/.config/mpv/            → ~/.config/mpv  mpv.conf; scripts/dottv.lua (Dot TV: titles, play
 │                               counts, Endless Mix, L); shaders/dotled.glsl (LED video)
 ├── mpv/.local/bin/dottv        Dot TV, the YouTube library CLI (+ dottv.desktop)
@@ -88,8 +97,10 @@ dotfiles/
 │                               colors from the generated dotshell.conf, gitignored)
 ├── fontconfig/.config/fontconfig/conf.d/   Departure Mono without antialiasing (hard pixels)
 ├── zsh/.zshrc                  → ~/.zshrc  (oh-my-zsh, powerlevel10k, eza, zoxide)
+├── p10/                        the P10 wall's receiver, for the Raspberry Pi (not stowed):
+│                               dotwall-pi.py, dotwall.service
 ├── system/                     outside ~, installed by `sudo system/install.sh`
-│   ├── greetd/                 config.toml, hyprland.conf (the greeter's bare Hyprland)
+│   ├── greetd/                 config.toml, hyprland.lua (the greeter's bare Hyprland)
 │   ├── plymouth/dotshell/      the boot splash: script theme + build.py (images in era colors)
 │   └── install.sh
 ├── packages.txt                pacman packages
@@ -137,6 +148,7 @@ media center), hyprlock, hypridle, polkit-gnome, awww and hyprsunset.
 
 ```bash
 dotshell ipc call tokens set era tokyo     # phosphor tokyo nineties matrix vfd aero gameboy
+                                           # nixie flap nightvision vapor arcade blueprint
 dotshell ipc call tokens set pitch 5       # 3 | 5 | 8 | 12 px per dot
 dotshell ipc call tokens set dotSize 70    # 40–100 % of pitch
 dotshell ipc call tokens set depth 16      # era | 8 | 16 | 24
@@ -150,13 +162,34 @@ dotshell ipc call tokens set borders false # LED rings around panes, panels, win
 dotshell ipc call tokens set ledfx random  # border animations: auto | random | music | off
 dotshell ipc call tokens set side auto     # off | on | auto (right side bar)
 dotshell ipc call tokens set title false   # window title on the strip
+dotshell ipc call tokens set winshade all  # off | dim | all: windows on the dot grid (plugin)
+dotshell ipc call tokens set scene false   # the era's scene after a minute idle
+dotshell ipc call tokens set sounds full   # off | soft | full: the era's UI sounds
+dotshell ipc call tokens set frosted true  # panes as LEDs on blurred glass
 dotshell ipc call strip toggle
 ```
 
 Binds: `Super D` toggles the strip, `Super Shift D` cycles eras, `Super T` opens the era switcher,
 `Super Shift T` toggles full LED,
-`Super W` the wallpapers, `Super F` files, `Super I` the package manager (pacman + yay), `Super Ctrl D`
+`Super W` the wallpapers, `Super F` files, `Super I` the package manager (pacman + yay), `Super Tab`
+the switchboard, `Super Shift S` the era's scene, `Super Shift W` cycles window shading, `Super Ctrl D`
 restarts the shell.
+
+### Hyprland in Lua
+
+The config is `hypr/.config/hypr/hyprland.lua` (Hyprland 0.55 reads it before `hyprland.conf`;
+hyprlang is deprecated). Under Lua, `hyprctl keyword` is refused and `hyprctl dispatch X` means
+`hl.dispatch(X)`, so nothing here sends the old strings: Dot Shell goes through `services/Hypr.qml`,
+which asks `hyprctl -j status` for the config provider and speaks Lua (`hl.dsp.*`,
+`hyprctl eval 'hl.config(...)'`) or hyprlang accordingly, and scripts use `hyprdo` the same way.
+To go back to hyprlang, check out `hypr/` from before `ea37562`; the shell follows on its own.
+
+| Thing | How |
+|---|---|
+| Window shading | `winshade` token (`Super Shift W`): **dim** draws every unfocused window as LED dots in the era ramp, fading in as it loses focus (`shaders/dotled.glsl`); **all** adds a faint dot mask on the focused one (`dotglass.glsl`); **off**. Needs Hypr-DarkWindow (`./install.sh --plugins`); without it unfocused windows are dimmed as before |
+| Frosted panes | `frosted` token: the glass between a pane's dots turns translucent and Hyprland blurs the layers behind (`dotshell-<pane>`) |
+| Cursor | `dotcursor` draws a pixel cursor theme in the era (15 cursors, LED dots with a rim, animated busy chasers) as one theme for hyprcursor and XCursor, `~/.local/share/icons/DotShell`; Export redraws it on era changes and sets it live. dynamic-cursors stretches it with speed and magnifies it when shaken, nearest-neighbour |
+| State | Export writes `~/.local/state/dotshell/hypr.lua` (era ramp, grid, winshade, frosted) and runs `dotshell.apply()` in Hyprland's Lua |
 
 ### Capture and clipboard
 
@@ -185,9 +218,16 @@ empties it (`clip forget "text"` drops one entry); `dotshell ipc call capture re
 | VFD | `vfd` | car-stereo cyan-green with orange |
 | Frutiger Aero | `aero` | light sky glass, glossy bubble dots, dark ink |
 | Game Boy | `gameboy` | the four DMG greens, square dots, no glow |
+| Nixie | `nixie` | cold-cathode orange, mono, heavy glow |
+| Split-Flap | `flap` | airport board: white and yellow on black flaps, square dots |
+| Night Vision | `nightvision` | Gen III P43 green, mono |
+| Vaporwave | `vapor` | pink, cyan and lavender at dusk |
+| Arcade | `arcade` | RGB332 cabinet primaries, square dots |
+| Blueprint | `blueprint` | white lines on drafting blue |
 
 `Super T` (or the brush on the side rail) shows every era as a card in its own colors. **ERAS** page: arrows or j/k move, Enter
-applies, 1–7 pick directly. Tab goes to **DISPLAY**: pitch, dot size, depth, wall, hue, cascade, screen, windows, workspaces;
+applies, 1–9 pick directly. Tab goes to **DISPLAY**: pitch, dot size, depth, wall, hue, cascade, screen, windows, win shade,
+workspaces, borders, bars, idle scene, sounds, pane glass;
 Up/Down pick a row, Left/Right change it. Tab again: **WALLS** (`Super W`, or the picture on the side rail):
 every image under `~/wallpaper` and `~/wallpapers` as a thumbnail in dots, the WALL mode on top; arrows
 move, Enter sets it, R picks one at random. At coarse pitches the pane narrows and scrolls so it
@@ -212,13 +252,53 @@ The era on screen is also exported to the apps around the shell, on every change
 | rmpc | `~/.config/rmpc/themes/dotshell.ron` | picked by the repo's `config.ron`; hot-reloaded |
 | cava | `~/.config/cava/themes/dotshell` | picked by the repo's `cava/.config/cava/config`; running cavas reload on SIGUSR2 |
 
+| Hyprland | `~/.local/state/dotshell/hypr.lua` | window shading and frosted panes; `dotshell.apply()` runs right after |
+| Cursor | `~/.local/share/icons/DotShell` | drawn by `dotcursor`; `hyprctl setcursor` and gsettings |
+| Sounds | `~/.local/state/dotshell/sounds/<era>/` | synthesized by `dotsound`, played by `services/Sound.qml` |
+
 `dotshell ipc call export run` rewrites them by hand.
+
+### Scenes, sounds and the switchboard
+
+**Scenes.** After a minute idle (before the dim at five) the whole screen becomes the era's dot board
+and plays its piece (`panes/Scenes.js`, drawn at one pixel per dot): a terminal typing (Phosphor), rain
+over the skyline (Tokyo), the sun setting on the neon grid (90s), glyph rain (Matrix), a car-stereo
+clock and spectrum (VFD), bubbles (Aero), Life (Game Boy), the time in tubes (Nixie), a departure
+board (Flap), a radar (Night Vision), a turning pyramid (Vapor), invaders (Arcade), a spirograph being
+drafted (Blueprint). Any key or a real mouse move ends it; `Super Shift S` plays it now; the `scene`
+token turns the idle trigger off.
+
+**Sounds.** `dotsound` synthesizes the era's UI sounds (a voice per era: relay clicks, glass chimes,
+pulse-wave blips, flap clacks...) for eight events: pane open and close, toast, alert, the era
+cascade, workspace switch, screenshot, recording. `sounds` token: off, soft, full (`pw-play`).
+
+**Switchboard.** `Super Tab`: every workspace as a small LED screen, its windows captured (hidden
+workspaces too) and dithered onto the era ramp. Arrows move, Enter goes, Shift Enter takes the
+focused window along, 1–9 jump; the switch still dissolves.
+
+### The P10 wall
+
+A real LED board, 2x2 P10 RGB panels (64x32) on a Raspberry Pi 5, shows a piece of the shell. Dot
+Shell renders every frame itself at the wall's size (`services/WallCtx.js`, a software canvas with a
+5x7 LED font) and `dotwall feed` sends it over UDP; on the Pi, `p10/dotwall-pi.py` only puts pixels on
+the panels (hzeller rpi-rgb-led-matrix, Adafruit's Pi 5 piomatter, or a terminal preview).
+
+```bash
+# on the Pi
+sudo install -Dm755 p10/dotwall-pi.py /usr/local/bin/dotwall-pi
+sudo install -Dm644 p10/dotwall.service /etc/systemd/system/dotwall.service
+sudo systemctl enable --now dotwall        # panel options on ExecStart: dotwall-pi --help
+# on the laptop
+dot wall on 192.168.1.40 --source clock    # scene | clock | media | text | pixels
+dot wall text "OPEN 24 HRS";  dot wall source scene;  dot wall off
+dotwall test 192.168.1.40                  # color bars, no shell needed
+```
 
 ### Login and boot
 
 `sudo system/install.sh` sets up both; `greetd` or `plymouth` as an argument does one.
 
-**Greeter.** greetd runs a bare Hyprland (`/etc/greetd/hyprland.conf`) whose one job is
+**Greeter.** greetd runs a bare Hyprland (`/etc/greetd/hyprland.lua`) whose one job is
 `greeter.qml`: the lock screen's look, in the era and wallpaper you last used. Type the password,
 Enter logs in and starts `start-hyprland`; Tab edits the user name, F11 reboots, F12 powers off.
 The greeter user cannot read `~`, so the installer copies Dot Shell to `/usr/local/share/dotshell`
