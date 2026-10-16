@@ -2,13 +2,16 @@
 // The successor of the Media Center's CPU renderer (blocks, RGB332, diffuser,
 // glow), now one pass on the GPU at display resolution.
 //
-// Each dot samples the frame once at its center, then takes the era ramp
-// (ordered-dithered luma -> four levels) or a color depth, and is drawn as a
-// round, square or bubble dot with a little glow on dark glass.
+// Each dot samples the frame once at its center, then takes a color mode (the
+// era ramp, one tube in eight steps, RGB332, RGB565 or full color, optionally
+// ordered-dithered) and is drawn as a round, square or bubble dot with a
+// little glow on dark glass. The same math draws the video in Dot Shell's
+// MEDIA pane (quickshell/.../shaders/tvled.frag).
 //
-// Dot Shell writes the era's values to ${XDG_STATE_HOME}/dotshell/mpv-led.conf
-// (glsl-shader-opts=...) on every era change; `dottv led reload` pushes them to
-// a running player. Toggle the shader with L in Dot TV, or `dottv led`.
+// Dot Shell writes the settings (MEDIA pane, SCREEN page) and the era's colors
+// to ${XDG_STATE_HOME}/dotshell/mpv-led.conf (glsl-shader-opts=...) on every
+// change; `dottv led reload` pushes them to a running player. Toggle the
+// shader with L in Dot TV, or `dottv led`.
 
 //!PARAM pitch
 //!DESC dot pitch in screen px
@@ -29,10 +32,14 @@
 //!TYPE float
 0.0
 
-//!PARAM depth
-//!DESC 0 era ramp, 8 RGB332, 16 RGB565, 24 true color
+//!PARAM mode
+//!DESC 0 era ramp, 1 mono, 2 RGB332, 3 RGB565, 4 full color
 //!TYPE float
 0.0
+
+//!PARAM dither
+//!TYPE float
+1.0
 
 //!PARAM glow
 //!TYPE float
@@ -76,6 +83,15 @@
 //!PARAM r3b
 //!TYPE float
 0.25
+//!PARAM tbr
+//!TYPE float
+1.0
+//!PARAM tbg
+//!TYPE float
+0.7
+//!PARAM tbb
+//!TYPE float
+0.25
 //!PARAM unr
 //!TYPE float
 0.1
@@ -107,9 +123,10 @@ float bayer4(vec2 p) {
     return (m[i] + 0.5) / 16.0;
 }
 
+// `t` is the dither offset, -0.5 .. 0.5 (0 = plain rounding).
 vec3 quantize(vec3 c, vec3 bits, float t) {
     vec3 n = exp2(bits) - 1.0;
-    return floor(c * n + t) / n;
+    return clamp(floor(c * n + 0.5 + t) / n, 0.0, 1.0);
 }
 
 vec4 hook() {
@@ -121,18 +138,21 @@ vec4 hook() {
 
     vec3 unlit = vec3(unr, ung, unb);
     vec3 glass = vec3(glr, glg, glb);
-    float t = bayer4(cell);
+    float t = dither > 0.5 ? bayer4(cell) - 0.5 : 0.0;
+    float l = dot(c, vec3(0.30, 0.59, 0.11));
 
     vec3 col;
-    bool lit = true;
-    if (depth < 1.0) {
-        float l = dot(c, vec3(0.30, 0.59, 0.11));
-        float lv = clamp(floor(l * 4.2 + t - 0.5), 0.0, 3.0);
+    bool lit = l > 0.04 || mode > 1.5;
+    if (mode < 0.5) {
+        float lv = clamp(floor(l * 4.2 + t), 0.0, 3.0);
         col = lv < 0.5 ? vec3(r0r, r0g, r0b) : lv < 1.5 ? vec3(r1r, r1g, r1b) : lv < 2.5 ? vec3(r2r, r2g, r2b) : vec3(r3r, r3g, r3b);
-        lit = l > 0.04;
-    } else if (depth < 12.0) {
+    } else if (mode < 1.5) {
+        float lv = clamp(floor(l * 8.0 + 0.5 + t), 0.0, 8.0) / 8.0;
+        col = mix(unlit, vec3(tbr, tbg, tbb), lv);
+        lit = lv > 0.0;
+    } else if (mode < 2.5) {
         col = quantize(c, vec3(3.0, 3.0, 2.0), t);
-    } else if (depth < 20.0) {
+    } else if (mode < 3.5) {
         col = quantize(c, vec3(5.0, 6.0, 5.0), t);
     } else {
         col = c;

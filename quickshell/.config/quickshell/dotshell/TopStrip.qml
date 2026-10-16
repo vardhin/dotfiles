@@ -107,6 +107,13 @@ PanelWindow {
                     }
                 }
             }
+
+            // A new, empty workspace (the first free id).
+            StatusWord {
+                text: "+"
+                color: Tokens.slot2
+                onClicked: Hyprland.dispatch("workspace empty")
+            }
         }
 
         // The focused window's title, in whatever room is left before the
@@ -115,7 +122,7 @@ PanelWindow {
             readonly property int room: clockRow.x - x - 8
             x: workspaces.x + workspaces.width + 8
             width: Math.max(0, room)
-            visible: !strip.compact && !ticker.visible && room >= Tokens.charDots * 4 && text !== ""
+            visible: Tokens.title && !strip.compact && !ticker.visible && room >= Tokens.charDots * 4 && text !== ""
             elide: Text.ElideRight
             text: (ToplevelManager.activeToplevel?.activated ? ToplevelManager.activeToplevel.title : "").toUpperCase()
             color: Tokens.slot1
@@ -197,14 +204,52 @@ PanelWindow {
 
             // Now playing: play or pause glyph and the title. Click opens
             // MEDIA, middle click plays or pauses, the wheel skips tracks.
-            StatusWord {
+            Item {
+                id: nowWord
                 visible: Media.active && (Media.title !== "" || Media.isPlaying)
-                text: (Media.isPlaying ? "\uf04b" : "\uf04c") + (strip.compact ? "" : " " + (Media.title.length > 16 ? Media.title.slice(0, 15).replace(/[\s\-|:,.]+$/, "") + "." : Media.title).toUpperCase())
-                color: Tokens.slot2
-                dim: !Media.isPlaying
-                onClicked: Ui.toggle("media", strip.screen)
-                onMiddleClicked: Media.toggle()
-                onWheel: up => up ? Media.previous() : Media.next()
+                // A 16-letter window the title runs through when it is longer.
+                readonly property int box: strip.compact ? 0 : Math.min(16 * Tokens.charDots, nowTitle.one)
+                width: glyph.implicitWidth + (box > 0 ? Tokens.charDots + box : 0)
+                height: strip.rows
+
+                DotText {
+                    id: glyph
+                    text: Media.isPlaying ? "\uf04b" : "\uf04c"
+                    color: Tokens.slot2
+                    opacity: Media.isPlaying ? 1 : 0.5
+                }
+                Scroller {
+                    id: nowTitle
+                    readonly property int one: fit.implicitWidth
+                    x: glyph.implicitWidth + Tokens.charDots
+                    width: nowWord.box
+                    height: strip.rows
+                    visible: nowWord.box > 0
+                    text: Media.title.toUpperCase()
+                    color: Tokens.slot2
+                    textOpacity: Media.isPlaying ? 1 : 0.5
+                    DotText {
+                        id: fit
+                        visible: false
+                        text: nowTitle.text
+                    }
+                }
+                Rectangle {
+                    visible: nowMouse.containsMouse
+                    y: strip.rows - 1
+                    width: parent.width
+                    height: 1
+                    color: Tokens.slot2
+                }
+                MouseArea {
+                    id: nowMouse
+                    anchors.fill: parent
+                    hoverEnabled: true
+                    cursorShape: Qt.PointingHandCursor
+                    acceptedButtons: Qt.LeftButton | Qt.MiddleButton
+                    onClicked: mouse => mouse.button === Qt.MiddleButton ? Media.toggle() : Ui.toggle("media", strip.screen)
+                    onWheel: wheel => wheel.angleDelta.y > 0 ? Media.previous() : Media.next()
+                }
             }
             StatusWord {
                 visible: Notifs.dnd || Notifs.live.length > 0

@@ -15,6 +15,15 @@ import qs
 //   lists     playlists.json as is: [{id, name, itemIds, coverVideoId}]
 //   status    {running, mix, led, current, queue}, polled while `watching`
 //   results   the last YouTube search, [{id, title, channel, duration, saved}]
+//   screen    how the video is drawn as dots, in the MEDIA pane and in the Dot TV
+//             window alike (persisted in ${XDG_STATE_HOME}/dotshell/tv.json):
+//               pitch    px per dot: 2 3 4 6 8 12 16
+//               dotSize  % of the pitch, 40 .. 100
+//               shape    era | round | square | bubble
+//               color    era (the era's four levels) | mono (one tube, every
+//                        level) | 8 (RGB332) | 16 (RGB565) | 24 (full color) |
+//                        raw (no dots: the plain video)
+//               glow     0 .. 100;  dither  ordered dither on or off
 Singleton {
     id: root
 
@@ -34,6 +43,53 @@ Singleton {
     property string searched: ""
     // Set while a pane shows the queue: status is polled only then.
     property bool watching: false
+
+    // ── Screen settings ─────────────────────────────────────────────
+    readonly property var screen: ({
+            pitch: [2, 3, 4, 6, 8, 12, 16].includes(screenStore.pitch) ? screenStore.pitch : 6,
+            dotSize: Math.max(40, Math.min(100, screenStore.dotSize)),
+            shape: ["era", "round", "square", "bubble"].includes(screenStore.shape) ? screenStore.shape : "era",
+            color: ["era", "mono", "8", "16", "24", "raw"].includes(screenStore.color) ? screenStore.color : "era",
+            glow: Math.max(0, Math.min(100, screenStore.glow)),
+            dither: screenStore.dither
+        })
+    readonly property var screenOptions: [
+        { key: "pitch", label: "PITCH", options: [[2, "2"], [3, "3"], [4, "4"], [6, "6"], [8, "8"], [12, "12"], [16, "16"]] },
+        { key: "dotSize", label: "DOT SIZE", options: [[50, "50"], [60, "60"], [70, "70"], [80, "80"], [90, "90"], [100, "100"]] },
+        { key: "shape", label: "SHAPE", options: [["era", "ERA"], ["round", "ROUND"], ["square", "SQUARE"], ["bubble", "BUBBLE"]] },
+        { key: "color", label: "COLOR", options: [["era", "ERA"], ["mono", "MONO"], ["8", "8 BIT"], ["16", "16 BIT"], ["24", "FULL"], ["raw", "RAW"]] },
+        { key: "glow", label: "GLOW", options: [[0, "0"], [25, "25"], [50, "50"], [75, "75"], [100, "100"]] },
+        { key: "dither", label: "DITHER", options: [[true, "ON"], [false, "OFF"]] }
+    ]
+    function setScreen(key: string, value: var): void {
+        screenStore[key] = value;
+    }
+    function nudgeScreen(key: string, dir: int): void {
+        const o = screenOptions.find(x => x.key === key);
+        const i = o.options.findIndex(x => x[0] === screen[key]);
+        setScreen(key, o.options[(Math.max(0, i) + dir + o.options.length) % o.options.length][0]);
+    }
+
+    FileView {
+        path: Tokens.dirReady ? Tokens.dir + "/tv.json" : ""
+        watchChanges: true
+        onFileChanged: reload()
+        onAdapterUpdated: writeAdapter()
+        onLoadFailed: error => {
+            if (error === FileViewError.FileNotFound)
+                writeAdapter();
+        }
+
+        JsonAdapter {
+            id: screenStore
+            property int pitch: 6
+            property int dotSize: 80
+            property string shape: "era"
+            property string color: "era"
+            property int glow: 50
+            property bool dither: true
+        }
+    }
 
     // ── Reading ─────────────────────────────────────────────────────
     function reload(): void {

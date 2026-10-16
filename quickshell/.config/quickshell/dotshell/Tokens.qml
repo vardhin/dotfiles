@@ -33,6 +33,12 @@ import Quickshell.Io
 //              color per dot, a true LED board (small text does not survive
 //              fine pitches); or nothing
 //   winfx      true: windows open and close as LED dots (panes/WindowFx.qml)
+//   borders    true: a one-dot LED ring around every pane, desktop panel and
+//              window (panes/WindowBorders.qml; windows get a one-dot gap)
+//   top        true: the top strip
+//   title      true: the focused window's title on the top strip
+//   side       off | on | auto: the right side bar (panes/SideBar.qml); auto
+//              hides it until the pointer touches the right edge
 Singleton {
     id: root
 
@@ -48,10 +54,15 @@ Singleton {
     readonly property bool night: store.night
     readonly property string screen: screens.includes(store.screen) ? store.screen : "glass"
     readonly property bool winfx: store.winfx
+    readonly property bool borders: store.borders
+    readonly property bool top: store.top
+    readonly property bool title: store.title
+    readonly property string side: sides.includes(store.side) ? store.side : "auto"
+    readonly property var sides: ["off", "on", "auto"]
 
     readonly property var walls: ["dots", "image", "off"]
     readonly property var screens: ["glass", "led", "board", "off"]
-    readonly property var keys: ["era", "pitch", "dotSize", "depth", "wall", "wallpaper", "hue", "cascade", "night", "screen", "winfx"]
+    readonly property var keys: ["era", "pitch", "dotSize", "depth", "wall", "wallpaper", "hue", "cascade", "night", "screen", "winfx", "borders", "top", "title", "side"]
 
     // ── What is on screen ───────────────────────────────────────────
     // `current` is the era as displayed: its colors after the wallpaper hue,
@@ -246,6 +257,10 @@ Singleton {
             property bool night: false
             property string screen: "glass"
             property bool winfx: true
+            property bool borders: true
+            property bool top: true
+            property bool title: true
+            property string side: "auto"
         }
     }
 
@@ -302,6 +317,20 @@ Singleton {
         case "winfx":
             store.winfx = truthy(value);
             break;
+        case "borders":
+            store.borders = truthy(value);
+            break;
+        case "top":
+            store.top = truthy(value);
+            break;
+        case "title":
+            store.title = truthy(value);
+            break;
+        case "side":
+            if (!sides.includes(value))
+                return "side is one of: " + sides.join(", ");
+            store.side = value;
+            break;
         default:
             return "unknown token; one of: " + keys.join(", ");
         }
@@ -320,7 +349,11 @@ Singleton {
             cascade: cascade,
             night: night,
             screen: screen,
-            winfx: winfx
+            winfx: winfx,
+            borders: borders,
+            top: top,
+            title: title,
+            side: side
         };
     }
 

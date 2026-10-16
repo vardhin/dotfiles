@@ -4,12 +4,13 @@ import Quickshell.Wayland
 import qs
 import qs.services
 
-// MEDIA (Super M, or the strip's now-playing word). Three pages, Tab switches.
+// MEDIA (Super M, or the strip's now-playing word). Four pages, Tab switches.
 //
 // NOW: whatever plays on MPRIS (services/Media.qml): dithered art, title,
 // artist, a seek bar, transport and a spectrum. Space plays or pauses,
 // Left/Right seek 5 s, N/P next and previous, S switches player. With Dot TV
-// playing it also shows what is up next, M Endless Mix and L the LED shader.
+// playing, the video plays right here (TvScreen) over the art, with what is up
+// next and M for Endless Mix.
 // TV: the Dot TV library (services/Tv.qml, the `dottv` CLI), most played
 // first. Type to filter; Ctrl S searches YouTube for the text instead.
 // Enter plays, Ctrl Q queues, Ctrl E plays next, Ctrl L adds to or drops from
@@ -17,6 +18,9 @@ import qs.services
 // without playing it. A YouTube result that is not saved streams and saves.
 // LISTS: playlists. Enter plays, Ctrl R shuffles, Ctrl T makes it the target
 // for Ctrl L, Ctrl O makes a new list named after the text, Ctrl D drops it.
+// SCREEN: how the video is drawn as dots (Tv.screen: pitch, dot size, shape,
+// color mode, glow, dither), with a live preview. Up/Down pick, Left/Right
+// change. The Dot TV window (O, Super Ctrl M) follows the same settings.
 Pane {
     id: pane
 
@@ -36,10 +40,15 @@ Pane {
 
     // Dot rows free under the strip at this pitch.
     readonly property int avail: Math.floor(((screen?.height ?? 1000) - 40) / Tokens.pitch) - 2
-    readonly property int slots: Math.max(3, Math.min(10, Math.floor((avail - 4 * Tokens.lineDots - 20) / Tokens.lineDots)))
+    // The video: the pane's width, 16:9. Shown on NOW and TV while Dot TV
+    // plays, and always on SCREEN.
+    readonly property int screenH: Math.round(inner * 9 / 16)
+    readonly property bool tvShown: page === "screen" || Media.isTv && (page === "now" || page === "tv")
+    readonly property int slots: Math.max(3, Math.min(10, Math.floor((avail - 4 * Tokens.lineDots - 20 - (tvShown ? screenH + 3 : 0)) / Tokens.lineDots)))
+    property int screenRow: 0
 
     property string page: "now"
-    readonly property var pages: ["now", "tv", "lists"]
+    readonly property var pages: ["now", "tv", "lists", "screen"]
 
     // ── TV page state ───────────────────────────────────────────────
     property string query: ""
@@ -183,6 +192,18 @@ Pane {
         if (k === Qt.Key_Tab || k === Qt.Key_Backtab) {
             const i = pages.indexOf(page);
             show(pages[(i + (k === Qt.Key_Tab ? 1 : pages.length - 1)) % pages.length]);
+        } else if (page === "screen") {
+            const n = Tv.screenOptions.length;
+            if (k === Qt.Key_Down || k === Qt.Key_J)
+                screenRow = (screenRow + 1) % n;
+            else if (k === Qt.Key_Up || k === Qt.Key_K)
+                screenRow = (screenRow + n - 1) % n;
+            else if (k === Qt.Key_Right || k === Qt.Key_L || k === Qt.Key_Return || k === Qt.Key_Enter || k === Qt.Key_Space)
+                Tv.nudgeScreen(Tv.screenOptions[screenRow].key, 1);
+            else if (k === Qt.Key_Left || k === Qt.Key_H)
+                Tv.nudgeScreen(Tv.screenOptions[screenRow].key, -1);
+            else
+                return;
         } else if (page === "now") {
             if (k === Qt.Key_Space || k === Qt.Key_Return || k === Qt.Key_Enter)
                 Media.toggle();
@@ -198,8 +219,6 @@ Pane {
                 Media.cycle();
             else if (k === Qt.Key_M && Media.isTv)
                 Tv.mix(!Tv.status.mix);
-            else if (k === Qt.Key_L && Media.isTv)
-                Tv.led();
             else if (k === Qt.Key_O)
                 Tv.open();
             else
@@ -239,7 +258,21 @@ Pane {
         event.accepted = true;
     }
 
-    // dotshell ipc call mediapane open tv   (now | tv | lists)
+    // The video, laid over screenSlot in screen px.
+    overlay: TvScreen {
+        readonly property point at: {
+            // Depend on what moves the slot.
+            void (pane.page, pane.tvShown, screenSlot.y, Tokens.pitch);
+            return screenSlot.mapToItem(pane.surface, 0, 0);
+        }
+        x: at.x
+        y: at.y
+        width: pane.inner * Tokens.pitch
+        height: pane.screenH * Tokens.pitch
+        visible: pane.shown && pane.tvShown
+    }
+
+    // dotshell ipc call mediapane open tv   (now | tv | lists | screen)
     IpcHandler {
         target: "mediapane"
 
@@ -271,7 +304,7 @@ Pane {
             Row {
                 spacing: 2
                 Repeater {
-                    model: [["now", "NOW"], ["tv", "TV"], ["lists", "LISTS"]]
+                    model: [["now", "NOW"], ["tv", "TV"], ["lists", "LISTS"], ["screen", "SCREEN"]]
                     DotButton {
                         required property var modelData
                         text: modelData[1]
@@ -290,10 +323,18 @@ Pane {
             }
             DotText {
                 anchors.right: parent.right
-                visible: pane.page !== "now"
+                visible: pane.page === "tv" || pane.page === "lists"
                 text: pane.page === "tv" ? (Tv.searching ? "SEARCHING" : pane.online ? "YOUTUBE" : Tv.library.length + " SAVED") : Tv.lists.length + " LISTS"
                 color: Tokens.slot1
             }
+        }
+
+        // Where the video goes; TvScreen in the overlay is laid over it.
+        Item {
+            id: screenSlot
+            visible: pane.tvShown
+            width: pane.inner
+            height: pane.screenH
         }
 
         // ── NOW ─────────────────────────────────────────────────────
@@ -304,54 +345,34 @@ Pane {
 
             Item {
                 id: now
-                readonly property int art: Tokens.lineDots * 4
+                readonly property int art: Media.isTv ? 0 : Tokens.lineDots * 4
                 width: pane.inner
-                height: art
+                height: Media.isTv ? Tokens.lineDots * 4 : art
 
                 // Unlit until the art loads; a frame marks where it goes.
                 Frame {
                     width: now.art
                     height: now.art
-                    visible: !artPic.ready
+                    visible: now.art > 0 && !artPic.ready
                     border.color: Tokens.slot1
                     opacity: 0.5
                 }
                 DitherArt {
                     id: artPic
+                    visible: now.art > 0
                     width: now.art
                     height: now.art
                     source: Media.art
                 }
 
                 Column {
-                    x: now.art + 6
+                    x: now.art > 0 ? now.art + 6 : 0
                     width: pane.inner - x
 
-                    Item {
+                    Scroller {
                         width: parent.width
                         height: Tokens.lineDots
-                        readonly property string text: (Media.title || (Media.active ? "NOTHING PLAYING" : "NO PLAYER")).toUpperCase()
-                        readonly property bool long: titleFit.implicitWidth > width
-
-                        DotText {
-                            id: titleFit
-                            width: parent.width
-                            visible: !parent.long
-                            text: parent.text
-                            color: Tokens.slot0
-                        }
-                        Marquee {
-                            id: titleRun
-                            width: parent.width
-                            height: parent.height
-                            visible: parent.long
-                            passes: 1000000
-                            stepMs: 40
-                            text: parent.text
-                            color: Tokens.slot0
-                            onTextChanged: if (visible) run()
-                            onVisibleChanged: if (visible) run()
-                        }
+                        text: (Media.title || (Media.active ? "NOTHING PLAYING" : "NO PLAYER")).toUpperCase()
                     }
                     DotText {
                         width: parent.width
@@ -436,9 +457,8 @@ Pane {
                     }
                     DotButton {
                         visible: Media.isTv
-                        text: "LED"
-                        active: Tv.status.led
-                        onClicked: Tv.led()
+                        text: "SCREEN"
+                        onClicked: pane.show("screen")
                     }
                 }
                 DotText {
@@ -474,7 +494,7 @@ Pane {
 
         // ── TV and LISTS: query line ────────────────────────────────
         Item {
-            visible: pane.page !== "now"
+            visible: pane.page === "tv" || pane.page === "lists"
             width: pane.inner
             height: Tokens.lineDots
 
@@ -620,11 +640,47 @@ Pane {
             }
         }
 
+        // ── SCREEN settings ─────────────────────────────────────────
+        Repeater {
+            model: pane.page === "screen" ? Tv.screenOptions : []
+
+            Line {
+                id: setting
+                required property var modelData
+                required property int index
+                label: (index === pane.screenRow ? "> " : "  ") + modelData.label
+                labelColor: index === pane.screenRow ? Tokens.slot2 : Tokens.slot0
+
+                Repeater {
+                    model: pane.wide ? setting.modelData.options : []
+
+                    DotButton {
+                        required property var modelData
+                        text: modelData[1]
+                        active: Tv.screen[setting.modelData.key] === modelData[0]
+                        onClicked: {
+                            pane.screenRow = setting.index;
+                            Tv.setScreen(setting.modelData.key, modelData[0]);
+                        }
+                    }
+                }
+                DotButton {
+                    visible: !pane.wide
+                    active: true
+                    text: "<" + (setting.modelData.options.find(o => o[0] === Tv.screen[setting.modelData.key])?.[1] ?? "?") + ">"
+                    onClicked: {
+                        pane.screenRow = setting.index;
+                        Tv.nudgeScreen(setting.modelData.key, 1);
+                    }
+                }
+            }
+        }
+
         Rule {}
 
         // Mode line: Endless Mix and the target list, then key hints.
         DotText {
-            visible: pane.page !== "now" && pane.wide
+            visible: (pane.page === "tv" || pane.page === "lists") && pane.wide
             width: pane.inner
             height: Tokens.lineDots
             elide: Text.ElideRight
@@ -637,7 +693,9 @@ Pane {
                 if (!pane.wide)
                     return ["TAB PAGE  ENTER"];
                 if (pane.page === "now")
-                    return ["SPACE PLAY  < > SEEK  N P TRACK", "S PLAYER  " + (Media.isTv ? "M MIX  L LED  " : "") + "O TV WINDOW  TAB PAGE"];
+                    return ["SPACE PLAY  < > SEEK  N P TRACK", "S PLAYER  " + (Media.isTv ? "M MIX  " : "") + "O TV WINDOW  TAB PAGE"];
+                if (pane.page === "screen")
+                    return ["UP DOWN PICK  LEFT RIGHT CHANGE", "THE TV WINDOW (O) LOOKS THE SAME"];
                 if (pane.page === "tv")
                     return pane.online ? ["ENTER PLAY  ^Q QUEUE  ^E NEXT  ^G SAVE"] : ["ENTER PLAY  ^Q QUEUE  ^E NEXT  ^S YOUTUBE", "^L ADD TO LIST  ^D DELETE  ^M ENDLESS MIX"];
                 return ["ENTER PLAY  ^R SHUFFLE  ^T TARGET", "^O NEW LIST  ^D DROP"];

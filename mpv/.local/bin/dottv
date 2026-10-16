@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
 """dottv: Dot TV, a YouTube library played by mpv (the old AGS Media Center).
 
-  dottv open                      start or focus the player window
+  dottv open                      show the player window (it starts without one:
+                                  Dot Shell's MEDIA pane shows the picture)
   dottv play ID|URL [--queue|--next]
                                   play now; --queue appends, --next plays after
                                   this one. Not in the library yet: streams it
@@ -25,7 +26,9 @@
 The library is ${DOTTV_DIR:-~/Video/TV}: <id>-<height>.mp4, video-meta.json,
 playlists.json, play-counts.json, thumbs/<id>.jpg. The player is mpv on
 $XDG_RUNTIME_DIR/dottv.sock with scripts/dottv.lua (titles, play counts,
-Endless Mix, the L key); mpv-mpris puts it on MPRIS like any player.
+Endless Mix, the L key); mpv-mpris puts it on MPRIS like any player. It runs
+without video until `dottv open`: the MEDIA pane plays the saved file itself,
+muted and kept in time with mpv.
 """
 import fcntl
 import json
@@ -166,11 +169,11 @@ def watch(vid):
 
 # ── mpv ─────────────────────────────────────────────────────────────────
 class Mpv:
-    def __init__(self, start=True):
+    def __init__(self, start=True, window=False):
         self.sock = None
         self.req = 0
         if not self.connect() and start:
-            self.launch()
+            self.launch(window)
 
     def connect(self):
         s = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
@@ -181,9 +184,11 @@ class Mpv:
         self.sock, self.buf = s, b""
         return True
 
-    def launch(self):
+    def launch(self, window=False):
         args = [
-            "mpv", "--idle=yes", "--force-window=yes", "--wayland-app-id=dottv",
+            "mpv", "--idle=yes", "--wayland-app-id=dottv",
+            "--force-window=yes" if window else "--force-window=no",
+            "--vid=auto" if window else "--vid=no",
             "--title=${?media-title:${media-title}}${!media-title:DOT TV}",
             f"--input-ipc-server={SOCK}", f"--script-opts=dottv-library={LIB}",
             f"--ytdl-format={FORMAT}", "--really-quiet",
@@ -274,7 +279,12 @@ def get_in_background(vid):
 
 # ── Commands ────────────────────────────────────────────────────────────
 def cmd_open(args):
-    Mpv()
+    mpv = Mpv(window=True)
+    mpv("set_property", "vid", "auto")
+    mpv("set_property", "force-window", True)
+    if led_state() == "on" and not any(s.endswith("dotled.glsl") for s in (mpv.get("glsl-shaders", []) or [])):
+        mpv("set_property", "glsl-shaders", [SHADER])
+    time.sleep(0.3)
     focus()
 
 
@@ -494,6 +504,18 @@ def cmd_list(args):
             print(f"{vid}  {meta.get(vid, {}).get('title', vid)}")
 
 
+def led_state():
+    """'on' or 'off' from Dot Shell's `# dottv-led` line (raw color = off)."""
+    try:
+        with open(LED_OPTS) as f:
+            for line in f:
+                if line.startswith("# dottv-led "):
+                    return line.split()[-1]
+    except OSError:
+        pass
+    return "on"
+
+
 def led_opts():
     try:
         with open(LED_OPTS) as f:
@@ -516,6 +538,9 @@ def cmd_led(args):
     if opts:
         mpv("set_property", "glsl-shader-opts", opts)
     if want == "reload":
+        if led_state() == "off":
+            shaders = mpv.get("glsl-shaders", []) or []
+            mpv("set_property", "glsl-shaders", [s for s in shaders if not s.endswith("dotled.glsl")])
         return
     shaders = mpv.get("glsl-shaders", []) or []
     on = any(s.endswith("dotled.glsl") for s in shaders)

@@ -7,7 +7,8 @@ import qs
 // tubes and its ramp. Arrows (or hjkl) move, Enter applies, 1-9 apply
 // directly; the screen then flips over to the new era (the `cascade` token).
 // DISPLAY: dot pitch, dot size, color depth, wallpaper mode, hue source and
-// the cascade, the screen shader, window effects. Up/Down pick a row, Left/Right change it.
+// the cascade, the screen shader, window effects, LED borders and the bars
+// (top strip, window title, side bar). Up/Down pick a row, Left/Right change it.
 // Every choice is a token, so it persists and applies live.
 //
 // The pane is sized in dots, so it grows with the pitch. At coarse pitches it
@@ -59,7 +60,11 @@ Pane {
         { token: "hue", label: "HUE", options: [["era", "ERA"], ["wallpaper", "WALLPAPER"]] },
         { token: "cascade", label: "CASCADE", options: [["true", "FLIP"], ["false", "CUT"]] },
         { token: "screen", label: "SCREEN", options: [["glass", "GLASS"], ["led", "LED"], ["board", "BOARD"], ["off", "OFF"]] },
-        { token: "winfx", label: "WINDOWS", options: [["true", "DOTS"], ["false", "PLAIN"]] }
+        { token: "winfx", label: "WINDOWS", options: [["true", "DOTS"], ["false", "PLAIN"]] },
+        { token: "borders", label: "BORDERS", options: [["true", "LED"], ["false", "NONE"]] },
+        { token: "top", label: "TOP BAR", options: [["true", "ON"], ["false", "OFF"]] },
+        { token: "title", label: "TITLE", options: [["true", "ON"], ["false", "OFF"]] },
+        { token: "side", label: "SIDE BAR", options: [["off", "OFF"], ["on", "ON"], ["auto", "AUTO"]] }
     ]
     // Settings rows that fit; the window follows `row`.
     readonly property int shownRows: Math.max(1, Math.min(settings.length, Math.floor((avail - fixedRows) / step)))

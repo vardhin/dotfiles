@@ -16,17 +16,18 @@ import qs.panes
 ShellRoot {
     id: shell
 
-    property bool stripVisible: true
-
     // Services with no pane of their own: start them with the shell.
     readonly property var services: [Power, Idle, ScreenShader, DropTerm, Lock, DotBus, Export]
 
     Wallpaper {}
     World {}
     WindowFx {}
+    WindowBorders {}
+
+    SideBar {}
 
     Variants {
-        model: shell.stripVisible ? Quickshell.screens : []
+        model: Tokens.top ? Quickshell.screens : []
 
         TopStrip {}
     }
@@ -77,13 +78,13 @@ ShellRoot {
         target: "strip"
 
         function toggle(): void {
-            shell.stripVisible = !shell.stripVisible;
+            Tokens.set("top", String(!Tokens.top));
         }
         function show(): void {
-            shell.stripVisible = true;
+            Tokens.set("top", "true");
         }
         function hide(): void {
-            shell.stripVisible = false;
+            Tokens.set("top", "false");
         }
     }
 

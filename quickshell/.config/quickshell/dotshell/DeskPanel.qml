@@ -68,6 +68,30 @@ Item {
 
         // Dots nothing lights stay unlit, so the board's shape shows when dark.
 
+        // LED border along the board's outline, at the dim level.
+        Frame {
+            visible: Tokens.borders && !root.raw && root.panel.shape === "rect"
+            width: root.cols
+            height: root.rows
+            border.color: root.tube
+            opacity: 0.6
+        }
+        Shape {
+            visible: Tokens.borders && !root.raw && root.panel.shape !== "rect"
+            width: root.cols
+            height: root.rows
+            preferredRendererType: Shape.CurveRenderer
+            opacity: 0.6
+            ShapePath {
+                strokeWidth: 2
+                strokeColor: root.tube
+                fillColor: "transparent"
+                PathSvg {
+                    path: Shapes.path(root.panel.shape, root.cols, root.rows)
+                }
+            }
+        }
+
         // ── clock ──
         DotText {
             visible: root.panel.kind === "clock"

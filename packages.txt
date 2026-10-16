@@ -55,7 +55,6 @@ wl-clip-persist
 # Terminal + CLI
 ghostty
 zsh
-zsh-theme-powerlevel10k
 eza
 zoxide
 jq

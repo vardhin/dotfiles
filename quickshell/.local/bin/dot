@@ -13,6 +13,7 @@
   dot display --pitch 5 --depth 16 [--size 80] [--wall dots|image|off]
               [--wallpaper ~/w.jpg] [--hue era|wallpaper] [--cascade on|off]
               [--screen glass|led|board|off] [--night on|off] [--winfx on|off]
+              [--borders on|off] [--top on|off] [--title on|off] [--side off|on|auto]
   dot raw '{"cmd":"tokens"}'        send one request as-is
 
 Kinds: clock sign note image mpris media vis pixels.

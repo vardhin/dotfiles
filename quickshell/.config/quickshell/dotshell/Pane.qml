@@ -28,6 +28,8 @@ PanelWindow {
 
     default property alias content: surface.content
     readonly property alias surface: surface
+    // Above the dots, in screen px rather than dots (video, crisp images).
+    property alias overlay: overlayLayer.data
 
     // Fires every time the pane appears; focus a TextInput here.
     signal opened
@@ -56,6 +58,17 @@ PanelWindow {
         cols: Math.min(pane.cols, pane.maxCols)
         rows: Math.min(pane.rows, pane.maxRows)
         focus: true
+
+        // LED border: the outermost ring of dots, at the dim level.
+        Frame {
+            z: -1
+            visible: Tokens.borders
+            width: surface.cols
+            height: surface.rows
+            border.color: Tokens.slot1
+            opacity: 0.6
+        }
+
         Keys.onPressed: event => {
             if (event.key === Qt.Key_Escape) {
                 if (pane.managed)
@@ -65,6 +78,11 @@ PanelWindow {
                 pane.keyPressed(event);
             }
         }
+    }
+
+    Item {
+        id: overlayLayer
+        anchors.fill: surface
     }
 
     HyprlandFocusGrab {
