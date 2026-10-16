@@ -7,6 +7,8 @@ node_modules/
 # Runtime state
 # Era colors Dot Shell writes for Ghostty (lands here when stow folds the dir)
 ghostty/.config/ghostty/dotshell.conf
+# Stub Hyprland writes beside hyprland.lua; the Lua config is the real one
+hypr/.config/hypr/hyprland.conf
 *.log
 *.db
 *.sqlite
