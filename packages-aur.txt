@@ -4,6 +4,7 @@
 
 otf-departure-mono-nerd # Ghostty pixel font (paru also resolves it if it lands in extra)
 
-# Cursor and icons (environment.conf and install.sh pick them)
+# Cursor (environment.conf and install.sh pick it). The McMojave-circle icons
+# come from install.sh instead: the AUR package builds all 33 variants (1.9 GB,
+# ~450k files, a very long makepkg strip); install.sh fetches the three it needs.
 bibata-cursor-theme-bin        # Bibata-Modern-Amber
-mcmojave-circle-icon-theme-git # McMojave-circle-dark

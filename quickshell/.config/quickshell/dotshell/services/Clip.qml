@@ -12,6 +12,7 @@ import qs
 // Images are not kept.
 //
 //   dotshell ipc call clip clear
+//   dotshell ipc call clip forget "some text"
 Singleton {
     id: root
 
@@ -43,6 +44,8 @@ Singleton {
 
     FileView {
         path: Tokens.dirReady ? Tokens.dir + "/clipboard.json" : ""
+        // Only you can read the history (writes keep the mode).
+        onLoaded: Quickshell.execDetached(["chmod", "600", path])
         onAdapterUpdated: writeAdapter()
         onLoadFailed: error => {
             if (error === FileViewError.FileNotFound)
@@ -81,6 +84,9 @@ Singleton {
 
         function clear(): void {
             root.clear();
+        }
+        function forget(text: string): void {
+            root.remove(text);
         }
     }
 }

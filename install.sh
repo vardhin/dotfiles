@@ -95,6 +95,11 @@ link_modules() {
     stow -d "$DOTFILES" -t "$HOME" --restow "$m"
     log "linked $m"
   done
+  # Restowing drops and remakes the links; a running Hyprland that reloaded in
+  # that gap is left with no binds. Reload it once the links are back.
+  if [[ -n ${HYPRLAND_INSTANCE_SIGNATURE:-} ]] && command -v hyprctl >/dev/null; then
+    hyprctl reload >/dev/null && log "reloaded Hyprland"
+  fi
 }
 
 # mpd keeps its database and state in ~/.local/state/mpd (mpd/.config/mpd/mpd.conf);
@@ -112,6 +117,20 @@ enable_services() {
   done
 }
 
+# McMojave-circle, -light and -dark into ~/.local/share/icons, unless some
+# copy (yours, or the AUR package's) is there already.
+install_icons() {
+  local d
+  for d in "$HOME/.local/share/icons" "$HOME/.icons" /usr/share/icons; do
+    [[ -d $d/McMojave-circle-dark ]] && return 0
+  done
+  log "McMojave-circle icons"
+  local tmp; tmp=$(mktemp -d)
+  git clone --depth 1 https://github.com/vinceliuice/McMojave-circle.git "$tmp/McMojave-circle"
+  "$tmp/McMojave-circle/install.sh"
+  rm -rf "$tmp"
+}
+
 # GTK apps and Firefox read the cursor and icons from gsettings; Hyprland
 # itself sets XCURSOR_THEME (hypr/.config/hypr/config/environment.conf).
 set_theme() {
@@ -125,7 +144,7 @@ set_theme() {
 case "${1:-}" in
   --dry-run) link_modules --dry-run ;;
   --link)    link_modules ;;
-  "")        install_packages; install_zsh_framework; link_modules; enable_services; set_theme ;;
+  "")        install_packages; install_zsh_framework; link_modules; enable_services; install_icons; set_theme ;;
   *)         echo "usage: $0 [--link|--dry-run]" >&2; exit 2 ;;
 esac
 

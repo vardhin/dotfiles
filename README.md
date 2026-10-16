@@ -11,8 +11,9 @@ Arch Linux rice: Hyprland + the Quickshell "Dot Shell" (a dot-matrix LED shell, 
 git clone https://github.com/vardhin/dotfiles ~/dotfiles
 cd ~/dotfiles
 ./install.sh            # pacman + AUR packages, oh-my-zsh + plugins, stow every module,
-                        # enable mpd + mpd-mpris (user services)
-./install.sh --link     # only (re)link the modules
+                        # enable mpd + mpd-mpris (user services), McMojave-circle icons
+                        # (3 variants, from git), cursor + icon theme in gsettings
+./install.sh --link     # only (re)link the modules (then reloads a running Hyprland)
 ./install.sh --dry-run  # show what stow would do
 sudo system/install.sh  # greeter (greetd) + boot splash (plymouth); see Login and boot
 ```
@@ -171,7 +172,7 @@ restarts the shell.
 Screenshots go to `~/Pictures/Screenshots`, recordings to `~/Videos/Recordings`. SCREEN and FULL
 take the focused monitor. The history is text only, kept in `~/.local/state/dotshell/clipboard.json`
 (100 entries); copies a password manager marks secret are never recorded. `dotshell ipc call clip clear`
-empties it; `dotshell ipc call capture rec|stop|shot|pick` drive capture from scripts.
+empties it (`clip forget "text"` drops one entry); `dotshell ipc call capture rec|stop|shot|pick` drive capture from scripts.
 
 ### Eras
 
