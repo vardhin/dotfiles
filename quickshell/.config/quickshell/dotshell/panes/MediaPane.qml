@@ -35,7 +35,9 @@ Pane {
     readonly property bool wide: inner >= full
     readonly property int chars: Math.floor(inner / Tokens.charDots)
     cols: inner + 8
-    rows: body.height + 8
+    // Always the full height under the strip, so no strip of desktop shows
+    // below it; what the content does not fill stays as unlit dots.
+    rows: Math.max(body.height + 8, maxRows)
 
     // Dot rows free under the strip at this pitch.
     readonly property int avail: maxRows - 2

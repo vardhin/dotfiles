@@ -26,15 +26,21 @@ import Quickshell.Io
 //   cascade    true: an era change flips every dot over in a wave, like a
 //              flip-disc board; false: switch at once
 //   night      warmth in the screen shader, on/off
-//   screen     glass | led | board | off: the full-screen shader
-//              (services/ScreenShader.qml): faint dot mask and tint over
-//              everything; the screen as LED dots in era colors, every pixel
-//              kept inside its dot so text stays legible (Super Shift T); one
-//              color per dot, a true LED board (small text does not survive
-//              fine pitches); or nothing
+//   screen     glass | led | board | off: the look of the wallpaper layer
+//              (panes/Wallpaper.qml, shaders/wall.frag; windows are left
+//              alone): faint dot mask and tint; the wallpaper as LED dots in
+//              era colors, every pixel kept inside its dot (Super Shift T);
+//              one color per dot, a true LED board; or nothing
 //   winfx      true: windows open and close as LED dots (panes/WindowFx.qml)
+//   wsfx       true: workspace switches dissolve into LED dots
+//              (panes/WorkspaceFx.qml); false: Hyprland's slide
 //   borders    true: a one-dot LED ring around every pane, desktop panel and
 //              window (panes/WindowBorders.qml; windows get a one-dot gap)
+//   ledfx      auto | random | music | off: the borders' animation
+//              (services/LedFx.qml): a random one, new on every window or
+//              workspace switch, reacting to music while it plays (auto);
+//              never to music (random); always to music when it can (music);
+//              still rings (off)
 //   top        true: the top strip
 //   title      true: the focused window's title on the top strip
 //   side       off | on | auto: the right side bar (panes/SideBar.qml); auto
@@ -54,7 +60,10 @@ Singleton {
     readonly property bool night: store.night
     readonly property string screen: screens.includes(store.screen) ? store.screen : "glass"
     readonly property bool winfx: store.winfx
+    readonly property bool wsfx: store.wsfx
     readonly property bool borders: store.borders
+    readonly property string ledfx: ledfxes.includes(store.ledfx) ? store.ledfx : "auto"
+    readonly property var ledfxes: ["auto", "random", "music", "off"]
     readonly property bool top: store.top
     readonly property bool title: store.title
     readonly property string side: sides.includes(store.side) ? store.side : "auto"
@@ -62,7 +71,7 @@ Singleton {
 
     readonly property var walls: ["dots", "image", "off"]
     readonly property var screens: ["glass", "led", "board", "off"]
-    readonly property var keys: ["era", "pitch", "dotSize", "depth", "wall", "wallpaper", "hue", "cascade", "night", "screen", "winfx", "borders", "top", "title", "side"]
+    readonly property var keys: ["era", "pitch", "dotSize", "depth", "wall", "wallpaper", "hue", "cascade", "night", "screen", "winfx", "wsfx", "borders", "ledfx", "top", "title", "side"]
 
     // ── What is on screen ───────────────────────────────────────────
     // `current` is the era as displayed: its colors after the wallpaper hue,
@@ -257,7 +266,9 @@ Singleton {
             property bool night: false
             property string screen: "glass"
             property bool winfx: true
+            property bool wsfx: true
             property bool borders: true
+            property string ledfx: "auto"
             property bool top: true
             property bool title: true
             property string side: "auto"
@@ -317,8 +328,16 @@ Singleton {
         case "winfx":
             store.winfx = truthy(value);
             break;
+        case "wsfx":
+            store.wsfx = truthy(value);
+            break;
         case "borders":
             store.borders = truthy(value);
+            break;
+        case "ledfx":
+            if (!ledfxes.includes(value))
+                return "ledfx is one of: " + ledfxes.join(", ");
+            store.ledfx = value;
             break;
         case "top":
             store.top = truthy(value);
@@ -350,7 +369,9 @@ Singleton {
             night: night,
             screen: screen,
             winfx: winfx,
+            wsfx: wsfx,
             borders: borders,
+            ledfx: ledfx,
             top: top,
             title: title,
             side: side

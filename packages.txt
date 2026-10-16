@@ -3,6 +3,7 @@
 
 # Core
 stow
+socat           # dotws: workspace switches over the Dot Shell socket
 git
 base-devel
 
@@ -10,7 +11,10 @@ base-devel
 hyprland
 hyprpicker
 xdg-desktop-portal-hyprland
+# Login: greetd runs Dot Shell's greeter (greetd/) in a bare Hyprland;
+# plymouth draws the boot splash (plymouth/).
 greetd
+plymouth
 
 # Dot Shell (Quickshell): the whole shell, incl. lock, idle, polkit agent,
 # notifications and wallpaper. qt6-shadertools only to rebuild .qsb shaders;
@@ -39,6 +43,9 @@ rmpc
 yt-dlp
 ffmpeg
 cava
+
+# Files: libadwaita, so it takes the era colors from gtk-4.0/gtk.css
+nautilus
 
 # Network + bluetooth
 networkmanager

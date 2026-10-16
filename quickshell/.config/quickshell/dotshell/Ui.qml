@@ -15,6 +15,9 @@ Singleton {
     // "" = nothing open. Names: launcher session notifs cheatsheet calendar
     // audio brightness wifi bluetooth battery eras packages media
     property string pane: ""
+    // Which page a pane with pages opens on ("" = its own default), e.g.
+    // the era switcher's "walls"; set by openPage / togglePage.
+    property string page: ""
     property ShellScreen screen: focusedScreen()
 
     // Top strips register themselves so a pane's click-outside grab lets
@@ -29,8 +32,23 @@ Singleton {
     }
 
     function open(name: string, onScreen: ShellScreen): void {
+        page = "";
         screen = onScreen ?? focusedScreen();
         pane = name;
+    }
+
+    function openPage(name: string, pageName: string, onScreen: ShellScreen): void {
+        screen = onScreen ?? focusedScreen();
+        page = pageName;
+        pane = name;
+    }
+
+    // Closes the pane only when it is already open on that page.
+    function togglePage(name: string, pageName: string, onScreen: ShellScreen): void {
+        if (pane === name && page === pageName)
+            close();
+        else
+            openPage(name, pageName, onScreen);
     }
 
     function toggle(name: string, onScreen: ShellScreen): void {

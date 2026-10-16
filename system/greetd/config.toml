@@ -1,0 +1,8 @@
+# greetd: Dot Shell's greeter in a bare Hyprland on tty1.
+# Installed to /etc/greetd/config.toml by system/install.sh.
+[terminal]
+vt = 1
+
+[default_session]
+command = "start-hyprland -- --config /etc/greetd/hyprland.conf"
+user = "greeter"

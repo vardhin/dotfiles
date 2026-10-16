@@ -2,6 +2,7 @@ import QtQuick
 import Quickshell
 import Quickshell.Hyprland
 import Quickshell.Wayland
+import qs.services
 
 // A floating LED pane: one layer-shell window holding one DotSurface.
 // Children are authored in dots (1 px = 1 dot), like any DotSurface.
@@ -54,8 +55,10 @@ PanelWindow {
 
     // Never wider or taller than the screen at the current pitch.
     readonly property int maxCols: screen ? Math.floor(screen.width / Tokens.pitch) : cols
-    // The strip's rows are taken (the pane sits under it).
-    readonly property int maxRows: screen ? Math.floor((screen.height - (Tokens.top ? 11 * Tokens.pitch + 4 : 0)) / Tokens.pitch) : rows
+    // The strip's rows are taken (the pane sits under it): its real height,
+    // which TopStrip rounds to whole device px.
+    readonly property int stripH: !Tokens.top ? 0 : Ui.strips.find(w => w.screen === screen)?.height ?? 11 * Tokens.pitch
+    readonly property int maxRows: screen ? Math.floor((screen.height - stripH) / Tokens.pitch) : rows
 
     DotSurface {
         id: surface
@@ -63,14 +66,16 @@ PanelWindow {
         rows: Math.min(pane.rows, pane.maxRows)
         focus: true
 
-        // LED border: the outermost ring of dots, at the dim level.
-        Frame {
+        // LED border: the outermost ring of dots, at the dim level, animated
+        // by LedFx.
+        LedRing {
             z: -1
             visible: Tokens.borders
             width: surface.cols
             height: surface.rows
-            border.color: Tokens.slot1
-            opacity: 0.6
+            color: Tokens.slot1
+            gain: LedFx.on ? 0.8 : 0.6
+            offset: 0.25
         }
 
         Keys.onPressed: event => {

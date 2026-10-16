@@ -1,7 +1,10 @@
 import QtQuick
+import Quickshell
+import Quickshell.Io
 import qs
 
-// Era switcher and display settings (Super T). Two pages, Tab switches.
+// Era switcher, display settings and wallpapers (Super T, or the side bar's
+// palette and picture buttons). Three pages, Tab cycles them.
 //
 // ERAS: every era is a card drawn in its own colors: its glass, its three
 // tubes and its ramp. Arrows (or hjkl) move, Enter applies, 1-9 apply
@@ -9,6 +12,9 @@ import qs
 // DISPLAY: dot pitch, dot size, color depth, wallpaper mode, hue source and
 // the cascade, the screen shader, window effects, LED borders and the bars
 // (top strip, window title, side bar). Up/Down pick a row, Left/Right change it.
+// WALLS: every image under ~/wallpaper and ~/wallpapers as a thumbnail, drawn
+// as dots in its own colors, with the WALL mode (dots, image, off) on top.
+// Arrows (or hjkl) move, Enter sets it, R picks one at random.
 // Every choice is a token, so it persists and applies live.
 //
 // The pane is sized in dots, so it grows with the pitch. At coarse pitches it
@@ -31,7 +37,9 @@ Pane {
     cols: inner + 8
     rows: body.height + 8
 
-    property string page: "eras"
+    // The page lives in Ui, so the side bar knows which one is open.
+    readonly property string page: ["eras", "display", "walls"].includes(Ui.page) ? Ui.page : "eras"
+    readonly property var pages: ["eras", "display", "walls"]
     property int cursor: 0      // era card
     property int row: 0         // display setting
 
@@ -61,7 +69,9 @@ Pane {
         { token: "cascade", label: "CASCADE", options: [["true", "FLIP"], ["false", "CUT"]] },
         { token: "screen", label: "SCREEN", options: [["glass", "GLASS"], ["led", "LED"], ["board", "BOARD"], ["off", "OFF"]] },
         { token: "winfx", label: "WINDOWS", options: [["true", "DOTS"], ["false", "PLAIN"]] },
+        { token: "wsfx", label: "WORKSPACES", options: [["true", "DISSOLVE"], ["false", "SLIDE"]] },
         { token: "borders", label: "BORDERS", options: [["true", "LED"], ["false", "NONE"]] },
+        { token: "ledfx", label: "BORDER FX", options: [["auto", "AUTO"], ["random", "RANDOM"], ["music", "MUSIC"], ["off", "STILL"]] },
         { token: "top", label: "TOP BAR", options: [["true", "ON"], ["false", "OFF"]] },
         { token: "title", label: "TITLE", options: [["true", "ON"], ["false", "OFF"]] },
         { token: "side", label: "SIDE BAR", options: [["off", "OFF"], ["on", "ON"], ["auto", "AUTO"]] }
@@ -95,13 +105,32 @@ Pane {
     }
 
     onOpened: {
-        page = "eras";
         cursor = Math.max(0, Eras.ids.indexOf(Tokens.era));
+        walls.scan();
     }
     onKeyPressed: event => {
         const k = event.key;
         if (k === Qt.Key_Tab || k === Qt.Key_Backtab) {
-            page = page === "eras" ? "display" : "eras";
+            const i = pages.indexOf(page);
+            Ui.page = pages[(i + (k === Qt.Key_Tab ? 1 : pages.length - 1)) % pages.length];
+        } else if (page === "walls") {
+            const len = walls.paths.length;
+            if (len === 0)
+                return;
+            if (k === Qt.Key_Right || k === Qt.Key_L)
+                walls.cursor = Math.min(len - 1, walls.cursor + 1);
+            else if (k === Qt.Key_Left || k === Qt.Key_H)
+                walls.cursor = Math.max(0, walls.cursor - 1);
+            else if (k === Qt.Key_Down || k === Qt.Key_J)
+                walls.cursor = Math.min(len - 1, walls.cursor + walls.cols);
+            else if (k === Qt.Key_Up || k === Qt.Key_K)
+                walls.cursor = Math.max(0, walls.cursor - walls.cols);
+            else if (k === Qt.Key_Return || k === Qt.Key_Enter || k === Qt.Key_Space)
+                walls.apply(walls.cursor);
+            else if (k === Qt.Key_R)
+                walls.apply(Math.floor(Math.random() * len));
+            else
+                return;
         } else if (page === "eras") {
             if (k === Qt.Key_Down || k === Qt.Key_J)
                 cursor = (cursor + 1) % n;
@@ -126,6 +155,58 @@ Pane {
                 return;
         }
         event.accepted = true;
+    }
+
+    // ── Wallpapers ──────────────────────────────────────────────────
+    QtObject {
+        id: walls
+
+        readonly property string home: Quickshell.env("HOME")
+        property var paths: []
+        property int cursor: 0
+        // Grid: four across on a wide pane, fewer when the pitch is coarse.
+        readonly property int gap: 3
+        readonly property int cols: pane.wide ? 4 : Math.max(1, Math.floor((pane.inner + gap) / 48))
+        readonly property int thumbW: Math.floor((pane.inner - (cols - 1) * gap) / cols)
+        readonly property int thumbH: Math.round(thumbW * 9 / 16)
+        // WALL modes line, tabs, name line, hint, rule and padding.
+        readonly property int shownRows: Math.max(1, Math.min(4, Math.floor((pane.avail - pane.fixedRows - pane.step * 2) / (thumbH + gap))))
+        readonly property int rowCount: Math.ceil(paths.length / cols)
+        property int firstRow: 0
+        onCursorChanged: {
+            const r = Math.floor(cursor / cols);
+            if (r < firstRow)
+                firstRow = r;
+            else if (r >= firstRow + shownRows)
+                firstRow = r - shownRows + 1;
+        }
+        onShownRowsChanged: firstRow = Math.max(0, Math.min(firstRow, rowCount - shownRows))
+
+        // "~/x" in the token, so it survives a change of user name.
+        function tilde(p: string): string {
+            return p.startsWith(home + "/") ? "~" + p.slice(home.length) : p;
+        }
+        function apply(i: int): void {
+            cursor = i;
+            Tokens.set("wallpaper", tilde(paths[i]));
+            if (Tokens.wall === "off")
+                Tokens.set("wall", "image");
+        }
+        function scan(): void {
+            finder.running = true;
+        }
+    }
+
+    Process {
+        id: finder
+        command: ["sh", "-c", "find \"$HOME/wallpaper\" \"$HOME/wallpapers\" -maxdepth 3 -type f \\( -iname '*.jpg' -o -iname '*.jpeg' -o -iname '*.png' -o -iname '*.webp' \\) 2>/dev/null | sort"]
+        stdout: StdioCollector {
+            onStreamFinished: {
+                walls.paths = text.split("\n").filter(l => l !== "");
+                const at = walls.paths.indexOf(Tokens.wallpaper);
+                walls.cursor = Math.max(0, at);
+            }
+        }
     }
 
     // One era, previewed in its own colors.
@@ -246,13 +327,19 @@ Pane {
                     text: "ERAS"
                     color: Tokens.slot2
                     active: pane.page === "eras"
-                    onClicked: pane.page = "eras"
+                    onClicked: Ui.page = "eras"
                 }
                 DotButton {
                     text: "DISPLAY"
                     color: Tokens.slot2
                     active: pane.page === "display"
-                    onClicked: pane.page = "display"
+                    onClicked: Ui.page = "display"
+                }
+                DotButton {
+                    text: "WALLS"
+                    color: Tokens.slot2
+                    active: pane.page === "walls"
+                    onClicked: Ui.page = "walls"
                 }
             }
             DotText {
@@ -320,13 +407,81 @@ Pane {
             }
         }
 
+        // ── WALLS ───────────────────────────────────────────────────
+        Line {
+            visible: pane.page === "walls"
+            label: "WALL"
+            Repeater {
+                model: [["dots", "DOTS"], ["image", "IMAGE"], ["off", "OFF"]]
+                DotButton {
+                    required property var modelData
+                    text: modelData[1]
+                    active: Tokens.wall === modelData[0]
+                    onClicked: Tokens.set("wall", modelData[0])
+                }
+            }
+        }
+        Grid {
+            visible: pane.page === "walls"
+            columns: walls.cols
+            spacing: walls.gap
+
+            Repeater {
+                model: pane.page === "walls" ? walls.paths.slice(walls.firstRow * walls.cols, (walls.firstRow + walls.shownRows) * walls.cols) : []
+
+                Item {
+                    id: thumb
+                    required property string modelData
+                    required property int index
+                    readonly property int at: walls.firstRow * walls.cols + index
+                    readonly property bool applied: modelData === Tokens.wallpaper
+                    width: walls.thumbW
+                    height: walls.thumbH
+
+                    // In its own colors: the pane keeps authored colors, so
+                    // each thumbnail shows as dots of the real picture.
+                    Image {
+                        x: 1
+                        y: 1
+                        width: parent.width - 2
+                        height: parent.height - 2
+                        source: "file://" + thumb.modelData
+                        sourceSize: Qt.size(width, height)
+                        fillMode: Image.PreserveAspectCrop
+                        asynchronous: true
+                        smooth: true
+                    }
+                    Frame {
+                        anchors.fill: parent
+                        visible: thumb.at === walls.cursor || thumb.applied
+                        border.color: thumb.applied ? Tokens.slot2 : Tokens.slot0
+                    }
+                    MouseArea {
+                        anchors.fill: parent
+                        hoverEnabled: true
+                        cursorShape: Qt.PointingHandCursor
+                        onEntered: walls.cursor = thumb.at
+                        onClicked: walls.apply(thumb.at)
+                    }
+                }
+            }
+        }
+        DotText {
+            visible: pane.page === "walls"
+            width: pane.inner
+            height: Tokens.lineDots
+            elide: Text.ElideMiddle
+            text: walls.paths.length === 0 ? "NO IMAGES IN ~/WALLPAPER OR ~/WALLPAPERS" : (walls.cursor + 1) + "/" + walls.paths.length + " " + (walls.paths[walls.cursor] ?? "").split("/").slice(-2).join("/").toUpperCase()
+            color: Tokens.slot1
+        }
+
         Rule {}
 
         DotText {
             width: pane.inner
             height: Tokens.lineDots
             elide: Text.ElideRight
-            text: !pane.wide ? "TAB PAGE  ENTER" : pane.page === "eras" ? "TAB DISPLAY  ENTER APPLY  1-" + pane.n + " PICK" : "TAB ERAS  LEFT RIGHT CHANGE" + (pane.shownRows < pane.settings.length ? "  UP DOWN MORE" : "")
+            text: !pane.wide ? "TAB PAGE  ENTER" : pane.page === "eras" ? "TAB DISPLAY  ENTER APPLY  1-" + pane.n + " PICK" : pane.page === "walls" ? "TAB ERAS  ARROWS MOVE  ENTER SET  R RANDOM" : "TAB WALLS  LEFT RIGHT CHANGE" + (pane.shownRows < pane.settings.length ? "  UP DOWN MORE" : "")
             color: Tokens.slot1
         }
     }

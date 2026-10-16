@@ -7,7 +7,11 @@ import Quickshell.Hyprland
 
 // Dropdown terminal (Super X): one persistent Ghostty window that is
 // parked on a silent workspace when hidden, pulled onto the current one
-// when shown, and hidden again when focus moves elsewhere.
+// when shown, and hidden as soon as it loses focus: once it has had focus,
+// any other window (or none) taking it hides it. A click on the empty
+// desktop moves no focus in Hyprland, so panes/World.qml reports those
+// (clickedAway()).
+// panes/WindowFx.qml plays the open / close dots for its moves.
 Singleton {
     id: root
 
@@ -16,7 +20,12 @@ Singleton {
     readonly property string parking: "dotshell-dropdown"
 
     property bool hidden: true
-    property double graceUntil: 0       // ignore focus events right after showing
+    // The window's address ("0x…"), once known.
+    property string address: ""
+    // Focused since it was shown: only then does losing focus hide it (it is
+    // not focused yet between the move and the focus dispatch, or while a
+    // new one maps).
+    property bool hadFocus: false
 
     function toggle(): void {
         clients.running = true;
@@ -32,10 +41,11 @@ Singleton {
                 try {
                     win = JSON.parse(text).find(c => (c.class || c.initialClass || "").toLowerCase() === root.cls) ?? null;
                 } catch (e) {}
+                if (win)
+                    root.address = win.address;
 
                 // Decide from where the window really is, not from `hidden`:
                 // the flag resets when the shell restarts, the window does not.
-                root.graceUntil = Date.now() + 1500;
                 if (!win) {
                     root.hidden = false;
                     // gtk-single-instance=false: a new process, so the class sticks
@@ -55,24 +65,46 @@ Singleton {
         if (!ws)
             return;
         Hyprland.dispatch(`movetoworkspacesilent name:${ws},class:^(${clsRe})$`);
-        Hyprland.dispatch(`focuswindow class:^(${clsRe})$`);
         hidden = false;
+        hadFocus = false;
+        Hyprland.dispatch(`focuswindow class:^(${clsRe})$`);
     }
 
     function hide(): void {
         Hyprland.dispatch(`movetoworkspacesilent name:${parking},class:^(${clsRe})$`);
         hidden = true;
+        hadFocus = false;
+    }
+
+    function clickedAway(): void {
+        if (!hidden && hadFocus)
+            hide();
     }
 
     Connections {
         target: Hyprland
         function onRawEvent(event) {
-            if (root.hidden || Date.now() < root.graceUntil)
+            if (event.name === "openwindow") {
+                const f = event.data.split(",");
+                if ((f[2] ?? "").toLowerCase() === root.cls)
+                    root.address = "0x" + f[0];
                 return;
-            if (event.name === "activewindow") {
-                const focusedClass = event.data.split(",")[0].toLowerCase();
-                // An empty class is a window still mapping (often the dropdown itself).
-                if (focusedClass !== "" && focusedClass !== root.cls)
+            }
+            if (event.name === "closewindow") {
+                if ("0x" + event.data === root.address) {
+                    root.address = "";
+                    root.hidden = true;
+                }
+                return;
+            }
+            if (root.hidden)
+                return;
+            if (event.name === "activewindowv2") {
+                // Empty: nothing focused.
+                const a = event.data ? "0x" + event.data : "";
+                if (a === root.address)
+                    root.hadFocus = true;
+                else if (root.hadFocus)
                     root.hide();
             } else if (event.name === "workspace") {
                 root.hide();

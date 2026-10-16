@@ -68,20 +68,22 @@ Item {
 
         // Dots nothing lights stay unlit, so the board's shape shows when dark.
 
-        // LED border along the board's outline, at the dim level.
-        Frame {
+        // LED border along the board's outline, at the dim level; animated by
+        // LedFx on rect boards, breathing with it (and the music) on the rest.
+        LedRing {
             visible: Tokens.borders && !root.raw && root.panel.shape === "rect"
             width: root.cols
             height: root.rows
-            border.color: root.tube
-            opacity: 0.6
+            color: root.tube
+            gain: LedFx.on ? 0.7 : 0.6
+            offset: (root.cols * 7 + root.rows * 13) % 100 / 100
         }
         Shape {
             visible: Tokens.borders && !root.raw && root.panel.shape !== "rect"
             width: root.cols
             height: root.rows
             preferredRendererType: Shape.CurveRenderer
-            opacity: 0.6
+            opacity: !LedFx.on ? 0.6 : LedFx.musical ? 0.4 + 0.6 * Math.min(1, LedFx.bass + LedFx.beat * 0.5) : 0.45 + 0.35 * Math.sin(LedFx.time * 2)
             ShapePath {
                 strokeWidth: 2
                 strokeColor: root.tube

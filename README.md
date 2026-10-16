@@ -1,6 +1,6 @@
 # dotfiles
 
-Arch Linux rice: Hyprland + the Quickshell "Dot Shell" (a dot-matrix LED shell), Ghostty, mpv + Dot TV, mpd, zsh. Managed with GNU Stow, one module per top-level folder.
+Arch Linux rice: Hyprland + the Quickshell "Dot Shell" (a dot-matrix LED shell, greeter and boot splash), Ghostty, Nautilus, mpv + Dot TV, mpd, zsh. Managed with GNU Stow, one module per top-level folder; `system/` holds the few files outside `~`.
 
 > Mid re-rice. The plan (Hyprland + Quickshell + the dot-matrix "Dot Shell") lives in the
 > *Arch Rice* doc, tab **Re-rice plan**. This README describes what is in the repo today.
@@ -14,6 +14,7 @@ cd ~/dotfiles
                         # enable mpd + mpd-mpris (user services)
 ./install.sh --link     # only (re)link the modules
 ./install.sh --dry-run  # show what stow would do
+sudo system/install.sh  # greeter (greetd) + boot splash (plymouth); see Login and boot
 ```
 
 Files that would block a link are moved to `~/.dotfiles-backup/<timestamp>/` first.
@@ -38,6 +39,7 @@ dotfiles/
 │   └── sounds/boot.wav
 ├── quickshell/.config/quickshell/dotshell/   → ~/.config/quickshell/dotshell
 │   ├── shell.qml               entry point; IPC targets pane, strip, night, shell (tokens, screen, export, …)
+│   ├── greeter.qml             the login screen (greetd), a second entry point; see Login and boot
 │   ├── Tokens.qml / Eras.qml   the seven eras, the era cascade and every display token (pitch,
 │   │                           dot size, depth, wall, wallpaper, hue, cascade, night, screen,
 │   │                           winfx); persisted
@@ -50,6 +52,7 @@ dotfiles/
 │   ├── Scroller.qml, TvScreen.qml   looping LED text; Dot TV's video as dots (tvled.frag)
 │   ├── TopStrip.qml            workspaces | clock / ticker | status words, tray
 │   ├── DotText DotLabel DotButton DotInput VuBar Marquee FlapText Frame Rule Line StatusWord
+│   │   RailButton RailMeter    (the side rail's glyph buttons and vertical meters)
 │   ├── services/               Notifs (the notification daemon), Audio, Brightness, Power
 │   │                           (+ battery monitor), Net, Bt, Idle (+ logind bridge), Lock (PAM),
 │   │                           ScreenShader, DropTerm, Notify, Panels (desktop panels, panels.json),
@@ -65,10 +68,12 @@ dotfiles/
 │   │                           open/close as LED dots)
 │   ├── pam/dotshell            PAM stack for the lock screen (pam_unix only)
 │   ├── shaders/                dot.frag(.qsb) for DotSurface, winfx.frag(.qsb) for WindowFx,
-│   │                           art.frag(.qsb) for DitherArt;
-│   │                           screen.glsl, the Hyprland screen shader template (GLSL ES 3.00)
+│   │                           art.frag(.qsb) for DitherArt, wall.frag(.qsb) the screen look
+│   │                           on the wallpaper; screen.glsl, night warmth for Hyprland's
+│   │                           screen shader (GLSL ES 3.00)
 │   ├── build-shaders.sh        recompile .qsb after editing a .frag (qt6-shadertools)
-│   └── (../../.local/bin/dot)  the `dot` CLI, linked to ~/.local/bin/dot
+│   └── (../../.local/bin/dot, dotws)  the `dot` CLI, and `dotws` (workspace switches
+│                               through the shell), linked to ~/.local/bin
 ├── mpv/.config/mpv/            → ~/.config/mpv  mpv.conf; scripts/dottv.lua (Dot TV: titles, play
 │                               counts, Endless Mix, L); shaders/dotled.glsl (LED video)
 ├── mpv/.local/bin/dottv        Dot TV, the YouTube library CLI (+ dottv.desktop)
@@ -77,6 +82,10 @@ dotfiles/
 │                               colors from the generated dotshell.conf, gitignored)
 ├── fontconfig/.config/fontconfig/conf.d/   Departure Mono without antialiasing (hard pixels)
 ├── zsh/.zshrc                  → ~/.zshrc  (oh-my-zsh, powerlevel10k, eza, zoxide)
+├── system/                     outside ~, installed by `sudo system/install.sh`
+│   ├── greetd/                 config.toml, hyprland.conf (the greeter's bare Hyprland)
+│   ├── plymouth/dotshell/      the boot splash: script theme + build.py (images in era colors)
+│   └── install.sh
 ├── packages.txt                pacman packages
 ├── packages-aur.txt            AUR packages
 └── install.sh
@@ -107,15 +116,18 @@ media center), hyprlock, hypridle, polkit-gnome, awww and hyprsunset.
 | Launcher | `Alt Space`: departure board. Type, arrows or Ctrl J/K, Enter; Ctrl 1–8 jumps to a gate. Launch counts rank results |
 | Lock | `Super L` (`loginctl lock-session`), idle, the session menu and suspend all lock through logind. PAM stack: `pam/dotshell` |
 | Idle | dim 5 min, lock 7.5 min, screen off 7.75 min. Caffeine (`Super Shift C`, or the brightness pane) holds all three |
-| Screen shader | Hyprland's `screen_shader`, written by Dot Shell from `shaders/screen.glsl` with the tokens baked in (Hyprland passes screen shaders no custom uniforms). **glass**, always on: faint dot mask on the shell's grid, phosphor tint, vignette. **LED** (`Super Shift T`, `dotshell ipc call screen toggle`): the screen as dots in the era's colors (or the color depth), every pixel kept inside its dot so text stays legible. **board**: one color per dot, a true LED board; text below ~4 dots tall does not survive, so it suits coarse pitches. **off**. Costs nothing measurable at 1080p on the Lucienne iGPU |
-| Night warmth | `Super Shift H` or `dotshell ipc call night toggle`: folded into the screen shader, persisted in tokens |
+| Screen look | The `screen` token, drawn over the wallpaper only (`panes/Wallpaper.qml`, `shaders/wall.frag`); windows stay untouched. **glass**: faint dot mask on the shell's grid, phosphor tint, vignette. **LED** (`Super Shift T`, `dotshell ipc call screen toggle`): the wallpaper as dots in the era's colors (or the color depth). **board**: one color per dot, a true LED board. **off** |
+| Night warmth | `Super Shift H` or `dotshell ipc call night toggle`: Hyprland's `screen_shader` (`shaders/screen.glsl`, written by Dot Shell), over windows too; persisted in tokens |
 | Window effects | Windows open with a raster sweep of dots and close by collapsing to a line, drawn by Dot Shell on a click-through overlay (Hyprland has no per-window shaders); Hyprland's own window animation is cut to a fade. `winfx` token |
+| Workspace switch | The old workspace dissolves into LED dots, flipping over in a wave toward where you are going, onto the new one. Adaptive: a switch soon after the last plays faster (650 ms down to 200 ms), and one mid-dissolve carries on from what is on screen. The snapshot is taken before Hyprland moves, so the workspace binds, the strip and the side bar switch through the shell (`dotws go 3`, `dotws move 3`, over the `dot` socket); Hyprland's own workspace animation is off while it is on. `wsfx` token (`false`: Hyprland's slide) |
 | Wallpaper | `dotshell ipc call tokens set wallpaper ~/wallpaper/x.jpg`; `wall` picks how it shows: `dots` (drawn by the matrix), `image` (plain, parallax), `off` (unlit glass) |
 | Battery monitor | toasts on plug/unplug, at 15 % and 10 %; at 5 % a 60 s grace, then poweroff |
 | Shortcuts | `Super /`: read live from `hyprctl -j binds`, described by the `bindd` descriptions |
 | Media | `Super M`, or the now-playing word on the strip (middle click plays/pauses, wheel skips). See [Media](#media) |
-| Bars | top strip (workspaces, `+` for a new one, window title, clock, now playing, status); side bar on the right edge: big clock, workspaces, now playing, spectrum, CPU / memory / temperature / volume / brightness / battery meters. `Super T` → DISPLAY: TOP BAR, TITLE, SIDE BAR (off, on, auto: hidden until the pointer touches the right edge) |
+| Bars | top strip (workspaces, `+` for a new one, window title, clock, now playing, status); side rail on the right edge, 13 dots wide, holding only what the strip does not: launcher and files at the top, CPU / memory / temperature meters and the media transport in the middle, era switcher, wallpapers and session menu at the bottom. `Super T` → DISPLAY: TOP BAR, TITLE, SIDE BAR (off, on, auto: hidden until the pointer touches the right edge) |
+| Files | `Super F`, or the folder on the side rail: Nautilus, the default for folders. libadwaita, so it takes the era colors from `gtk-4.0/gtk.css` whatever the GTK theme is |
 | LED borders | a one-dot LED ring around every pane, desktop panel and window (lit for the focused window); windows get one-dot gaps for it. `borders` token |
+| Border FX | the LED rings animate: a random one of comet, twins, flow, breathe, marquee, sparkle, scanner or wipe, new on every window or workspace switch (bright on the focused window, dim on the rest). While music plays they react to it instead (cava): spectrum around the ring, bass pulse, a rider whose speed follows the loudness, treble fizz, corner VU meters, all flashing on beats. `ledfx` token: `auto`, `random` (never music), `music`, `off` (still rings); `dotshell ipc call ledfx next` / `mode comet` |
 
 ```bash
 dotshell ipc call tokens set era tokyo     # phosphor tokyo nineties matrix vfd aero gameboy
@@ -127,7 +139,9 @@ dotshell ipc call tokens set hue wallpaper # era | wallpaper (matugen picks the 
 dotshell ipc call tokens set cascade false # true: era changes flip over in a wave
 dotshell ipc call tokens set screen led    # glass | led | board | off
 dotshell ipc call tokens set winfx false   # window open/close as dots
+dotshell ipc call tokens set wsfx false    # workspace switches dissolve into dots
 dotshell ipc call tokens set borders false # LED rings around panes, panels, windows
+dotshell ipc call tokens set ledfx random  # border animations: auto | random | music | off
 dotshell ipc call tokens set side auto     # off | on | auto (right side bar)
 dotshell ipc call tokens set title false   # window title on the strip
 dotshell ipc call strip toggle
@@ -135,7 +149,8 @@ dotshell ipc call strip toggle
 
 Binds: `Super D` toggles the strip, `Super Shift D` cycles eras, `Super T` opens the era switcher,
 `Super Shift T` toggles full LED,
-`Super I` the package manager (pacman + yay), `Super Ctrl D` restarts the shell.
+`Super W` the wallpapers, `Super F` files, `Super I` the package manager (pacman + yay), `Super Ctrl D`
+restarts the shell.
 
 ### Eras
 
@@ -149,9 +164,11 @@ Binds: `Super D` toggles the strip, `Super Shift D` cycles eras, `Super T` opens
 | Frutiger Aero | `aero` | light sky glass, glossy bubble dots, dark ink |
 | Game Boy | `gameboy` | the four DMG greens, square dots, no glow |
 
-`Super T` shows every era as a card in its own colors. **ERAS** page: arrows or j/k move, Enter
-applies, 1–7 pick directly. Tab goes to **DISPLAY**: pitch, dot size, depth, wall, hue, cascade, screen, windows;
-Up/Down pick a row, Left/Right change it. At coarse pitches the pane narrows and scrolls so it
+`Super T` (or the brush on the side rail) shows every era as a card in its own colors. **ERAS** page: arrows or j/k move, Enter
+applies, 1–7 pick directly. Tab goes to **DISPLAY**: pitch, dot size, depth, wall, hue, cascade, screen, windows, workspaces;
+Up/Down pick a row, Left/Right change it. Tab again: **WALLS** (`Super W`, or the picture on the side rail):
+every image under `~/wallpaper` and `~/wallpapers` as a thumbnail in dots, the WALL mode on top; arrows
+move, Enter sets it, R picks one at random. At coarse pitches the pane narrows and scrolls so it
 always fits under the strip.
 
 An era change flips every dot over in a wave from the top left, like a flip-disc board (the
@@ -168,8 +185,28 @@ The era on screen is also exported to the apps around the shell, on every change
 | Neovim | `~/.local/share/nvim/site/colors/dotshell.lua` | `:colorscheme dotshell`; running nvims that use it reload |
 | GTK 3 / 4 | `~/.config/gtk-{3,4}.0/gtk.css` | libadwaita named colors; only written when missing or ours (first line says `dotshell:`); also sets the dark/light `color-scheme` |
 | Qt | `~/.config/qt6ct/colors/dotshell.conf` | pick it once in qt6ct |
+| Greeter | `/var/lib/dotshell-greeter/dotshell/` | `tokens.json`, the wallpaper and the user name, once `system/install.sh` has made the folder yours |
 
 `dotshell ipc call export run` rewrites them by hand.
+
+### Login and boot
+
+`sudo system/install.sh` sets up both; `greetd` or `plymouth` as an argument does one.
+
+**Greeter.** greetd runs a bare Hyprland (`/etc/greetd/hyprland.conf`) whose one job is
+`greeter.qml`: the lock screen's look, in the era and wallpaper you last used. Type the password,
+Enter logs in and starts `start-hyprland`; Tab edits the user name, F11 reboots, F12 powers off.
+The greeter user cannot read `~`, so the installer copies Dot Shell to `/usr/local/share/dotshell`
+(rerun `sudo system/install.sh greetd` after changing `greeter.qml` or what it uses) and Export keeps
+the colors in `/var/lib/dotshell-greeter/dotshell`. greetd is enabled for the next boot, not started:
+it takes tty1, which would end a session logged in there. If the greeter ever fails, Ctrl Alt F2 gives
+a text login.
+
+**Splash.** A Plymouth script theme: the DOT SHELL sign as a dot board, a lit dot running under it.
+`build.py` draws it in the era on screen at install time (from the Ghostty export); rerun
+`sudo system/install.sh plymouth` to repaint it after an era change. The installer adds the `plymouth`
+hook, `quiet splash` to `/etc/kernel/cmdline` (unified kernel images), and rebuilds with `mkinitcpio -P`;
+edited files keep a `*.dotshell-bak` copy.
 
 ### Desktop panels and the `dot` bus
 

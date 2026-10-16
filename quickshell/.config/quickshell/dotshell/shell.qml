@@ -17,11 +17,12 @@ ShellRoot {
     id: shell
 
     // Services with no pane of their own: start them with the shell.
-    readonly property var services: [Power, Idle, ScreenShader, DropTerm, Lock, DotBus, Export]
+    readonly property var services: [Power, Idle, ScreenShader, DropTerm, Lock, DotBus, Export, WsFx, LedFx]
 
     Wallpaper {}
     World {}
     WindowFx {}
+    WorkspaceFx {}
     WindowBorders {}
 
     SideBar {}
@@ -58,6 +59,13 @@ ShellRoot {
             if (!Ui.names.includes(name))
                 return "unknown pane; one of: " + Ui.names.join(", ");
             Ui.toggle(name, null);
+            return Ui.pane === name ? "open" : "closed";
+        }
+        // dotshell ipc call pane page eras walls
+        function page(name: string, pageName: string): string {
+            if (!Ui.names.includes(name))
+                return "unknown pane; one of: " + Ui.names.join(", ");
+            Ui.togglePage(name, pageName, null);
             return Ui.pane === name ? "open" : "closed";
         }
         function close(): void {

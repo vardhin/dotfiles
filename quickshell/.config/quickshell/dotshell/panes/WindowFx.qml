@@ -4,6 +4,7 @@ import Quickshell.Hyprland
 import Quickshell.Io
 import Quickshell.Wayland
 import qs
+import qs.services
 
 // Window open/close as LED dots. Hyprland has only built-in window animations
 // (no custom shader per window), so the shell draws the effect itself: on
@@ -14,8 +15,10 @@ import qs
 //
 // Close needs the rect of a window that is already gone, so rects are cached
 // from `hyprctl -j clients` after every event that can move a window.
-// Off with the `winfx` token. Skipped: Dot Shell's own windows, specials,
-// fullscreen, tiny windows and windows on workspaces not on screen.
+// The dropdown terminal (services/DropTerm.qml) is never closed, only moved
+// to and from its parking workspace; those moves play open and close.
+// Off with the `winfx` token. Skipped: specials, fullscreen, tiny windows and
+// windows on workspaces not on screen.
 Scope {
     id: root
 
@@ -36,7 +39,7 @@ Scope {
     function play(kind: string, c: var): void {
         if (!Tokens.winfx || !c)
             return;
-        if (/^dotshell\./.test(c.class ?? "") || c.fullscreen > 0 || (c.workspace?.id ?? -1) < 0)
+        if (c.fullscreen > 0 || (c.workspace?.id ?? -1) < 0)
             return;
         const mon = Hyprland.monitors.values.find(m => m.id === c.monitor);
         if (!mon || mon.activeWorkspace?.id !== c.workspace.id && !c.pinned)
@@ -132,6 +135,21 @@ Scope {
                 settle.restart();
                 break;
             case "movewindowv2":
+                {
+                    // address,workspaceid,workspacename
+                    const f = event.data.split(",");
+                    const a = root.addrOf(f[0]);
+                    if (Tokens.winfx && a === DropTerm.address) {
+                        if (f[2] === DropTerm.parking) {
+                            root.play("close", root.rects[a]);
+                        } else {
+                            root.waiting = root.waiting.concat([a]);
+                            root.refresh();
+                        }
+                    }
+                }
+                settle.restart();
+                break;
             case "changefloatingmode":
             case "fullscreen":
             case "workspacev2":

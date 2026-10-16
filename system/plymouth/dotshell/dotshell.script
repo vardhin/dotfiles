@@ -1,0 +1,77 @@
+// Dot Shell boot splash: the DOT SHELL sign as a dot-matrix board, and a row
+// of dots under it with a lit head running along it, like a scanner.
+// The images (sign.png, lit.png, dim.png, bg.png) come from build.py, in the
+// era's colors at install time.
+
+bg_image = Image("bg.png");
+Window.SetBackgroundTopColor(0, 0, 0);
+Window.SetBackgroundBottomColor(0, 0, 0);
+bg = Sprite(bg_image.Scale(Window.GetWidth(), Window.GetHeight()));
+bg.SetZ(-100);
+
+sign_image = Image("sign.png");
+sign = Sprite(sign_image);
+cx = Window.GetX() + Window.GetWidth() / 2;
+cy = Window.GetY() + Window.GetHeight() / 2;
+sign.SetX(cx - sign_image.GetWidth() / 2);
+sign.SetY(cy - sign_image.GetHeight() / 2);
+
+lit = Image("lit.png");
+dim = Image("dim.png");
+pitch = lit.GetWidth();
+count = 24;
+row_x = cx - count * pitch / 2;
+row_y = cy + sign_image.GetHeight() / 2 + pitch * 4;
+for (i = 0; i < count; i++) {
+    dots[i] = Sprite(dim);
+    dots[i].SetX(row_x + i * pitch);
+    dots[i].SetY(row_y);
+}
+
+tick = 0;
+fun refresh() {
+    tick++;
+    // One step every 3 frames; the head runs off the end and starts over.
+    head = Math.Int(tick / 3) % (count + 4);
+    for (i = 0; i < count; i++) {
+        d = head - i;
+        if (d >= 0 && d < 4) {
+            dots[i].SetImage(lit);
+            dots[i].SetOpacity(1 - d * 0.25);
+        } else {
+            dots[i].SetImage(dim);
+            dots[i].SetOpacity(1);
+        }
+    }
+}
+Plymouth.SetRefreshFunction(refresh);
+
+// Messages (fsck and the like) as plain text under the row.
+message = Sprite();
+fun show_message(text) {
+    message.SetImage(Image.Text(text, 0.6, 0.6, 0.6));
+    message.SetX(cx - message.GetImage().GetWidth() / 2);
+    message.SetY(row_y + pitch * 4);
+}
+Plymouth.SetMessageFunction(show_message);
+
+// A password prompt, in case a disk is ever encrypted: one lit dot per key.
+prompt = Sprite();
+bullets = Sprite();
+fun show_password(text, count) {
+    prompt.SetImage(Image.Text(text, 0.8, 0.8, 0.8));
+    prompt.SetX(cx - prompt.GetImage().GetWidth() / 2);
+    prompt.SetY(row_y + pitch * 4);
+    s = "";
+    for (i = 0; i < count; i++)
+        s += "*";
+    bullets.SetImage(Image.Text(s, 1, 1, 1));
+    bullets.SetX(cx - bullets.GetImage().GetWidth() / 2);
+    bullets.SetY(row_y + pitch * 7);
+}
+fun hide_password() {
+    prompt.SetImage(Image.Text("", 0, 0, 0));
+    bullets.SetImage(Image.Text("", 0, 0, 0));
+}
+Plymouth.SetDisplayPasswordFunction(show_password);
+Plymouth.SetDisplayNormalFunction(hide_password);

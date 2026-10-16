@@ -4,10 +4,12 @@ import Quickshell.Hyprland
 import Quickshell.Io
 import Quickshell.Wayland
 import qs
+import qs.services
 
 // LED borders for windows (the `borders` token): a one-dot ring of LEDs around
-// every window on the workspaces on screen, lit in the first tube for the
-// focused window and dark (unlit dots) for the rest. Hyprland draws only flat
+// every window on the workspaces on screen, animated by services/LedFx.qml
+// (bright on the focused window, dim on the rest; with `ledfx` off, lit in
+// the first tube for the focused window and dark for the rest). Hyprland draws only flat
 // borders, so the shell draws the rings, each a small DotSurface cut to a ring.
 //
 // While borders are on, the gaps become one dot wide (gaps_in and gaps_out =
@@ -110,14 +112,14 @@ Scope {
     }
 
     // Windows that get a ring on a screen: on a workspace shown there, mapped,
-    // not fullscreen, not Dot Shell's own.
+    // not fullscreen.
     function rings(scr: ShellScreen, floating: bool): var {
         const mon = Hyprland.monitors.values.find(m => m.name === scr.name);
         if (!mon)
             return [];
         const ws = mon.activeWorkspace?.id;
         const special = mon.lastIpcObject?.specialWorkspace?.id ?? 0;
-        return clients.filter(c => c.mapped && !c.hidden && c.fullscreen === 0 && !!c.floating === floating && (c.workspace?.id === ws || special !== 0 && c.workspace?.id === special || c.pinned) && !/^dotshell\./.test(c.class ?? "")).map(c => ({
+        return clients.filter(c => c.mapped && !c.hidden && c.fullscreen === 0 && !!c.floating === floating && (c.workspace?.id === ws || special !== 0 && c.workspace?.id === special || c.pinned)).map(c => ({
                     address: c.address,
                     x: c.at[0] - mon.x,
                     y: c.at[1] - mon.y,
@@ -157,11 +159,14 @@ Scope {
                 rows: Math.max(3, Math.round(modelData.h / root.pitch) + 2)
                 shape: `M 0 0 H ${cols} V ${rows} H 0 Z M 1 1 V ${rows - 1} H ${cols - 1} V 1 Z`
 
-                Frame {
+                // Animated by LedFx: full on the focused window, dim on the
+                // rest. Still (ledfx off): lit on the focused window only.
+                LedRing {
                     width: ring.cols
                     height: ring.rows
-                    visible: ring.lit
-                    border.color: Tokens.slot0
+                    visible: ring.lit || LedFx.on
+                    gain: ring.lit ? 1 : 0.4
+                    offset: parseInt(ring.modelData.address.slice(-4), 16) % 997 / 997
                 }
             }
         }

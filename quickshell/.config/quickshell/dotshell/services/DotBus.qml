@@ -21,6 +21,7 @@ import qs
 //    "wallpaper":"~/w.jpg","hue":"wallpaper","cascade":true,
 //    "screen":"led","night":true}
 //   {"cmd":"tokens"}
+//   {"cmd":"ws","go":"3"}  {"cmd":"ws","move":"e+1"}   workspace switch, with the dissolve
 // Replies: {"ok":true, ...} or {"ok":false,"error":"..."}.
 Singleton {
     id: root
@@ -88,8 +89,17 @@ Singleton {
             return tokens();
         case "tokens":
             return tokens();
+        case "ws":
+            // Workspace switch through the shell (the dissolve): `dotws go 3`.
+            if (q.go !== undefined)
+                WsFx.go(String(q.go));
+            else if (q.move !== undefined)
+                WsFx.move(String(q.move));
+            else
+                return { error: "ws takes go or move" };
+            return {};
         default:
-            return { error: "unknown cmd; one of: spawn rm move set write pixels list era eras display tokens" };
+            return { error: "unknown cmd; one of: spawn rm move set write pixels list era eras display tokens ws" };
         }
     }
 

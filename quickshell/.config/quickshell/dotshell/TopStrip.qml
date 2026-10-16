@@ -103,7 +103,7 @@ PanelWindow {
 
                     MouseArea {
                         anchors.fill: parent
-                        onClicked: Hyprland.dispatch("workspace " + cell.wsId)
+                        onClicked: WsFx.go(String(cell.wsId))
                     }
                 }
             }
@@ -112,7 +112,7 @@ PanelWindow {
             StatusWord {
                 text: "+"
                 color: Tokens.slot2
-                onClicked: Hyprland.dispatch("workspace empty")
+                onClicked: WsFx.go("empty")
             }
         }
 

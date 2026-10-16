@@ -37,6 +37,17 @@ Variants {
         onLiveWsChanged: if (liveWs > 0)
             wsId = liveWs
 
+        // This layer takes every click on the empty desktop (the panels sit on
+        // top of this). Such a click moves no focus, so tell the dropdown.
+        MouseArea {
+            anchors.fill: parent
+            acceptedButtons: Qt.AllButtons
+            onPressed: mouse => {
+                DropTerm.clickedAway();
+                mouse.accepted = false;
+            }
+        }
+
         Item {
             id: world
             width: win.width
