@@ -23,9 +23,11 @@ layout(std140, binding = 0) uniform buf {
     vec4 ramp1;
     vec4 ramp2;
     vec4 ramp3;
+    float useMask;    // 1 = dots where `mask` is clear are cut out (no dot, no glass)
 };
 
 layout(binding = 1) uniform sampler2D source;
+layout(binding = 2) uniform sampler2D mask;   // panel shape, one texel per dot
 
 vec3 quantize(vec3 c, vec3 bits) {
     vec3 n = exp2(bits) - 1.0;
@@ -51,6 +53,12 @@ void main() {
     vec2 g = qt_TexCoord0 * grid;
     vec2 cell = floor(g);
     vec2 f = fract(g) - 0.5;
+
+    // Shaped panels: a dot outside the shape does not exist at all.
+    if (useMask > 0.5 && texture(mask, (cell + 0.5) / grid).a < 0.5) {
+        fragColor = vec4(0.0);
+        return;
+    }
 
     // One sample per dot, from the dot's center.
     vec4 t = texture(source, (cell + 0.5) / grid);

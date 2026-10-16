@@ -19,9 +19,10 @@ ShellRoot {
     property bool stripVisible: true
 
     // Services with no pane of their own: start them with the shell.
-    readonly property var services: [Power, Idle, Night, DropTerm, Lock]
+    readonly property var services: [Power, Idle, Night, DropTerm, Lock, DotBus]
 
     Wallpaper {}
+    World {}
 
     Variants {
         model: shell.stripVisible ? Quickshell.screens : []

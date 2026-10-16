@@ -1,12 +1,15 @@
 import QtQuick
 import Quickshell
+import Quickshell.Hyprland
 import Quickshell.Wayland
 import qs
 
 // Wallpaper layer (replaces awww): the `wallpaper` token, cropped to fill,
 // on every screen. Set it with:
 //   dotshell ipc call tokens set wallpaper ~/wallpaper/some.jpg
-// Phase 4/5 add the dots mode, parallax and per-workspace scrolling.
+// Parallax: the image is a little wider than the screen and slides a step per
+// workspace, slower than the world layer's panels (panes/World.qml).
+// Phase 5 adds the dots and off modes.
 Variants {
     model: Quickshell.screens
 
@@ -27,12 +30,30 @@ Variants {
         WlrLayershell.layer: WlrLayer.Background
         WlrLayershell.namespace: "dotshell-wallpaper"
 
+        // Fraction of the screen width the image moves per workspace, over 10.
+        readonly property real step: 0.02
+        readonly property int span: 10
+        readonly property HyprlandMonitor monitor: Hyprland.monitorFor(screen)
+        property int wsId: 1
+        readonly property int liveWs: monitor?.activeWorkspace?.id ?? 1
+        onLiveWsChanged: if (liveWs > 0)
+            wsId = liveWs
+
         Image {
             id: image
-            anchors.fill: parent
+            width: win.width * (1 + win.step * (win.span - 1))
+            height: win.height
+            x: -win.width * win.step * (Math.min(win.span, Math.max(1, win.wsId)) - 1)
+
+            Behavior on x {
+                NumberAnimation {
+                    duration: 380
+                    easing.type: Easing.OutCubic
+                }
+            }
             source: Tokens.wallpaper ? "file://" + Tokens.wallpaper : ""
             fillMode: Image.PreserveAspectCrop
-            sourceSize: Qt.size(win.width, win.height)
+            sourceSize: Qt.size(width, height)
             asynchronous: true
             smooth: true
             opacity: status === Image.Ready ? 1 : 0

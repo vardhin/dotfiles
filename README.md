@@ -40,21 +40,26 @@ dotfiles/
 │   ├── Tokens.qml / Eras.qml   era, pitch, dot size, depth, wallpaper, night; persisted in
 │   │                           ~/.local/state/dotshell/tokens.json (IPC target: tokens)
 │   ├── Ui.qml                  which pane is open, on which screen
-│   ├── DotSurface.qml          low-res QML canvas → LED dots (shaders/dot.frag)
+│   ├── DotSurface.qml          low-res QML canvas → LED dots (shaders/dot.frag); optional shape cut
+│   ├── DeskPanel.qml, Shapes.js  one desktop panel (clock sign note image mpris pixels) and its outlines
 │   ├── Pane.qml                a floating LED pane (layer-shell window + DotSurface)
 │   ├── TopStrip.qml            workspaces | clock / ticker | status words, tray
 │   ├── DotText DotLabel DotButton DotInput VuBar Marquee FlapText Frame Rule Line StatusWord
 │   ├── services/               Notifs (the notification daemon), Audio, Brightness, Power
 │   │                           (+ battery monitor), Net, Bt, Idle (+ logind bridge), Lock (PAM),
-│   │                           Night, DropTerm, Notify
+│   │                           Night, DropTerm, Notify, Panels (desktop panels, panels.json),
+│   │                           DotBus (the `dot` socket)
 │   ├── panes/                  Launcher, Messages, ToastStack, Osd, Session, Cheatsheet,
-│   │                           Calendar, Audio, Brightness, Wifi, Bluetooth, Battery,
-│   │                           LockScreen, Polkit, Wallpaper
+│   │                           Calendar, Audio, Brightness, Wifi, Bluetooth, Battery, Eras,
+│   │                           Packages, LockScreen, Polkit, Wallpaper (parallax), World
+│   │                           (desktop panels; slides with workspaces)
 │   ├── pam/dotshell            PAM stack for the lock screen (pam_unix only)
 │   ├── shaders/                dot.frag(.qsb) for DotSurface; warm.glsl, the Hyprland
-│   │                           night-warmth screen shader
-│   └── build-shaders.sh        recompile .qsb after editing dot.frag (qt6-shadertools)
+│   │                           night-warmth screen shader (GLSL ES 3.00, like every screen shader)
+│   ├── build-shaders.sh        recompile .qsb after editing dot.frag (qt6-shadertools)
+│   └── (../../.local/bin/dot)  the `dot` CLI, linked to ~/.local/bin/dot
 ├── ghostty/.config/ghostty/    → ~/.config/ghostty  (Departure Mono pixel font, no chrome)
+├── fontconfig/.config/fontconfig/conf.d/   Departure Mono without antialiasing (hard pixels)
 ├── zsh/.zshrc                  → ~/.zshrc  (oh-my-zsh, powerlevel10k, eza, zoxide)
 ├── packages.txt                pacman packages
 ├── packages-aur.txt            AUR packages
@@ -104,4 +109,26 @@ dotshell ipc call tokens set depth 16      # era | 8 | 16 | 24
 dotshell ipc call strip toggle
 ```
 
-Binds: `Super D` toggles the strip, `Super Shift D` cycles eras, `Super Ctrl D` restarts the shell.
+Binds: `Super D` toggles the strip, `Super Shift D` cycles eras, `Super T` opens the era and display
+picker, `Super I` the package manager (pacman + yay), `Super Ctrl D` restarts the shell.
+
+### Desktop panels and the `dot` bus
+
+Panels are small LED boards on the desktop, behind windows. Each sits on one workspace and slides
+away with it. Drag one to move it; it snaps to the 12 px grid. They persist in
+`~/.local/state/dotshell/panels.json`. Scripts and agents drive them through
+`$XDG_RUNTIME_DIR/dotshell.sock` (one JSON object per line), or the `dot` CLI:
+
+```bash
+dot spawn sign --id rain --shape strip --at 28,6 --size 40x6 --text "RAIN CITY"
+dot spawn note --shape circle --at 72,6 --size 30x26 --ws 2 --text "hello"
+dot write rain "NEW TEXT";  dot move rain 30 8;  dot set rain --slot 2 --dot false
+dot pixels vis < frame.rgb     # raw RGB at the panel's dot size (dot list shows it)
+dot era tokyo;  dot display --pitch 5 --depth 16
+dot list;  dot rm rain
+```
+
+If you have your own `~/.config/fontconfig/fonts.conf` that sets antialiasing for every font,
+put the Departure Mono rule from `fontconfig/` at its end too: fontconfig applies edits in
+load order, and that file loads after `conf.d`.
+

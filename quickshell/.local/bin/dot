@@ -1,0 +1,184 @@
+#!/usr/bin/env python3
+"""dot: drive Dot Shell over its socket ($XDG_RUNTIME_DIR/dotshell.sock).
+
+  dot spawn note --shape circle --at 52,18 --size 32x28 [--id todo] [--ws 2]
+                 [--slot 1] [--raw] [--source FILE|PLAYER] [--text "..."]
+  dot write sign "RAIN CITY"
+  dot pixels vis < frame.rgb        raw RGB, panel resolution (see dot list)
+  dot move clock 60 20
+  dot set player --dot false        any panel field: --shape hex --ws 3 ...
+  dot rm note
+  dot list [--json]
+  dot era tokyo
+  dot display --pitch 5 --depth 16 [--size 80] [--wallpaper ~/w.jpg]
+  dot raw '{"cmd":"tokens"}'        send one request as-is
+
+Kinds: clock sign note image mpris pixels.
+Shapes: rect circle hex diamond strip, or an SVG path in a 0..100 box.
+Positions and sizes are grid units (12 px each).
+"""
+import base64
+import json
+import os
+import socket
+import sys
+
+SOCK = os.path.join(os.environ.get("XDG_RUNTIME_DIR", "/tmp"), "dotshell.sock")
+
+
+def die(msg, code=1):
+    print(f"dot: {msg}", file=sys.stderr)
+    sys.exit(code)
+
+
+def call(req):
+    s = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+    try:
+        s.connect(SOCK)
+    except OSError as e:
+        die(f"cannot reach Dot Shell at {SOCK} ({e.strerror}); is it running?")
+    s.sendall((json.dumps(req) + "\n").encode())
+    buf = b""
+    while not buf.endswith(b"\n"):
+        chunk = s.recv(65536)
+        if not chunk:
+            break
+        buf += chunk
+    s.close()
+    try:
+        reply = json.loads(buf)
+    except ValueError:
+        die("no reply from Dot Shell")
+    if not reply.get("ok"):
+        die(reply.get("error", "failed"))
+    return reply
+
+
+def pair(s, sep, what):
+    try:
+        a, b = s.lower().split(sep)
+        return int(a), int(b)
+    except ValueError:
+        die(f"{what} must look like 10{sep}20")
+
+
+def flags(args):
+    """--key value pairs (and bare --raw) into a dict."""
+    out, i = {}, 0
+    while i < len(args):
+        a = args[i]
+        if not a.startswith("--"):
+            die(f"unexpected argument {a!r}")
+        key = a[2:]
+        if key == "raw":
+            out["dot"] = False
+            i += 1
+            continue
+        if i + 1 >= len(args):
+            die(f"{a} needs a value")
+        out[key] = args[i + 1]
+        i += 2
+    return out
+
+
+def panel_fields(f):
+    """Map CLI flags onto panel fields."""
+    out = {}
+    for k, v in f.items():
+        if k == "at":
+            out["x"], out["y"] = pair(v, ",", "--at")
+        elif k == "size":
+            out["w"], out["h"] = pair(v, "x", "--size")
+        elif k == "ws":
+            out["workspace"] = int(v)
+        elif k == "dot":
+            if isinstance(v, str):
+                if v.lower() not in ("true", "false", "on", "off", "1", "0"):
+                    die("--dot takes true or false")
+                v = v.lower() in ("true", "on", "1")
+            out["dot"] = v
+        else:
+            out[k] = v
+    return out
+
+
+def show(panels):
+    if not panels:
+        print("no panels; try: dot spawn clock --at 4,6 --size 20x6")
+        return
+    print(f"{'ID':12} {'KIND':7} {'SHAPE':8} {'WS':>3} {'AT':>7} {'SIZE':>7} {'DOTS':>9}  TEXT/SOURCE")
+    for p in panels:
+        at = f"{p['x']},{p['y']}"
+        size = f"{p['w']}x{p['h']}"
+        dots = f"{p['cols']}x{p['rows']}"
+        shape = p["shape"] if len(p["shape"]) <= 8 else "path"
+        extra = p.get("text") or p.get("source") or ""
+        raw = "" if p.get("dot", True) else " (raw)"
+        print(f"{p['id']:12} {p['kind']:7} {shape:8} {p['workspace']:>3} {at:>7} {size:>7} {dots:>9}  {extra}{raw}")
+
+
+def main(argv):
+    if not argv or argv[0] in ("-h", "--help", "help"):
+        print(__doc__.strip())
+        return
+    cmd, rest = argv[0], argv[1:]
+
+    if cmd == "spawn":
+        if not rest:
+            die("spawn needs a kind")
+        req = {"cmd": "spawn", "kind": rest[0], **panel_fields(flags(rest[1:]))}
+        p = call(req)["panel"]
+        print(p["id"])
+    elif cmd == "write":
+        if len(rest) < 2:
+            die("usage: dot write ID TEXT")
+        call({"cmd": "write", "id": rest[0], "text": " ".join(rest[1:])})
+    elif cmd == "pixels":
+        if len(rest) != 1:
+            die("usage: dot pixels ID < frame.rgb")
+        pid = rest[0]
+        info = next((p for p in call({"cmd": "list"})["panels"] if p["id"] == pid), None)
+        if not info:
+            die(f"no panel {pid}")
+        w, h = info["cols"], info["rows"]
+        data = sys.stdin.buffer.read()
+        if len(data) < w * h * 3:
+            die(f"{pid} is {w}x{h} dots: needs {w * h * 3} bytes of RGB, got {len(data)}")
+        # Wrapped as a binary PPM, which the panel shows as an image directly.
+        ppm = f"P6 {w} {h} 255\n".encode() + data[: w * h * 3]
+        call({"cmd": "pixels", "id": pid, "w": w, "h": h, "data": base64.b64encode(ppm).decode()})
+    elif cmd == "move":
+        if len(rest) != 3:
+            die("usage: dot move ID X Y")
+        call({"cmd": "move", "id": rest[0], "x": int(rest[1]), "y": int(rest[2])})
+    elif cmd == "set":
+        if len(rest) < 3:
+            die("usage: dot set ID --field value ...")
+        call({"cmd": "set", "id": rest[0], "fields": panel_fields(flags(rest[1:]))})
+    elif cmd == "rm":
+        for pid in rest:
+            call({"cmd": "rm", "id": pid})
+    elif cmd == "list":
+        r = call({"cmd": "list"})
+        if "--json" in rest:
+            print(json.dumps(r["panels"], indent=2))
+        else:
+            show(r["panels"])
+    elif cmd == "era":
+        if len(rest) != 1:
+            die("usage: dot era NAME")
+        call({"cmd": "era", "name": rest[0]})
+    elif cmd == "display":
+        f = flags(rest)
+        req = {"cmd": "display"}
+        for k, v in f.items():
+            req["dotSize" if k == "size" else k] = v
+        print(json.dumps(call(req)["tokens"]))
+    elif cmd == "raw":
+        print(json.dumps(call(json.loads(" ".join(rest)))))
+    else:
+        die(f"unknown command {cmd!r}; dot --help")
+
+
+if __name__ == "__main__":
+    main(sys.argv[1:])
