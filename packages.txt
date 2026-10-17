@@ -54,6 +54,7 @@ nautilus
 
 # Network + bluetooth
 networkmanager
+power-profiles-daemon   # Dot Shell power profiles (services/Power.qml)
 bluez
 bluez-utils
 
