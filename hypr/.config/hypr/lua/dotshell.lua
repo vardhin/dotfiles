@@ -1,6 +1,6 @@
 -- Dot Shell ↔ Hyprland.
 --
--- Plugins (installed with hyprpm, loaded by `hyprpm reload` at start; loading
+-- Plugins (built by `install.sh --plugins`, loaded by lua/autostart.lua; loading
 -- one reloads this config, so the `if hl.plugin.X` blocks run once it is in):
 --   Hypr-DarkWindow  per-window GLSL: shaders/dotled.glsl, shaders/dotglass.glsl
 --   dynamic-cursors  the cursor stretches with speed, shake to find it
@@ -47,6 +47,8 @@ if dw then
     hl.config({ plugin = { darkwindow = { load_shaders = "" } } })
     dw.load_shader("dotled", { path = shaderDir .. "dotled.glsl", fade_in_speed = 4, fade_out_speed = 3 })
     dw.load_shader("dotglass", { path = shaderDir .. "dotglass.glsl", fade_in_speed = 4, fade_out_speed = 3 })
+    -- The theme flip: close in 0.5 s, open in 0.6 s (shaders/dotflip.glsl).
+    dw.load_shader("dotflip", { path = shaderDir .. "dotflip.glsl", fade_in_speed = 5, fade_out_speed = 6 })
 end
 
 local active = {}
@@ -82,7 +84,9 @@ function dotshell.apply()
 
     local grid = { pitch = s.pitch, dotSize = s.dotSize, square = s.square and 1 or 0 }
 
-    local led = { lit = s.lit, mid = s.mid, unlit = s.unlit }
+    -- Half brightness: the lit ramp is brighter than most windows, and an
+    -- unfocused window must read as dimmer than the focused one.
+    local led = { lit = s.lit, glow = s.mid, unlit = s.unlit, bright = 0.5 }
     for k, v in pairs(grid) do led[k] = v end
     active[#active + 1] = hl.window_rule({
         name = "dotshell-winshade-led",
@@ -102,6 +106,49 @@ function dotshell.apply()
 end
 
 dotshell.apply()
+
+-- ── Theme flip ──────────────────────────────────────────────────────
+-- Dot Shell's Export calls this around an era change, for the windows of
+-- the apps it recolors live (services/Export.qml, `live`):
+--   dotshell.flip("close", { "0x…", … }, { pitch, dotSize, square, back, rim, gap })
+--     each window's dots turn over to the blank board and stay there
+--   dotshell.flip("open")
+--     every closed window turns back over, now in the new colors
+-- A dispatched shader wins over the winshade rules, so a shaded window
+-- leaves its dots for the flip and takes them back afterwards. Dispatching
+-- the same shader again removes it, so the dispatcher is kept per window.
+-- Survives config reloads; the shell opens everything again when it starts.
+dotshell.flipped = dotshell.flipped or {}
+
+function dotshell.flip(phase, addrs, look)
+    if not dw then
+        return
+    end
+    if phase == "close" then
+        look = look or {}
+        local args = {
+            pitch = look.pitch or 5,
+            dotSize = look.dotSize or 0.7,
+            square = look.square and 1 or 0,
+            back = look.back or { 0.1, 0.1, 0.1 },
+            rim = look.rim or { 1, 1, 1 },
+            gap = look.gap or { 0, 0, 0 },
+        }
+        for _, a in ipairs(addrs or {}) do
+            if not dotshell.flipped[a] then
+                local shade = dw.dsp_shade({ shader = "dotflip", args = args, window = "address:" .. a })
+                if pcall(shade) then
+                    dotshell.flipped[a] = shade
+                end
+            end
+        end
+    else
+        for _, shade in pairs(dotshell.flipped) do
+            pcall(shade)
+        end
+        dotshell.flipped = {}
+    end
+end
 
 -- ── dynamic-cursors ─────────────────────────────────────────────────
 -- Stretch with speed (a pixel cursor smeared like a fast LED), shake to find

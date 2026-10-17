@@ -11,7 +11,7 @@ base-devel
 hyprland
 hyprpicker
 xdg-desktop-portal-hyprland
-# hyprpm builds the plugins (install.sh --plugins): DarkWindow, dynamic-cursors
+# install.sh --plugins builds the Hyprland plugins (DarkWindow, dynamic-cursors) with these
 cmake
 meson
 cpio

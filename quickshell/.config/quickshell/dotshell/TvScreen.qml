@@ -10,7 +10,7 @@ import qs.services
 // seek whenever the two drift apart by more than a third of a second.
 //
 // Lives in a Pane's overlay (screen px). A track that is still streaming, not
-// saved yet, shows its art until the file lands.
+// saved yet, shows its art (plain, not dots) until the file lands.
 Item {
     id: root
 
@@ -69,12 +69,13 @@ Item {
         visible: false
         layer.enabled: true
     }
-    // No video: the art, through the same dots.
+    // No video: the art as it is (thumbnails turn to mush as dots).
     Image {
         id: still
         anchors.fill: parent
-        visible: false
-        layer.enabled: true
+        visible: !root.hasVideo
+        smooth: true
+        mipmap: true
         source: !root.hasVideo ? Media.art : ""
         fillMode: Image.PreserveAspectFit
         asynchronous: true
@@ -82,9 +83,10 @@ Item {
 
     ShaderEffect {
         anchors.fill: parent
+        visible: root.hasVideo
         readonly property var sc: Tv.screen
         readonly property var era: Tokens.current
-        property variant source: root.hasVideo ? video : still
+        property variant source: video
         property size size: Qt.size(width * root.dpr, height * root.dpr)
         property real pitch: sc.pitch * root.dpr
         property real dotSize: sc.dotSize / 100

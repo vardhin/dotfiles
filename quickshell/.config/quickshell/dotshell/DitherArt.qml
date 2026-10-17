@@ -1,6 +1,7 @@
 import QtQuick
 
 // A picture in era colors, dithered one texel per dot (shaders/art.frag).
+// Cover art and thumbnails use PlainArt instead: as they are, not as dots.
 // Use inside a DotSurface canvas, sized in dots:
 //   DitherArt { width: 32; height: 32; source: Media.art }
 // Shows nothing until the image loads, so the board's unlit dots stay.

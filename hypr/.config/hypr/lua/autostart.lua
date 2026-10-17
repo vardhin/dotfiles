@@ -7,10 +7,10 @@ hl.on("hyprland.start", function()
     -- Boot sound at mpv's own volume; the sink volume is never touched.
     hl.exec_cmd("mpv --no-video --really-quiet --volume=60 ~/.config/hypr/sounds/boot.wav")
 
-    -- Plugins (window shaders, dynamic cursor), built by hyprpm against this
-    -- Hyprland; lua/dotshell.lua configures them once they have loaded.
-    -- -n: no notification when there is nothing to load.
-    hl.exec_cmd("hyprpm reload -n")
+    -- Plugins (window shaders, dynamic cursor), built by `install.sh --plugins`
+    -- against this Hyprland; lua/dotshell.lua configures them once they have
+    -- loaded. Hyprland refuses ones built for another version.
+    hl.exec_cmd("sh -c 'for p in ~/.local/lib/hypr-plugins/*.so; do [ -e \"$p\" ] && hyprctl plugin load \"$p\"; done'")
 
     -- Dot Shell (Quickshell) is the whole shell: strip, wallpaper,
     -- notifications, OSD, launcher, panes, lock and idle, polkit agent, screen

@@ -61,6 +61,9 @@ Singleton {
             return a;
         if (tvEntry?.thumb)
             return "file://" + tvEntry.thumb;
+        // An anime episode (dotanime plays it in mpv): the show's cover.
+        if (!tvId && Anime.playing && (player?.identity ?? "").toLowerCase().includes("mpv"))
+            return Anime.playing.cover ?? "";
         return tvId ? "https://i.ytimg.com/vi/" + tvId + "/hqdefault.jpg" : "";
     }
     readonly property string name: (player?.identity ?? "").toUpperCase()

@@ -54,7 +54,10 @@ PanelWindow {
     WlrLayershell.keyboardFocus: shown ? keyboard : WlrKeyboardFocus.None
 
     // Never wider or taller than the screen at the current pitch.
-    readonly property int maxCols: screen ? Math.floor(screen.width / Tokens.pitch) : cols
+    // The side bar's columns are taken too when it reserves space (side on;
+    // SideBar.qml's 13 cols): the compositor already narrows the window.
+    readonly property int sideW: Tokens.side === "on" ? 13 * Tokens.pitch : 0
+    readonly property int maxCols: screen ? Math.floor((screen.width - sideW) / Tokens.pitch) : cols
     // The strip's rows are taken (the pane sits under it): its real height,
     // which TopStrip rounds to whole device px.
     readonly property int stripH: !Tokens.top ? 0 : Ui.strips.find(w => w.screen === screen)?.height ?? 11 * Tokens.pitch

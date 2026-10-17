@@ -1,0 +1,835 @@
+#!/usr/bin/env python3
+"""dotanime: anime for Dot Shell's MEDIA pane (the ANIME page), through ani-cli.
+
+  dotanime featured [--fresh]     trending now, from AniList (JSON)
+  dotanime genres                 the categories (JSON)
+  dotanime genre NAME             the most popular in a category (JSON)
+  dotanime search QUERY           AniList search (JSON)
+  dotanime info ID                one show, with its synopsis (JSON)
+  dotanime episodes ID [--fresh]  the show on ani-cli's source: the matched
+                                  title, the other candidates, the episodes
+  dotanime source ID N            match the show to ani-cli's Nth result instead
+  dotanime state                  liked, watchlist, downloads, progress, jobs
+  dotanime play ID EP             a saved episode plays from disk, any other
+                                  streams through ani-cli; progress is kept
+  dotanime get ID EP...|all       download episodes (one at a time, queued)
+  dotanime prefetch ID            toggle: keep the next episodes downloaded
+  dotanime cancel ID [EP]|all     drop queued downloads (and the running one)
+  dotanime rm ID EP|all           delete saved episodes
+  dotanime like ID | watch ID     toggle the show in LIKED or the WATCHLIST
+  dotanime mode [sub|dub|toggle]
+
+Shows are AniList ids: AniList gives the covers, trending and categories;
+ani-cli (its search and episode menus answered by this script, linked as a
+`rofi` on PATH) finds and plays them. State is in
+${XDG_STATE_HOME}/dotshell/anime.json and anime-jobs.json; covers and AniList
+answers are cached in ${XDG_CACHE_HOME}/dotanime. Episodes are saved to
+${DOTANIME_DIR:-~/Video/Anime}/<title>/ as ani-cli names them
+("<title> Episode <n>.mp4", subtitles beside them). DOTANIME_QUALITY (720)
+is the download quality, DOTANIME_PREFETCH (3) how many episodes prefetch
+keeps ahead.
+"""
+import concurrent.futures
+import difflib
+import fcntl
+import hashlib
+import json
+import os
+import re
+import shutil
+import signal
+import socket
+import subprocess
+import sys
+import tempfile
+import threading
+import time
+import urllib.request
+
+HOME = os.path.expanduser("~")
+STATE_DIR = os.path.join(os.environ.get("XDG_STATE_HOME", HOME + "/.local/state"), "dotshell")
+STATE = os.path.join(STATE_DIR, "anime.json")
+JOBS = os.path.join(STATE_DIR, "anime-jobs.json")
+LOCK = os.path.join(STATE_DIR, "anime.lock")
+WORKER_LOCK = os.path.join(STATE_DIR, "anime-worker.lock")
+LOG = os.path.join(STATE_DIR, "dotanime.log")
+CACHE = os.path.join(os.environ.get("XDG_CACHE_HOME", HOME + "/.cache"), "dotanime")
+COVERS = os.path.join(CACHE, "covers")
+SHIM = os.path.join(CACHE, "shim")
+LIB = os.path.expanduser(os.environ.get("DOTANIME_DIR", "~/Video/Anime")).rstrip("/")
+SOCK = os.path.join(os.environ.get("XDG_RUNTIME_DIR", "/tmp"), "dotanime.sock")
+QUALITY = os.environ.get("DOTANIME_QUALITY", "720")
+PREFETCH = int(os.environ.get("DOTANIME_PREFETCH", "3"))
+ANILIST = "https://graphql.anilist.co"
+UA = "dotanime (Dot Shell)"
+EP_RE = re.compile(r"^(.*) Episode (\S+)\.mp4$")
+# A show still airing gets new episodes: its episode list is read again after this.
+EPISODES_TTL = 6 * 3600
+
+
+def die(msg, code=1):
+    print(f"dotanime: {msg}", file=sys.stderr)
+    sys.exit(code)
+
+
+def log(msg):
+    os.makedirs(STATE_DIR, exist_ok=True)
+    with open(LOG, "a") as f:
+        f.write(time.strftime("%F %T ") + msg.rstrip() + "\n")
+
+
+def out(value):
+    json.dump(value, sys.stdout, ensure_ascii=False)
+    sys.stdout.write("\n")
+
+
+# ── State files ─────────────────────────────────────────────────────────
+def load(path, default):
+    try:
+        with open(path) as f:
+            return json.load(f)
+    except (OSError, ValueError):
+        return default
+
+
+def save(path, value):
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    tmp = f"{path}.{os.getpid()}.tmp"
+    with open(tmp, "w") as f:
+        json.dump(value, f, indent=1, ensure_ascii=False)
+    os.replace(tmp, path)
+
+
+def blank_state():
+    return {"mode": "sub", "liked": [], "watch": [], "prefetch": [], "progress": {},
+            "items": {}, "match": {}, "playing": None, "error": ""}
+
+
+def blank_jobs():
+    return {"current": None, "queue": [], "failed": []}
+
+
+class Locked:
+    """Read-modify-write of one JSON file, safe across dotanime processes."""
+
+    def __init__(self, path, default):
+        self.path, self.default = path, default
+
+    def __enter__(self):
+        os.makedirs(STATE_DIR, exist_ok=True)
+        self.lock = open(LOCK, "w")
+        fcntl.flock(self.lock, fcntl.LOCK_EX)
+        self.value = load(self.path, self.default())
+        for k, v in self.default().items():
+            self.value.setdefault(k, v)
+        return self.value
+
+    def __exit__(self, kind, *_):
+        if kind is None:
+            save(self.path, self.value)
+        fcntl.flock(self.lock, fcntl.LOCK_UN)
+        self.lock.close()
+
+
+def state():
+    s = load(STATE, blank_state())
+    for k, v in blank_state().items():
+        s.setdefault(k, v)
+    return s
+
+
+def jobs():
+    j = load(JOBS, blank_jobs())
+    for k, v in blank_jobs().items():
+        j.setdefault(k, v)
+    return j
+
+
+# ── AniList ─────────────────────────────────────────────────────────────
+FIELDS = """
+fragment m on Media {
+  id title { romaji english } synonyms coverImage { large color }
+  episodes format seasonYear averageScore genres status
+  nextAiringEpisode { episode }
+}"""
+
+
+def anilist(query, variables=None, ttl=3600, fresh=False):
+    """A GraphQL answer, cached for `ttl` s; a stale answer beats none."""
+    body = json.dumps({"query": query + FIELDS if "...m" in query else query, "variables": variables or {}})
+    path = os.path.join(CACHE, "q", hashlib.sha1(body.encode()).hexdigest() + ".json")
+    try:
+        if not fresh and time.time() - os.path.getmtime(path) < ttl:
+            return load(path, None)["data"]
+    except (OSError, TypeError, KeyError):
+        pass
+    req = urllib.request.Request(ANILIST, data=body.encode(), headers={
+        "Content-Type": "application/json", "Accept": "application/json", "User-Agent": UA})
+    try:
+        with urllib.request.urlopen(req, timeout=15) as r:
+            got = json.load(r)
+        if got.get("errors") and not got.get("data"):
+            raise OSError(got["errors"][0].get("message", "error"))
+        save(path, got)
+        return got["data"]
+    except (OSError, ValueError) as e:
+        old = load(path, None)
+        if old:
+            return old["data"]
+        die(f"AniList: {e}", 2)
+
+
+def cover_path(aid):
+    return os.path.join(COVERS, f"{aid}-l.jpg")
+
+
+def fetch_cover(aid, url):
+    path = cover_path(aid)
+    if not url or os.path.exists(path):
+        return
+    os.makedirs(COVERS, exist_ok=True)
+    try:
+        req = urllib.request.Request(url, headers={"User-Agent": UA})
+        with urllib.request.urlopen(req, timeout=10) as r:
+            data = r.read()
+        tmp = f"{path}.{os.getpid()}.{threading.get_ident()}.tmp"
+        with open(tmp, "wb") as f:
+            f.write(data)
+        os.replace(tmp, path)
+    except OSError:
+        pass
+
+
+def fetch_covers(items):
+    todo = [(i["id"], i.get("coverUrl")) for i in items if not os.path.exists(cover_path(i["id"]))]
+    if todo:
+        with concurrent.futures.ThreadPoolExecutor(8) as pool:
+            list(pool.map(lambda t: fetch_cover(*t), todo))
+
+
+def meta(m):
+    """An AniList Media as the shell shows it."""
+    t = m.get("title") or {}
+    title = t.get("english") or t.get("romaji") or "?"
+    nxt = (m.get("nextAiringEpisode") or {}).get("episode")
+    return {
+        "id": m["id"],
+        "title": title,
+        "alt": t.get("romaji") if t.get("romaji") and t.get("romaji") != title else "",
+        "synonyms": (m.get("synonyms") or [])[:4],
+        "coverUrl": (m.get("coverImage") or {}).get("large") or "",
+        "color": (m.get("coverImage") or {}).get("color") or "",
+        "episodes": m.get("episodes"),
+        "aired": nxt - 1 if nxt else m.get("episodes"),
+        "format": (m.get("format") or "").replace("_", " "),
+        "year": m.get("seasonYear"),
+        "score": m.get("averageScore"),
+        "status": m.get("status") or "",
+        "genres": m.get("genres") or [],
+    }
+
+
+def shown(item):
+    """With `cover`: the cached file when there is one, else the URL."""
+    i = dict(item)
+    p = cover_path(i["id"])
+    i["cover"] = "file://" + p if os.path.exists(p) else i.get("coverUrl", "")
+    return i
+
+
+def listing(media):
+    items = [meta(m) for m in media]
+    fetch_covers(items)
+    return [shown(i) for i in items]
+
+
+def page(query, variables=None, ttl=6 * 3600, fresh=False):
+    return listing(anilist(query, variables, ttl, fresh)["Page"]["media"])
+
+
+def item(aid, s=None):
+    """A show's meta: kept in the state for shows in a list, else AniList's."""
+    s = s or state()
+    got = s["items"].get(str(aid))
+    if got and "title" in got:
+        return got
+    data = anilist("query($id: Int) { Media(id: $id, type: ANIME) { ...m } }", {"id": int(aid)}, ttl=86400)
+    if not data or not data.get("Media"):
+        die(f"no show {aid}")
+    return meta(data["Media"])
+
+
+def keep(s, aid, m):
+    """Remember a show's meta in the state (lists, downloads, progress)."""
+    old = s["items"].get(str(aid), {})
+    s["items"][str(aid)] = {**m, **{k: old[k] for k in ("dir",) if k in old}}
+    fetch_cover(m["id"], m.get("coverUrl"))
+
+
+# ── ani-cli ─────────────────────────────────────────────────────────────
+# ani-cli asks rofi when not run from a terminal. This script, linked as
+# `rofi` first on PATH, answers: it writes each menu it is shown to
+# $DOTANIME_CAP and picks the anime that best matches $DOTANIME_WANT (or the
+# $DOTANIME_PICK-th); every other menu gets no answer, so ani-cli stops there.
+def norm(s):
+    return " ".join(re.sub(r"[^a-z0-9]+", " ", s.lower()).split())
+
+
+def similarity(title, wants):
+    t = norm(title)
+    return max((difflib.SequenceMatcher(None, t, norm(w)).ratio() for w in wants if w), default=0)
+
+
+def menu_mode():
+    args = sys.argv[1:]
+    prompt = args[args.index("-p") + 1].lower() if "-p" in args and args.index("-p") + 1 < len(args) else ""
+    data = sys.stdin.read()
+    kind = "anime" if "anime" in prompt else "episode" if "episode" in prompt else "other"
+    cap = os.environ.get("DOTANIME_CAP")
+    if cap:
+        with open(os.path.join(cap, kind), "w") as f:
+            f.write(data)
+    if kind != "anime":
+        return
+    lines = [l for l in data.splitlines() if l.strip()]
+    pick = os.environ.get("DOTANIME_PICK")
+    if pick:
+        line = next((l for l in lines if l.split(" ", 1)[0] == pick), "")
+    else:
+        wants = json.loads(os.environ.get("DOTANIME_WANT") or "[]")
+        line = max(lines, key=lambda l: similarity(l.split(" ", 1)[-1], wants), default="")
+    print(line)
+
+
+def shim():
+    rofi = os.path.join(SHIM, "rofi")
+    me = os.path.realpath(__file__)
+    if os.path.realpath(rofi) != me:
+        os.makedirs(SHIM, exist_ok=True)
+        tmp = rofi + f".{os.getpid()}"
+        os.symlink(me, tmp)
+        os.replace(tmp, rofi)
+    return SHIM
+
+
+def ani_env(**extra):
+    env = os.environ.copy()
+    env["PATH"] = shim() + ":" + env.get("PATH", "")
+    env.pop("DOTANIME_CAP", None)
+    env.pop("DOTANIME_PICK", None)
+    env.update({k: str(v) for k, v in extra.items() if v is not None})
+    return env
+
+
+def clean_query(s):
+    return " ".join(re.sub(r"[^\w' ]+", " ", s).split())
+
+
+def look(query, wants, pick, dub):
+    """One ani-cli search: (candidates, picked index, episodes)."""
+    with tempfile.TemporaryDirectory(prefix="dotanime.") as cap:
+        cmd = ["ani-cli"] + (["--dub"] if dub else []) + [query]
+        env = ani_env(DOTANIME_CAP=cap, DOTANIME_WANT=json.dumps(wants), DOTANIME_PICK=pick,
+                      ANI_CLI_PLAYER="debug")
+        try:
+            r = subprocess.run(cmd, env=env, stdin=subprocess.DEVNULL, capture_output=True, text=True, timeout=60)
+            said = r.stdout + r.stderr
+        except subprocess.TimeoutExpired:
+            return [], 0, [], "ani-cli took too long"
+        read = lambda k: [l for l in load_text(os.path.join(cap, k)).splitlines() if l.strip()]
+        shows = [l.split(" ", 1)[-1] for l in read("anime")]
+        eps = read("episode")
+    why = last_words(said)
+    if not shows:
+        # One result: ani-cli takes it without asking.
+        if not eps and "All links" not in said:
+            return [], 0, [], why
+        shows = [query]
+    index = int(pick) if pick else max(range(len(shows)), key=lambda i: similarity(shows[i], wants)) + 1
+    if not eps and "All links" in said:
+        eps = ["1"]  # a single episode plays without asking
+    return shows, index, eps, why
+
+
+def load_text(path):
+    try:
+        with open(path) as f:
+            return f.read()
+    except OSError:
+        return ""
+
+
+def last_words(text):
+    text = re.sub(r"\x1b\[[0-9;]*[A-Za-z]", "", text)
+    text = re.sub(r"[^\S\n\r]+", " ", re.sub(r"[\x00-\x09\x0b\x0c\x0e-\x1f\x7f]", "", text))
+    lines = [l.strip() for l in re.split(r"[\r\n]", text) if l.strip()]
+    return lines[-1] if lines else ""
+
+
+def resolve(aid, pick=None, fresh=False):
+    """The show on ani-cli's source: {query, index, title, candidates, episodes}."""
+    s = state()
+    m = s["match"].get(str(aid))
+    show = item(aid, s)
+    airing = show.get("status") in ("RELEASING", "NOT_YET_RELEASED")
+    if m and pick is None and not fresh and m.get("episodes") and not (airing and time.time() - m.get("at", 0) > EPISODES_TTL):
+        return m
+    wants = [show["title"], show.get("alt", "")] + show.get("synonyms", [])
+    if m and (pick is not None or (m.get("picked") and not fresh)):
+        # Keep the show the user picked; just read its episodes again.
+        queries = [m["query"]]
+        pick = str(pick if pick is not None else m["index"])
+    else:
+        queries = []
+        for q in [show["title"], show.get("alt", ""), " ".join(show["title"].split()[:3])]:
+            q = clean_query(q)
+            if q and q not in queries:
+                queries.append(q)
+        pick = None
+    best, why = None, ""
+    for q in queries:
+        shows, index, eps, why = look(q, wants, pick, s.get("mode") == "dub")
+        if not shows:
+            continue
+        score = 1 if pick else similarity(shows[index - 1], wants)
+        if not best or score > best["score"]:
+            best = {"query": q, "index": index, "title": shows[index - 1], "candidates": shows,
+                    "episodes": eps, "score": score, "picked": bool(pick), "at": time.time()}
+        if score >= 0.8:
+            break
+    if not best:
+        die(f"not found on ani-cli's source{': ' + why if why else ''}", 3)
+    with Locked(STATE, blank_state) as st:
+        st["match"][str(aid)] = best
+    return best
+
+
+def anime_dir(aid, s=None):
+    s = s or state()
+    it = s["items"].get(str(aid)) or {}
+    if it.get("dir"):
+        return it["dir"]
+    name = re.sub(r"[/\x00]+", "-", (it.get("title") or str(aid))).strip(". ") or str(aid)
+    return os.path.join(LIB, name)
+
+
+def saved(aid, s=None):
+    """{episode: path} of the episodes on disk."""
+    d = anime_dir(aid, s)
+    have = {}
+    try:
+        for f in os.listdir(d):
+            m = EP_RE.match(f)
+            if m:
+                have[m.group(2)] = os.path.join(d, f)
+    except OSError:
+        pass
+    return have
+
+
+def ep_key(e):
+    try:
+        return float(e)
+    except ValueError:
+        return float("inf")
+
+
+def ahead(aid, eps, s, n):
+    """The n episodes from where the show was left off."""
+    p = s["progress"].get(str(aid))
+    eps = sorted(eps, key=ep_key)
+    if not p:
+        return eps[:n]
+    at = ep_key(p["ep"])
+    start = [e for e in eps if ep_key(e) > at] if p.get("done") else [e for e in eps if ep_key(e) >= at]
+    return start[:n]
+
+
+# ── Downloads ───────────────────────────────────────────────────────────
+def enqueue(aid, eps):
+    s = state()
+    have = saved(aid, s)
+    with Locked(JOBS, blank_jobs) as j:
+        busy = {(q["aid"], q["ep"]) for q in j["queue"]}
+        cur = j["current"]
+        if cur:
+            busy.add((cur["aid"], cur["ep"]))
+        title = item(aid, s)["title"]
+        for e in eps:
+            if e not in have and (aid, e) not in busy:
+                j["queue"].append({"aid": aid, "ep": e, "title": title})
+        j["failed"] = [f for f in j["failed"] if not (f["aid"] == aid and f["ep"] in eps)]
+    subprocess.Popen([os.path.realpath(__file__), "_worker"], start_new_session=True,
+                     stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+
+
+def worker():
+    os.makedirs(STATE_DIR, exist_ok=True)
+    held = open(WORKER_LOCK, "w")
+    try:
+        fcntl.flock(held, fcntl.LOCK_EX | fcntl.LOCK_NB)
+    except OSError:
+        return  # one is running; it takes the new jobs too
+    while True:
+        with Locked(JOBS, blank_jobs) as j:
+            if not j["queue"]:
+                j["current"] = None
+                return
+            job = j["queue"].pop(0)
+            j["current"] = dict(job, pct=0, pid=None)
+        download(job)
+
+
+def download(job):
+    aid, ep = job["aid"], job["ep"]
+    try:
+        m = resolve(aid)
+    except SystemExit:
+        return fail(job, "not found on ani-cli's source")
+    s = state()
+    d = anime_dir(aid, s)
+    os.makedirs(d, exist_ok=True)
+    with Locked(STATE, blank_state) as st:
+        it = st["items"].setdefault(str(aid), item(aid, st))
+        it["dir"] = d
+    cmd = ["ani-cli", "-d", "-q", QUALITY, "-S", str(m["index"]), "-e", ep] + (["--dub"] if s.get("mode") == "dub" else []) + [m["query"]]
+    env = ani_env(ANI_CLI_DOWNLOAD_DIR=d, DOTANIME_PICK=m["index"])
+    p = subprocess.Popen(cmd, env=env, stdin=subprocess.DEVNULL, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
+                         start_new_session=True)
+    with Locked(JOBS, blank_jobs) as j:
+        if j["current"]:
+            j["current"]["pid"] = p.pid
+    tail, last, pct = "", 0.0, 0.0
+    while True:
+        chunk = os.read(p.stdout.fileno(), 4096)
+        if not chunk:
+            break
+        tail = (tail + chunk.decode(errors="replace"))[-2000:]
+        got = re.findall(r"(\d{1,3}(?:\.\d+)?)%", tail)
+        if got:
+            pct = min(100.0, float(got[-1]))
+        if time.time() - last > 1:
+            last = time.time()
+            with Locked(JOBS, blank_jobs) as j:
+                if j["current"] and j["current"]["aid"] == aid and j["current"]["ep"] == ep:
+                    j["current"]["pct"] = round(pct, 1)
+    code = p.wait()
+    log(f"get {aid} ep {ep}: exit {code}: {last_words(tail)}")
+    if ep in saved(aid):
+        return
+    # What a stopped download leaves: fragments, and the subtitles ani-cli
+    # fetches first.
+    for f in os.listdir(d):
+        if f" Episode {ep}." in f:
+            try:
+                os.remove(os.path.join(d, f))
+            except OSError:
+                pass
+    if (jobs()["current"] or {}).get("cancelled"):
+        return
+    fail(job, last_words(tail) or f"ani-cli exit {code}")
+
+
+def fail(job, why):
+    with Locked(JOBS, blank_jobs) as j:
+        j["failed"] = [f for f in j["failed"] if not (f["aid"] == job["aid"] and f["ep"] == job["ep"])][-9:]
+        j["failed"].append({"aid": job["aid"], "ep": job["ep"], "title": job.get("title", ""), "why": why[:120]})
+
+
+# ── Playing ─────────────────────────────────────────────────────────────
+def mpv_ask(prop):
+    try:
+        with socket.socket(socket.AF_UNIX) as c:
+            c.settimeout(1)
+            c.connect(SOCK)
+            c.sendall(json.dumps({"command": ["get_property", prop]}).encode() + b"\n")
+            buf = b""
+            while b"\n" not in buf:
+                got = c.recv(4096)
+                if not got:
+                    break
+                buf += got
+            for line in buf.splitlines():
+                r = json.loads(line)
+                if "error" in r:
+                    return r.get("data")
+    except (OSError, ValueError):
+        return None
+
+
+def mpv_quit():
+    try:
+        with socket.socket(socket.AF_UNIX) as c:
+            c.settimeout(1)
+            c.connect(SOCK)
+            c.sendall(b'{"command": ["quit"]}\n')
+        time.sleep(0.3)
+    except OSError:
+        pass
+
+
+def play(aid, ep):
+    s = state()
+    show = item(aid, s)
+    have = saved(aid, s)
+    mpv_quit()
+    with Locked(STATE, blank_state) as st:
+        keep(st, aid, show)
+        old = st["progress"].get(str(aid), {})
+        st["progress"][str(aid)] = {"ep": ep, "done": False, "pos": old.get("pos", 0) if old.get("ep") == ep else 0,
+                                    "at": time.time()}
+        # phase: finding (ani-cli looks for the stream), then playing (mpv answers)
+        st["playing"] = {"id": aid, "ep": ep, "title": show["title"], "cover": shown(show)["cover"],
+                         "local": ep in have, "since": time.time(), "phase": "finding"}
+        st["error"] = ""
+        prefetching = aid in st["prefetch"]
+    title = f"{show['title']} Episode {ep}"
+    if ep in have:
+        cmd = ["mpv", "--input-ipc-server=" + SOCK, "--force-media-title=" + title, have[ep]]
+        env = os.environ.copy()
+    else:
+        try:
+            m = resolve(aid)
+        except SystemExit:
+            return stopped(aid, ep, 0, "not found on ani-cli's source")
+        if ep not in m["episodes"]:
+            m = resolve(aid, fresh=True)
+        cmd = ["ani-cli", "--exit-after-play", "-S", str(m["index"]), "-e", ep] + (["--dub"] if s.get("mode") == "dub" else []) + [m["query"]]
+        env = ani_env(ANI_CLI_PLAYER_FLAGS="--input-ipc-server=" + SOCK, DOTANIME_PICK=m["index"])
+    if prefetching:
+        try:
+            enqueue(aid, ahead(aid, [e for e in resolve(aid)["episodes"] if ep_key(e) > ep_key(ep)], state(), PREFETCH))
+        except SystemExit:
+            pass
+    p = subprocess.Popen(cmd, env=env, stdin=subprocess.DEVNULL, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
+                         text=True, errors="replace")
+    pos, eof = [0.0], [False]
+
+    def watch():
+        told = False
+        while p.poll() is None:
+            v = mpv_ask("percent-pos")
+            if isinstance(v, (int, float)):
+                pos[0] = v
+                if not told:
+                    told = True
+                    with Locked(STATE, blank_state) as st:
+                        if (st.get("playing") or {}).get("id") == aid:
+                            st["playing"]["phase"] = "playing"
+            if mpv_ask("eof-reached") is True:
+                eof[0] = True
+            time.sleep(3)
+
+    threading.Thread(target=watch, daemon=True).start()
+    said = p.communicate()[0]
+    log(f"play {aid} ep {ep}: exit {p.returncode}: {last_words(said)}")
+    why = ""
+    if p.returncode not in (0, 4) and pos[0] == 0:
+        why = last_words(said)[:100] or "could not play"
+    stopped(aid, ep, 100 if eof[0] else pos[0], why)
+
+
+def stopped(aid, ep, pos, why):
+    with Locked(STATE, blank_state) as st:
+        if pos > 0 or why:
+            p = st["progress"].get(str(aid), {})
+            if p.get("ep") == ep:
+                p.update(pos=round(pos), done=pos >= 85)
+        if (st.get("playing") or {}).get("id") == aid and st["playing"].get("ep") == ep:
+            st["playing"] = None
+        if why:
+            st["error"] = why
+            st["errorId"] = aid
+            st["errorEp"] = ep
+
+
+# ── Commands ────────────────────────────────────────────────────────────
+GENRE_SKIP = {"Hentai"}
+
+
+def cmd_state():
+    s = state()
+    j = jobs()
+    pending = {}
+    for q in j["queue"] + ([j["current"]] if j["current"] else []):
+        pending.setdefault(q["aid"], []).append(q["ep"])
+    look_at = lambda ids: [shown(s["items"][str(i)]) for i in ids if str(i) in s["items"]]
+    downloads = []
+    for k, it in s["items"].items():
+        have = sorted(saved(int(k), s), key=ep_key)
+        if have or int(k) in pending:
+            downloads.append(dict(shown(it), saved=have, pending=pending.get(int(k), [])))
+    downloads.sort(key=lambda d: -max([os.path.getmtime(p) for p in saved(d["id"], s).values()] or [time.time()]))
+    keep_ids = set(s["liked"]) | set(s["watch"]) | {d["id"] for d in downloads}
+    fetch_covers([s["items"][str(i)] for i in keep_ids if str(i) in s["items"]])
+    playing = s.get("playing")
+    # A player that died without saying so (killed, crashed) is not playing.
+    if playing and time.time() - playing.get("since", 0) > 90 and not os.path.exists(SOCK):
+        playing = None
+    out({
+        "mode": s["mode"],
+        "liked": look_at(s["liked"]),
+        "watch": look_at(s["watch"]),
+        "downloads": downloads,
+        "progress": s["progress"],
+        "prefetch": s["prefetch"],
+        "playing": playing,
+        "error": s.get("error", ""),
+        "errorId": s.get("errorId"),
+        "errorEp": s.get("errorEp", ""),
+        "jobs": {"current": j["current"], "queue": j["queue"], "failed": j["failed"]},
+    })
+
+
+def cmd_episodes(aid, fresh):
+    m = resolve(aid, fresh=fresh)
+    s = state()
+    out({"id": aid, "title": m["title"], "index": m["index"], "candidates": m["candidates"],
+         "episodes": m["episodes"], "saved": sorted(saved(aid, s), key=ep_key)})
+
+
+def toggle(listname, aid):
+    show = item(aid)
+    with Locked(STATE, blank_state) as st:
+        if aid in st[listname]:
+            st[listname].remove(aid)
+        else:
+            st[listname].insert(0, aid)
+            keep(st, aid, show)
+
+
+def parse_eps(aid, args):
+    if args == ["all"]:
+        return resolve(aid)["episodes"]
+    eps = []
+    for a in args:
+        m = re.fullmatch(r"(\d+)-(\d+)", a)
+        if m:
+            all_eps = resolve(aid)["episodes"]
+            lo, hi = int(m.group(1)), int(m.group(2))
+            eps += [e for e in all_eps if lo <= ep_key(e) <= hi]
+        else:
+            eps.append(a)
+    return eps
+
+
+def main():
+    if os.path.basename(sys.argv[0]) == "rofi":
+        return menu_mode()
+    a = sys.argv[1:]
+    if not a or a[0] in ("-h", "--help", "help"):
+        print(__doc__.strip())
+        return
+    cmd, rest = a[0], a[1:]
+    fresh = "--fresh" in rest
+    rest = [r for r in rest if r != "--fresh"]
+    need = lambda n: rest[:n] if len(rest) >= n else die(f"{cmd}: missing arguments; see dotanime --help")
+    aid = lambda: int(need(1)[0]) if need(1)[0].isdigit() else die(f"not an AniList id: {rest[0]}")
+    if cmd == "featured":
+        out(page("query { Page(perPage: 30) { media(type: ANIME, sort: TRENDING_DESC, isAdult: false) { ...m } } }",
+                 ttl=3 * 3600, fresh=fresh))
+    elif cmd == "genres":
+        g = anilist("query { GenreCollection }", ttl=7 * 86400, fresh=fresh)["GenreCollection"]
+        out([x for x in g if x not in GENRE_SKIP])
+    elif cmd == "genre":
+        out(page("query($g: String) { Page(perPage: 40) { media(type: ANIME, genre: $g, sort: POPULARITY_DESC, isAdult: false) { ...m } } }",
+                 {"g": " ".join(need(1) and rest)}, fresh=fresh))
+    elif cmd == "search":
+        q = " ".join(need(1) and rest)
+        out(page("query($q: String) { Page(perPage: 30) { media(type: ANIME, search: $q, sort: SEARCH_MATCH, isAdult: false) { ...m } } }",
+                 {"q": q}, ttl=3600, fresh=fresh))
+    elif cmd == "info":
+        i = aid()
+        data = anilist("query($id: Int) { Media(id: $id, type: ANIME) { ...m description(asHtml: false) studios(isMain: true) { nodes { name } } } }",
+                       {"id": i}, ttl=86400, fresh=fresh)["Media"]
+        m = meta(data)
+        fetch_cover(i, m["coverUrl"])
+        desc = re.sub(r"<[^>]+>", "", data.get("description") or "")
+        desc = re.sub(r"\s*\(Source:[^)]*\)\s*$", "", desc.replace("&quot;", '"').replace("&amp;", "&")).strip()
+        out(dict(shown(m), description=" ".join(desc.split()),
+                 studio=", ".join(n["name"] for n in (data.get("studios") or {}).get("nodes", []))))
+    elif cmd == "episodes":
+        cmd_episodes(aid(), fresh)
+    elif cmd == "source":
+        i = aid()
+        resolve(i, pick=int(need(2)[1]))
+        cmd_episodes(i, False)
+    elif cmd == "state":
+        cmd_state()
+    elif cmd == "play":
+        play(aid(), need(2)[1])
+    elif cmd == "get":
+        i = aid()
+        need(2)
+        with Locked(STATE, blank_state) as st:
+            keep(st, i, item(i, st))
+        enqueue(i, parse_eps(i, rest[1:]))
+    elif cmd == "prefetch":
+        i = aid()
+        with Locked(STATE, blank_state) as st:
+            on = i not in st["prefetch"]
+            if on:
+                st["prefetch"].append(i)
+                keep(st, i, item(i, st))
+            else:
+                st["prefetch"].remove(i)
+        if on:
+            enqueue(i, ahead(i, resolve(i)["episodes"], state(), PREFETCH))
+    elif cmd == "cancel":
+        which = need(1)[0]
+        ep = rest[1] if len(rest) > 1 else None
+        hit = lambda q: which == "all" or str(q["aid"]) == which and (ep is None or q["ep"] == ep)
+        with Locked(JOBS, blank_jobs) as j:
+            j["queue"] = [q for q in j["queue"] if not hit(q)]
+            j["failed"] = [f for f in j["failed"] if not hit(f)]
+            cur = j["current"]
+            if cur and hit(cur):
+                cur["cancelled"] = True
+        if cur and cur.get("pid") and cur.get("cancelled"):
+            try:
+                os.killpg(cur["pid"], signal.SIGTERM)
+            except OSError:
+                pass
+    elif cmd == "rm":
+        i = aid()
+        have = saved(i)
+        eps = list(have) if need(2)[1] == "all" else rest[1:]
+        for e in eps:
+            if e in have:
+                base = have[e][:-4]
+                for ext in (".mp4", ".vtt", ".srt"):
+                    try:
+                        os.remove(base + ext)
+                    except OSError:
+                        pass
+        d = anime_dir(i)
+        try:
+            os.rmdir(d)
+        except OSError:
+            pass
+        # Touch the state so the shell reads it again.
+        with Locked(STATE, blank_state):
+            pass
+    elif cmd in ("like", "watch"):
+        toggle("liked" if cmd == "like" else "watch", aid())
+    elif cmd == "mode":
+        want = rest[0] if rest else "toggle"
+        if want not in ("sub", "dub", "toggle"):
+            die("mode is sub, dub or toggle")
+        with Locked(STATE, blank_state) as st:
+            st["mode"] = ("dub" if st["mode"] == "sub" else "sub") if want == "toggle" else want
+            st["match"] = {k: dict(v, at=0) for k, v in st["match"].items()}
+        print(st["mode"])
+    elif cmd == "_worker":
+        worker()
+    else:
+        die(f"unknown command {cmd}; see dotanime --help")
+
+
+if __name__ == "__main__":
+    try:
+        main()
+    except BrokenPipeError:
+        pass
+    except KeyboardInterrupt:
+        sys.exit(130)

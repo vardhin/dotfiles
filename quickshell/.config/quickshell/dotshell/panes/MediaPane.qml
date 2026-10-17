@@ -4,7 +4,7 @@ import Quickshell.Wayland
 import qs
 import qs.services
 
-// MEDIA (Super M, or the strip's now-playing word). Four pages, Tab switches.
+// MEDIA (Super M, or the strip's now-playing word). Five pages, Tab switches.
 //
 // NOW: whatever plays on MPRIS (services/Media.qml): dithered art, title,
 // artist, a seek bar, transport and a spectrum. Space plays or pauses,
@@ -17,6 +17,8 @@ import qs.services
 // Enter plays, Ctrl Q queues, Ctrl E plays next, Ctrl L adds to or drops from
 // the target list, Ctrl D deletes (twice), Ctrl G saves a YouTube result
 // without playing it. A YouTube result that is not saved streams and saves.
+// ANIME: covers to browse and search, categories, likes, a watchlist and
+// downloads, through ani-cli (panes/AnimePage.qml, services/Anime.qml).
 // LISTS: playlists, then the YouTube Music stations (♪, read-only). Enter
 // plays, Ctrl R shuffles, Ctrl T makes it the target for Ctrl L, Ctrl O makes
 // a new list named after the text, Ctrl D drops it. SYNC (or Ctrl Y, here and
@@ -63,7 +65,7 @@ Pane {
     property int screenRow: 0
 
     property string page: "now"
-    readonly property var pages: ["now", "tv", "lists", "screen"]
+    readonly property var pages: ["now", "tv", "anime", "lists", "screen"]
 
     // ── TV page state ───────────────────────────────────────────────
     property string query: ""
@@ -121,6 +123,8 @@ Pane {
         Tv.watching = shown;
         if (p === "tv")
             tvInput.forceActiveFocus();
+        else if (p === "anime" && !Anime.show)
+            animePage.focusField();
         else if (p === "lists")
             listInput.forceActiveFocus();
         else
@@ -210,6 +214,9 @@ Pane {
         if (k === Qt.Key_Tab || k === Qt.Key_Backtab) {
             const i = pages.indexOf(page);
             show(pages[(i + (k === Qt.Key_Tab ? 1 : pages.length - 1)) % pages.length]);
+        } else if (page === "anime") {
+            if (!animePage.key(event))
+                return;
         } else if (page === "screen") {
             const n = Tv.screenOptions.length;
             if (k === Qt.Key_Down || k === Qt.Key_J)
@@ -292,7 +299,7 @@ Pane {
         visible: pane.shown && pane.tvShown
     }
 
-    // dotshell ipc call mediapane open tv   (now | tv | lists | screen)
+    // dotshell ipc call mediapane open tv   (now | tv | anime | lists | screen)
     IpcHandler {
         target: "mediapane"
 
@@ -324,7 +331,7 @@ Pane {
             Row {
                 spacing: 2
                 Repeater {
-                    model: [["now", "NOW"], ["tv", "TV"], ["lists", "LISTS"], ["screen", "SCREEN"]]
+                    model: [["now", "NOW"], ["tv", "TV"], ["anime", "ANIME"], ["lists", "LISTS"], ["screen", "SCREEN"]]
                     DotButton {
                         required property var modelData
                         text: modelData[1]
@@ -369,6 +376,25 @@ Pane {
             height: pane.screenH
         }
 
+        // ── ANIME ───────────────────────────────────────────────────
+        // The full height: tabs, then this, then the rule and two hint lines.
+        AnimePage {
+            id: animePage
+            visible: pane.page === "anime"
+            active: pane.shown && pane.page === "anime"
+            inner: pane.inner
+            surface: pane.surface
+            height: pane.avail - 4 * Tokens.lineDots - 6
+            onSummon: {
+                if (pane.shown)
+                    pane.show("anime");
+                else {
+                    pane.page = "anime";
+                    Ui.open("media", null);
+                }
+            }
+        }
+
         // ── NOW ─────────────────────────────────────────────────────
         Column {
             visible: pane.page === "now"
@@ -389,7 +415,7 @@ Pane {
                     border.color: Tokens.slot1
                     opacity: 0.5
                 }
-                DitherArt {
+                PlainArt {
                     id: artPic
                     visible: now.art > 0
                     width: now.art
@@ -724,6 +750,8 @@ Pane {
         // Key hints, two lines at most.
         Repeater {
             model: {
+                if (pane.page === "anime")
+                    return animePage.hints;
                 if (!pane.wide)
                     return ["TAB PAGE  ENTER"];
                 if (pane.page === "now")

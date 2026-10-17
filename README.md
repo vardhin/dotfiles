@@ -15,7 +15,8 @@ cd ~/dotfiles
                         # (3 variants, from git), cursor + icon theme in gsettings
 ./install.sh --link     # only (re)link the modules (then reloads a running Hyprland)
 ./install.sh --dry-run  # show what stow would do
-./install.sh --plugins  # build + enable the Hyprland plugins (hyprpm): Hypr-DarkWindow, dynamic-cursors
+./install.sh --plugins  # build + load the Hyprland plugins (no hyprpm, no sudo): Hypr-DarkWindow, dynamic-cursors;
+                        # rerun after a Hyprland update
 sudo system/install.sh  # greeter (greetd) + boot splash (plymouth); see Login and boot
 ```
 
@@ -63,7 +64,7 @@ dotfiles/
 │   ├── services/               Notifs (the notification daemon), Audio, Brightness, Power
 │   │                           (+ battery monitor), Net, Bt, Idle (+ logind bridge), Lock (PAM),
 │   │                           ScreenShader, DropTerm, Notify, Panels (desktop panels, panels.json),
-│   │                           DotBus (the `dot` socket), Export (era → Ghostty, Neovim, GTK, Qt,
+│   │                           DotBus (the `dot` socket), Export (era → Ghostty, Neovim, GTK, Qt, VSCode,
 │   │                           Firefox, rmpc, cava, Dot TV's LED shader), Media (MPRIS + cava), Tv
 │   │                           (Dot TV library, SCREEN settings), Sys (CPU, memory, temperature),
 │   │                           Capture (screenshots, recording, color picker), Clip (clipboard history),
@@ -84,9 +85,10 @@ dotfiles/
 │   │                           on the wallpaper; screen.glsl, night warmth for Hyprland's
 │   │                           screen shader (GLSL ES 3.00)
 │   ├── build-shaders.sh        recompile .qsb after editing a .frag (qt6-shadertools)
-│   └── (../../.local/bin/dot, dotws, dotcursor, dotsound, dotwall)  the `dot` CLI, `dotws`
-│                               (workspace switches through the shell), the cursor and sound
-│                               makers, the wall sender; linked to ~/.local/bin
+│   └── (../../.local/bin/dot, dotws, dotcursor, dotsound, dotwall, dotanime)  the `dot` CLI,
+│                               `dotws` (workspace switches through the shell), the cursor and
+│                               sound makers, the wall sender, anime through ani-cli; linked to
+│                               ~/.local/bin
 ├── mpv/.config/mpv/            → ~/.config/mpv  mpv.conf; scripts/dottv.lua (Dot TV: titles, play
 │                               counts, Endless Mix, L); shaders/dotled.glsl (LED video)
 ├── mpv/.local/bin/dottv        Dot TV, the YouTube library CLI (+ dottv.desktop)
@@ -163,7 +165,7 @@ dotshell ipc call tokens set ledfx random  # border animations: auto | random | 
 dotshell ipc call tokens set side auto     # off | on | auto (right side bar)
 dotshell ipc call tokens set title false   # window title on the strip
 dotshell ipc call tokens set winshade all  # off | dim | all: windows on the dot grid (plugin)
-dotshell ipc call tokens set scene false   # the era's scene after a minute idle
+dotshell ipc call tokens set scene false   # the era's scene after three minutes idle
 dotshell ipc call tokens set sounds full   # off | soft | full: the era's UI sounds
 dotshell ipc call tokens set frosted true  # panes as LEDs on blurred glass
 dotshell ipc call strip toggle
@@ -234,7 +236,12 @@ move, Enter sets it, R picks one at random. At coarse pitches the pane narrows a
 always fits under the strip.
 
 An era change flips every dot over in a wave from the top left, like a flip-disc board (the
-`cascade` token; off = instant).
+`cascade` token; off = instant). The windows of the apps that recolor live (Ghostty, VSCode,
+Firefox, Files, Dot TV: the `live` list in `services/Export.qml`) flip with it: each turns into
+flip dots that go over to the new era's blank board (`hypr/.config/hypr/shaders/dotflip.glsl`),
+holds while the export runs and the app swaps its colors, then turns back over in the new era, so
+no app is seen changing colors. Needs Hypr-DarkWindow; another live app joins with one line in
+`live`.
 
 With `hue` set to `wallpaper`, matugen (`extra/matugen`) picks the wallpaper's source color and
 every era is rotated onto that hue. Only the hue moves: the era's levels, glow and dot shape stay.
@@ -245,10 +252,12 @@ The era on screen is also exported to the apps around the shell, on every change
 |---|---|---|
 | Ghostty | `~/.config/ghostty/dotshell.conf` | included by the repo config, reloaded live (SIGUSR2) |
 | Neovim | `~/.local/share/nvim/site/colors/dotshell.lua` | `:colorscheme dotshell`; running nvims that use it reload |
-| GTK 3 / 4 | `~/.config/gtk-{3,4}.0/gtk.css` | libadwaita named colors; only written when missing or ours (first line says `dotshell:`); also sets the dark/light `color-scheme` |
+| GTK 3 | `~/.local/share/themes/DotShell/` | a theme of era colors over the one you had (remembered in `~/.local/state/dotshell/gtk-base`); every era swaps `gtk-theme` between `DotShell` and `DotShell-B` (a link), which makes running GTK 3 apps, Firefox included, reload it. GTK never rereads `gtk.css` in a running app, so `~/.config/gtk-3.0/gtk.css` is kept empty while ours. Also sets the dark/light `color-scheme` |
+| GTK 4 | `~/.config/gtk-4.0/gtk.css` | libadwaita named colors and variables; only written when missing or ours (first line says `dotshell:`). libadwaita reads it at start only and nothing else outranks its colors, so Files is restarted under the theme flip by `dotreopen`: each window back at its folder and workspace (first tab only), skipped while a copy or move runs |
 | Qt | `~/.config/qt6ct/colors/dotshell.conf` | pick it once in qt6ct |
 | Greeter | `/var/lib/dotshell-greeter/dotshell/` | `tokens.json`, the wallpaper and the user name, once `system/install.sh` has made the folder yours |
-| Firefox | `<profile>/chrome/userChrome.css`, `userContent.css` | every install's default profile; era colors, the pixel font (22 px, `--dot-font-size`), square corners, a lit outline on the selected tab, no titlebar buttons; new tab and `about:` pages in the era. Guarded like GTK. A `dotshell:begin … end` block in `user.js` turns userChrome on. **Firefox reads them at start: restart it after an era change** |
+| Firefox | `<profile>/chrome/userChrome.css`, `userContent.css` | every install's default profile; the pixel font (22 px, `--dot-font-size`), square corners, a lit outline on the selected tab, no titlebar buttons; new tab and `about:` pages in the era. The chrome's colors are GTK system colors (from the DotShell theme), so it follows an era live; `userContent.css` (new tab, `about:` pages) is read at start. Guarded like GTK. A `dotshell:begin … end` block in `user.js` turns userChrome on |
+| VSCode | `~/.config/{Code,Code - OSS,VSCodium,Cursor}/User/settings.json` | workbench, terminal and syntax colors over the built-in Modern theme, merged into your settings (kept as they are; left alone if the file has comments or colors not set by Dot Shell). Live |
 | rmpc | `~/.config/rmpc/themes/dotshell.ron` | picked by the repo's `config.ron`; hot-reloaded |
 | cava | `~/.config/cava/themes/dotshell` | picked by the repo's `cava/.config/cava/config`; running cavas reload on SIGUSR2 |
 
@@ -260,7 +269,7 @@ The era on screen is also exported to the apps around the shell, on every change
 
 ### Scenes, sounds and the switchboard
 
-**Scenes.** After a minute idle (before the dim at five) the whole screen becomes the era's dot board
+**Scenes.** After three minutes idle (before the dim at five; not while a video plays) the whole screen becomes the era's dot board
 and plays its piece (`panes/Scenes.js`, drawn at one pixel per dot): a terminal typing (Phosphor), rain
 over the skyline (Tokyo), the sun setting on the neon grid (90s), glyph rain (Matrix), a car-stereo
 clock and spectrum (VFD), bubbles (Aero), Life (Game Boy), the time in tubes (Nixie), a departure
@@ -269,8 +278,8 @@ drafted (Blueprint). Any key or a real mouse move ends it; `Super Shift S` plays
 token turns the idle trigger off.
 
 **Sounds.** `dotsound` synthesizes the era's UI sounds (a voice per era: relay clicks, glass chimes,
-pulse-wave blips, flap clacks...) for eight events: pane open and close, toast, alert, the era
-cascade, workspace switch, screenshot, recording. `sounds` token: off, soft, full (`pw-play`).
+pulse-wave blips, flap clacks...) for ten events: pane open and close, window open and close,
+toast, alert, the era cascade, workspace switch, screenshot, recording. `sounds` token: off, soft, full (`pw-play`).
 
 **Switchboard.** `Super Tab`: every workspace as a small LED screen, its windows captured (hidden
 workspaces too) and dithered onto the era ramp. Arrows move, Enter goes, Shift Enter takes the
@@ -341,11 +350,12 @@ pins another. The media keys go to that same player (`dotshell ipc call media to
 | Where | What |
 |---|---|
 | Strip | focused window's title after the workspaces; now-playing word on the right |
-| `Super M` | MEDIA pane, **NOW**: art dithered into the era's colors (or Dot TV's video, playing right in the pane), title, artist, seek bar, transport, spectrum (cava, only while shown and playing), Dot TV's up-next. Space, ← →, N/P, S |
+| `Super M` | MEDIA pane, **NOW**: the art as it is (or Dot TV's video, playing right in the pane), title, artist, seek bar, transport, spectrum (cava, only while shown and playing), Dot TV's up-next. Space, ← →, N/P, S |
 | `Super Shift M` | MEDIA pane, **TV** page: the Dot TV library, most played first. Type to filter, `Ctrl S` searches YouTube. Enter plays, `Ctrl Q` queues, `Ctrl E` plays next, `Ctrl L` adds to the target list, `Ctrl D` deletes (twice), `Ctrl M` Endless Mix, `Ctrl G` saves a search result |
+| **ANIME** page | anime through ani-cli, as shelves of covers: **SEARCH** (type, Enter), **FEATURED** (trending on AniList), **CATEGORIES** (pick one for a shelf of its most popular), **LIKED**, **WATCHLIST**, **DOWNLOADS**. A shelf folds on its header (`Ctrl X`); empty ones fold themselves and the open ones share the height. **AUDIO SUB DUB** by the field: the framed one is in use. The download button (or `Ctrl Q`) opens the queue: what downloads now with its bar, what waits (DROP), what failed (RETRY), what is saved. Enter on a cover opens the show: WATCHED / SAVED / PLAYER lines say where it stands, a bar runs while it downloads, and a failure says what happened with fixes to click (try dub, other match, retry). A click picks an episode, a double click (or Enter) plays it; under the legend, saved episodes are underlined, queued ones faintly, watched ones dim. `G` gets one, `A` all, from-where-you-left-off with **FROM EP n**, **KEEP NEXT 3 SAVED** prefetches, `S` (WRONG? NEXT) tries ani-cli's next match |
 | **LISTS** page | playlists, then the YouTube Music stations (♪, read-only): Enter plays, `Ctrl R` shuffles, `Ctrl T` sets the target list, `Ctrl O` makes a list from the typed name. **SYNC** (or `Ctrl Y`) fetches new songs and stations |
 | **SCREEN** page | the video's dot matrix, with a live preview: pitch (2–16 px), dot size, shape (era, round, square, bubble), color (era ramp, mono, 8 bit, 16 bit, full, raw), glow, dither. Saved in `~/.local/state/dotshell/tv.json` |
-| Panels | `media` (now-playing board, click to play/pause), `vis` (spectrum), `mpris` (title, dithered art) |
+| Panels | `media` (now-playing board, click to play/pause), `vis` (spectrum), `mpris` (title, art) |
 | `Super Ctrl M` | the Dot TV window (mpv, same dot matrix as the pane) |
 
 **Dot TV** is the old AGS Media Center, rebuilt as a standalone app: mpv plays, `dottv` keeps the
@@ -358,6 +368,20 @@ linked at `~/Music/ytmusic` (or `$DOTTV_MUSIC`). Its `.music-cache/<id>.mp3` joi
 songs (♪), keyed by the same YouTube id, so play counts, lists and Endless Mix take them too; its
 `stations/*/station.json` become read-only lists. `dottv sync` runs the sync in the background
 (log in `~/.local/state/dotshell/ytmusic-sync.log`) and notifies when done.
+
+**Anime** goes through [ani-cli](https://github.com/pystardust/ani-cli) (AUR), driven by `dotanime`:
+AniList gives the covers, trending shows and categories; ani-cli finds the show on its source and
+plays it in mpv (so NOW shows it, with the cover). `dotanime` answers ani-cli's menus itself (it is
+linked as a `rofi` first on its PATH), so nothing pops up. Episodes download one at a time to
+`~/Video/Anime/<title>/` (`$DOTANIME_DIR`, at `$DOTANIME_QUALITY`, 720 by default); **PREFETCH**
+keeps the next 3 (`$DOTANIME_PREFETCH`) saved as you watch. Likes, the watchlist and where you left
+off are in `~/.local/state/dotshell/anime.json`; covers in `~/.cache/dotanime`.
+
+```bash
+dotanime search frieren        # JSON; also featured, genres, genre NAME, info ID
+dotanime get 154587 1-4        # download episodes; cancel ID, rm ID EP|all
+dotanime play 154587 5         # streams, or plays the saved file
+```
 
 ```bash
 ln -s ~/Documents/git/ytmusic-helper ~/Music/ytmusic   # once

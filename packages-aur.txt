@@ -8,3 +8,12 @@ otf-departure-mono-nerd # Ghostty pixel font (paru also resolves it if it lands 
 # come from install.sh instead: the AUR package builds all 33 variants (1.9 GB,
 # ~450k files, a very long makepkg strip); install.sh fetches the three it needs.
 bibata-cursor-theme-bin        # Bibata-Modern-Amber
+
+# VSCode from the AUR rather than Microsoft's tarball, so it updates with the
+# rest of the system (yay -Syu, or the Packages pane's UPDATES, Super I). Its
+# colors come from the era (services/Export.qml writes settings.json).
+visual-studio-code-bin
+
+# Anime: the MEDIA pane's ANIME page (dotanime) streams and downloads through
+# it, with mpv, yt-dlp and ffmpeg from packages.txt.
+ani-cli

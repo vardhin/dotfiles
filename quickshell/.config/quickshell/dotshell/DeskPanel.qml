@@ -193,7 +193,7 @@ Item {
             readonly property int textY: wide ? 1 : artSize + 3
             readonly property int textW: root.cols - textX - 2
 
-            DitherArt {
+            PlainArt {
                 visible: root.panel.kind === "media" && media.artSize >= 8
                 x: 1
                 y: 1

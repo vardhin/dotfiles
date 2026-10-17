@@ -6,7 +6,7 @@ how mechanical) and the same eight events are played in it, so a pane
 opening sounds like a relay in Phosphor, a glass chime in Frutiger Aero and
 a square-wave blip on the Game Boy:
 
-    open close toast alert flip ws shutter rec
+    open close toast alert flip ws shutter rec winopen winclose
 
 Written as small WAV files (22.05 kHz, mono, 16 bit) to
     ${XDG_STATE_HOME:-~/.local/state}/dotshell/sounds/<era>/<event>.wav
@@ -160,6 +160,18 @@ def events(v):
     mix(rc, note(v, semis(b, st * 2), v["decay"] * 3, 0.8, rnd), 0)
     mix(rc, note(v, semis(b, st * 2), v["decay"] * 3, 0.8, rnd), 0.18)
     ev["rec"] = rc
+    # Windows (not panes): a quick three-note rise over a swell of noise,
+    # like a board powering up; closing falls the other way to a low thud.
+    wo = []
+    mix(wo, note(dict(v, noise=max(v["noise"], 0.35), click=0.0, decay=0.09), b * 0.5, 0.12, 0.35, rnd), 0)
+    for i, s in enumerate((-st, 0, st)):
+        mix(wo, note(v, semis(b, s), v["decay"] * 2.2, 0.55 + i * 0.12, rnd), 0.02 + i * 0.045)
+    ev["winopen"] = echo(wo, v)
+    wc = []
+    for i, s in enumerate((st, 0, -st)):
+        mix(wc, note(v, semis(b, s), v["decay"] * 2, 0.6 - i * 0.12, rnd), i * 0.04)
+    mix(wc, note(dict(v, noise=0.6, click=max(v["click"], 0.3), decay=0.05), b * 0.25, 0.1, 0.5, rnd), 0.13)
+    ev["winclose"] = echo(wc, v)
     return ev
 
 
@@ -193,7 +205,7 @@ def main():
     v = VOICES.get(a.era, VOICES[DEFAULT])
     out = Path(a.dir).expanduser() / a.era
     stamp = out / ".dotsound"
-    key = repr(sorted(v.items())) + " v1"
+    key = repr(sorted(v.items())) + " v2"
     if not a.force and stamp.exists() and stamp.read_text() == key:
         return 3
     out.mkdir(parents=True, exist_ok=True)

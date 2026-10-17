@@ -4,7 +4,7 @@
 #   ./install.sh            packages + zsh framework + stow all modules + user services
 #   ./install.sh --link     only (re)stow the modules
 #   ./install.sh --dry-run  show what stow would do, change nothing
-#   ./install.sh --plugins  only build and enable the Hyprland plugins (hyprpm)
+#   ./install.sh --plugins  only build and load the Hyprland plugins (no sudo)
 #
 # Existing files that would block a symlink are moved to
 # ~/.dotfiles-backup/<timestamp>/ before stowing.
@@ -132,30 +132,52 @@ install_icons() {
   rm -rf "$tmp"
 }
 
-# Hyprland plugins, built by hyprpm against the running Hyprland's headers:
-# Hypr-DarkWindow (Dot Shell's per-window LED shading, the `winshade` token)
-# and dynamic-cursors (stretch, shake to find). Their config lives in
-# hypr/.config/hypr/lua/dotshell.lua and runs only once they are loaded, so a
-# failed build leaves the desktop exactly as it was. Rerun after a Hyprland
-# update: `hyprpm update` rebuilds them.
+# Hyprland plugins: Hypr-DarkWindow (Dot Shell's per-window LED shading, the
+# `winshade` token) and dynamic-cursors (stretch, shake to find). Built here
+# against the headers the Arch hyprland package ships (pkg-config hyprland),
+# not by hyprpm: hyprpm clones all of Hyprland's history and submodules to make
+# those same headers, which takes ages. Each plugin repo's hyprpm.toml pins the
+# plugin commit for every Hyprland release; the pin for the Hyprland in use is
+# checked out (latest commit when there is none yet). The .so files go to
+# ~/.local/lib/hypr-plugins, which lua/autostart.lua loads at session start.
+# Their config lives in hypr/.config/hypr/lua/dotshell.lua and runs only once
+# they are loaded, so a failed build leaves the desktop exactly as it was.
+# Rerun after a Hyprland update (Hyprland refuses plugins built for another).
 PLUGINS=(
   "https://github.com/micha4w/Hypr-DarkWindow Hypr-DarkWindow"
-  "https://github.com/VirtCode/hypr-dynamic-cursors dynamic-cursors"
+  "https://github.com/VirtCode/hypr-dynamic-cursors hypr-dynamic-cursors"
 )
+PLUGIN_SRC="$HOME/.local/src"
+PLUGIN_DIR="$HOME/.local/lib/hypr-plugins"
 install_plugins() {
-  command -v hyprpm >/dev/null || { log "no hyprpm (comes with hyprland); plugins skipped"; return 0; }
-  log "Hyprland plugins (hyprpm)"
-  if ! hyprpm update; then
-    log "hyprpm update failed (headers for this Hyprland); plugins skipped"
-    return 0
-  fi
-  local entry url name
+  pkg-config --exists hyprland || { log "no Hyprland headers (pkg-config hyprland); plugins skipped"; return 0; }
+  log "Hyprland plugins (built against Hyprland $(pkg-config --modversion hyprland))"
+  # The Hyprland commit: the running one, else the installed binary's.
+  local hypr url name dir pin so
+  hypr=$(hyprctl version -j 2>/dev/null | sed -n 's/.*"commit": *"\([0-9a-f]*\)".*/\1/p')
+  [[ -n $hypr ]] || hypr=$(Hyprland --version 2>/dev/null | sed -n 's/.* at commit \([0-9a-f]*\).*/\1/p')
+  mkdir -p "$PLUGIN_SRC" "$PLUGIN_DIR"
   for entry in "${PLUGINS[@]}"; do
     read -r url name <<<"$entry"
-    hyprpm list 2>/dev/null | grep -q "$name" || yes | hyprpm add "$url" || { log "could not add $name"; continue; }
-    hyprpm enable "$name" || log "could not enable $name"
+    dir="$PLUGIN_SRC/$name"
+    [[ -d $dir/.git ]] || git clone --depth 1 "$url" "$dir" || { log "could not clone $name"; continue; }
+    git -C "$dir" fetch --depth 1 origin HEAD && git -C "$dir" checkout -q FETCH_HEAD
+    pin=$(sed -n "s/.*\"$hypr\", *\"\([0-9a-f]*\)\".*/\1/p" "$dir/hyprpm.toml" 2>/dev/null | head -n1)
+    if [[ -n $pin ]]; then
+      git -C "$dir" fetch --depth 1 origin "$pin" && git -C "$dir" checkout -q "$pin" || { log "could not check out $name at $pin"; continue; }
+    else
+      log "$name has no pin for this Hyprland yet; building its latest commit"
+    fi
+    make -C "$dir" clean >/dev/null 2>&1
+    make -C "$dir" -j"$(nproc)" || { log "$name did not build"; continue; }
+    so=$(find "$dir" -name '*.so' -newer "$dir/Makefile" | head -n1)
+    [[ -n $so ]] && install -m 755 "$so" "$PLUGIN_DIR/" && log "built $(basename "$so")"
   done
-  [[ -n ${HYPRLAND_INSTANCE_SIGNATURE:-} ]] && hyprpm reload -n
+  if [[ -n ${HYPRLAND_INSTANCE_SIGNATURE:-} ]]; then
+    for so in "$PLUGIN_DIR"/*.so; do
+      [[ -e $so ]] && hyprctl plugin load "$so" >/dev/null
+    done
+  fi
   return 0
 }
 

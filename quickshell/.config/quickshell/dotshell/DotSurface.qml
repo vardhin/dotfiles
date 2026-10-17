@@ -169,4 +169,11 @@ Item {
 
         fragmentShader: Qt.resolvedUrl("shaders/dot.frag.qsb")
     }
+
+    // Above the dots, in screen px: pictures shown as they are (PlainArt).
+    Item {
+        id: plain
+        anchors.fill: parent
+    }
+    readonly property alias plainLayer: plain
 }

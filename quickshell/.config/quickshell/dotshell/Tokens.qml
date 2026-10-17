@@ -50,8 +50,8 @@ import Quickshell.Io
 //              dotshell.lua): unfocused windows as LED dots in the era ramp
 //              (dim), plus a faint dot mask on the focused one (all). Without
 //              the plugin, unfocused windows are dimmed as before
-//   scene      true: the era's scene plays full screen after a minute idle,
-//              before the screen dims (panes/Scene.qml; Super Shift S now)
+//   scene      true: the era's scene plays full screen after three minutes
+//              idle, before the screen dims (not while a video plays) (panes/Scene.qml; Super Shift S now)
 //   sounds     off | soft | full: the era's UI sounds (services/Sound.qml):
 //              panes, toasts, the cascade, workspace switches
 //   frosted    true: panes are LED dots on frosted glass: the glass between
@@ -80,7 +80,7 @@ Singleton {
     readonly property bool title: store.title
     readonly property string side: sides.includes(store.side) ? store.side : "auto"
     readonly property var sides: ["off", "on", "auto"]
-    readonly property string winshade: winshades.includes(store.winshade) ? store.winshade : "dim"
+    readonly property string winshade: winshades.includes(store.winshade) ? store.winshade : "off"
     readonly property var winshades: ["off", "dim", "all"]
     readonly property bool scene: store.scene
     readonly property string sounds: soundModes.includes(store.sounds) ? store.sounds : "soft"
@@ -290,7 +290,7 @@ Singleton {
             property bool top: true
             property bool title: true
             property string side: "auto"
-            property string winshade: "dim"
+            property string winshade: "off"
             property bool scene: true
             property string sounds: "soft"
             property bool frosted: false

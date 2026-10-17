@@ -11,9 +11,10 @@ import "Scenes.js" as Scenes
 // Phosphor, rain over the city in Tokyo Night, green rain in Matrix, Life on
 // the Game Boy, a split-flap board, a radar, invaders...
 //
-// Plays after a minute idle (the `scene` token), before the screen dims at
-// five; any key or a real mouse move ends it. Super Shift S plays it now.
-// Caffeine holds it off like the rest of idle.
+// Plays after three minutes idle (the `scene` token), before the screen dims
+// at five; any key or a real mouse move ends it. Super Shift S plays it now.
+// Caffeine holds it off like the rest of idle, and so does a video playing
+// (any MPRIS player but a Dot TV song).
 //
 //   dotshell ipc call scene toggle | show | hide | get
 Scope {
@@ -33,11 +34,18 @@ Scope {
         manual = false;
     }
 
+    // A player is going that isn't a Dot TV song: someone is watching.
+    readonly property bool watching: Media.players.some(p => p.isPlaying && !/\/\.music-cache\/[A-Za-z0-9_-]{11}\.mp3$/.test(String(p.metadata?.["xesam:url"] ?? "")))
+    onWatchingChanged: {
+        if (watching && !manual)
+            hide();
+    }
+
     IdleMonitor {
         enabled: Tokens.scene && !Idle.caffeine
-        timeout: 60
+        timeout: 180
         onIsIdleChanged: {
-            if (isIdle && !root.shown)
+            if (isIdle && !root.shown && !root.watching)
                 root.show(false);
             else if (!isIdle && !root.manual)
                 root.hide();
