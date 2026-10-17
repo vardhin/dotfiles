@@ -202,7 +202,7 @@ set_theme() {
 configure_yay() {
   command -v yay >/dev/null || return 0
   log "yay defaults"
-  yay --save --answerclean None --answerdiff None --answeredit None --removemake --sudoloop
+  yay -Y --save --answerclean None --answerdiff None --answeredit None --removemake --sudoloop
 }
 
 # The committed .qsb shaders must match their sources (build-shaders.sh
