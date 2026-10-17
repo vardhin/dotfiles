@@ -1,0 +1,105 @@
+#!/usr/bin/env bash
+# dotwait SHELLPID TITLE
+#
+# Started by the zsh preexec hook (~/.config/zsh/dotterm.zsh) for every
+# command, killed by precmd when it ends. While the command runs it watches
+# the shell's descendants, and when the command sits blocked on input (a sudo
+# password, pacman's [Y/n], a yay menu, a read prompt) while this terminal is
+# not the focused window, it sends one notification per wait.
+#
+# "Blocked on input" means, for DOTTERM_WAIT seconds (default 4): no process
+# under the shell used any CPU, none is running, and one of the leaves (a
+# process with no children) is either a known prompter (sudo, pacman, yay, …;
+# root processes can't be inspected further) or one of your own processes
+# sleeping in a terminal read with stdin on a pty. Heuristic by design: a
+# stalled download under pacman can look the same.
+set -u
+shopt -s extglob
+shell=${1:?shell pid}
+title=${2:-command}
+tag="dotterm-$shell"
+need=${DOTTERM_WAIT:-4}
+uid=$(id -u)
+prompters=" sudo su doas pacman yay paru makepkg passwd ssh ssh-add scp sftp git gpg pinentry-tty pinentry-curses "
+
+# Every descendant of the given pids (via /proc/<pid>/task/<tid>/children).
+descendants() {
+  local p c
+  for p in "$@"; do
+    for c in $(cat /proc/"$p"/task/*/children 2>/dev/null); do
+      echo "$c"
+      descendants "$c"
+    done
+  done
+}
+
+focused() {
+  command -v hyprctl >/dev/null || return 1
+  local w
+  w=$(hyprctl -j activewindow 2>/dev/null | jq -r '(.class // "") + "\t" + (.title // "")' 2>/dev/null) || return 1
+  [[ ${w%%$'\t'*} == com.mitchellh.ghostty && ${w#*$'\t'} == "$title" ]]
+}
+
+still=0 last=-1 notified=0 n=0
+while kill -0 "$shell" 2>/dev/null; do
+  # Back off on long-running commands: every second for a minute, then every 3.
+  (( n++ < 60 )) && sleep 1 || sleep 3
+
+  # The foreground job only: dotwait itself is also a child of the shell, in a
+  # background process group.
+  { s=$(<"/proc/$shell/stat"); } 2>/dev/null || break
+  s=${s##*) }; read -r -a f <<<"$s"; fg=${f[5]}
+  roots=()
+  for c in $(cat /proc/"$shell"/task/*/children 2>/dev/null); do
+    { s=$(<"/proc/$c/stat"); } 2>/dev/null || continue
+    s=${s##*) }; read -r -a f <<<"$s"
+    [[ ${f[2]} == "$fg" ]] && roots+=("$c")
+  done
+  (( ${#roots[@]} )) || { still=0; continue; }
+  mapfile -t procs < <(printf '%s\n' "${roots[@]}"; descendants "${roots[@]}")
+  (( ${#procs[@]} )) || { still=0; continue; }
+
+  cpu=0 busy=0 waiting=0
+  declare -A kids=()
+  for p in "${procs[@]}"; do
+    { s=$(<"/proc/$p/stat"); } 2>/dev/null || continue
+    s=${s##*) }
+    read -r -a f <<<"$s"
+    [[ ${f[0]} == S ]] || busy=1
+    (( cpu += f[11] + f[12] ))
+    kids[${f[1]}]=1
+  done
+
+  if (( !busy )); then
+    for p in "${procs[@]}"; do
+      [[ -n ${kids[$p]:-} ]] && continue            # not a leaf
+      { comm=$(<"/proc/$p/comm"); } 2>/dev/null || continue
+      if [[ $prompters == *" $comm "* ]]; then
+        waiting=1; break
+      fi
+      owner=$(stat -c %u "/proc/$p" 2>/dev/null) || continue
+      [[ $owner == "$uid" ]] || continue
+      { wchan=$(<"/proc/$p/wchan"); } 2>/dev/null || continue
+      fd0=$(readlink "/proc/$p/fd/0" 2>/dev/null) || continue
+      if [[ $wchan == @(n_tty_read|wait_woken) && $fd0 == /dev/pts/* ]]; then
+        waiting=1; break
+      fi
+    done
+  fi
+  unset kids
+
+  if (( waiting && cpu == last )); then
+    (( still++ ))
+  else
+    still=0 notified=0
+  fi
+  last=$cpu
+
+  if (( still >= need && !notified )); then
+    notified=1
+    focused && continue
+    notify-send --app-name terminal --urgency normal \
+      --hint "string:x-canonical-private-synchronous:$tag" \
+      "Waiting for input" "$title"
+  fi
+done

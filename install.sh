@@ -5,6 +5,7 @@
 #   ./install.sh --link     only (re)stow the modules (and check the compiled shaders)
 #   ./install.sh --dry-run  show what stow would do, change nothing
 #   ./install.sh --plugins  only build and load the Hyprland plugins (no sudo)
+#   ./install.sh --yay      only save the yay defaults (no menus, sudo loop)
 #
 # Existing files that would block a symlink are moved to
 # ~/.dotfiles-backup/<timestamp>/ before stowing.
@@ -195,6 +196,15 @@ set_theme() {
   gsettings set org.gnome.desktop.interface icon-theme McMojave-circle-dark
 }
 
+# yay without the menus: no clean/diff/edit questions, make-dependencies
+# removed after a build, and sudo kept alive through long builds (one
+# password per command). Saved to ~/.config/yay/config.json.
+configure_yay() {
+  command -v yay >/dev/null || return 0
+  log "yay defaults"
+  yay --save --answerclean None --answerdiff None --answeredit None --removemake --sudoloop
+}
+
 # The committed .qsb shaders must match their sources (build-shaders.sh
 # records them); warn here, and refuse commits that would break it.
 check_shaders() {
@@ -207,8 +217,9 @@ case "${1:-}" in
   --dry-run) link_modules --dry-run ;;
   --link)    link_modules; check_shaders ;;
   --plugins) install_plugins ;;
-  "")        install_packages; install_zsh_framework; link_modules; check_shaders; enable_services; install_icons; install_plugins; set_theme ;;
-  *)         echo "usage: $0 [--link|--dry-run|--plugins]" >&2; exit 2 ;;
+  --yay)     configure_yay ;;
+  "")        install_packages; configure_yay; install_zsh_framework; link_modules; check_shaders; enable_services; install_icons; install_plugins; set_theme ;;
+  *)         echo "usage: $0 [--link|--dry-run|--plugins|--yay]" >&2; exit 2 ;;
 esac
 
 log "done"

@@ -3,6 +3,7 @@
 #   sudo system/install.sh            greeter + splash
 #   sudo system/install.sh greetd     Dot Shell's greeter for greetd
 #   sudo system/install.sh plymouth   the dot-matrix boot splash
+#   sudo system/install.sh sudo       one sudo password per 15 min across terminals (opt-in, not in all)
 #
 # greetd:   /etc/greetd/{config.toml,hyprland.lua}; a copy of Dot Shell in
 #           /usr/local/share/dotshell (the greeter user cannot read ~; rerun
@@ -81,9 +82,17 @@ install_plymouth() {
   mkinitcpio -P
 }
 
+install_sudo() {
+  echo ":: sudo: one password per 15 minutes across terminals"
+  local f=/etc/sudoers.d/10-dotshell
+  install -Dm440 "$SYS/sudoers/10-dotshell" "$f.new"
+  if visudo -cqf "$f.new"; then mv "$f.new" "$f"; else rm -f "$f.new"; echo "   sudoers check failed; nothing installed" >&2; exit 1; fi
+}
+
 case "${1:-all}" in
   greetd)   install_greetd ;;
   plymouth) install_plymouth ;;
+  sudo)     install_sudo ;;
   all)      install_greetd; install_plymouth ;;
-  *)        echo "usage: sudo $0 [greetd|plymouth]" >&2; exit 1 ;;
+  *)        echo "usage: sudo $0 [greetd|plymouth|sudo]" >&2; exit 1 ;;
 esac

@@ -153,6 +153,9 @@ bindkey '^[[B' history-substring-search-down
 bindkey '^[OA' history-substring-search-up
 bindkey '^[OB' history-substring-search-down
 
+# Terminal ↔ Dot Shell: notify when long commands end or a command waits for input.
+[[ -f "$HOME/.config/zsh/dotterm.zsh" ]] && source "$HOME/.config/zsh/dotterm.zsh"
+
 # Existing fuzzy-finder and machine-local additions, when present.
 [[ -f "$HOME/.fzf.zsh" ]] && source "$HOME/.fzf.zsh"
 [[ -f "$HOME/.zshrc.local" ]] && source "$HOME/.zshrc.local"

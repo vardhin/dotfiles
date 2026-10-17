@@ -1,0 +1,6 @@
+# Installed by `sudo system/install.sh sudo` as /etc/sudoers.d/10-dotshell.
+# One sudo password per 15 minutes for the whole session, instead of once per
+# terminal window: any process of yours can then sudo without asking until
+# the timestamp expires. Remove this file to go back to per-terminal.
+Defaults timestamp_type=global
+Defaults timestamp_timeout=15

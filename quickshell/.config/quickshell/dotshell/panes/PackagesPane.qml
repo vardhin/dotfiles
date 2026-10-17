@@ -136,7 +136,10 @@ Pane {
     // ── Actions ─────────────────────────────────────────────────────
     function terminal(title: string, script: string): void {
         Ui.close();
-        Quickshell.execDetached(["ghostty", "--gtk-single-instance=false", "--class=dotshell.pkg", "--title=" + title, "-e", "bash", "-c", script + "; echo; read -n1 -rsp 'Done. Press a key to close.'"]);
+        // The title goes in as $1, never into the script text. A notification says
+        // how it ended, so the window can sit behind others while it runs.
+        const end = "; s=$?; if [ $s -eq 0 ]; then notify-send --app-name packages --urgency low \"$1\" Done; else notify-send --app-name packages \"$1\" \"Failed (exit $s)\"; fi; echo; read -n1 -rsp 'Done. Press a key to close.'";
+        Quickshell.execDetached(["ghostty", "--gtk-single-instance=false", "--class=dotshell.pkg", "--title=" + title, "-e", "bash", "-c", script + end, "dotshell-pkg", title]);
     }
 
     function act(i: int): void {
@@ -145,7 +148,7 @@ Pane {
         if (!p || !/^[A-Za-z0-9@._+-]+$/.test(p.name))
             return;
         if (mode === "search" || mode === "updates")
-            terminal("Install " + p.name, "yay -S " + p.name);
+            terminal("Install " + p.name, "yay -S --needed --noconfirm " + p.name);
         else
             terminal("Remove " + p.name, "yay -Rns " + p.name);
     }

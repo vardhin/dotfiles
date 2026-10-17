@@ -18,7 +18,9 @@ cd ~/dotfiles
 ./install.sh --dry-run  # show what stow would do
 ./install.sh --plugins  # build + load the Hyprland plugins (no hyprpm, no sudo): Hypr-DarkWindow, dynamic-cursors;
                         # rerun after a Hyprland update
+./install.sh --yay      # save yay defaults: no clean/diff/edit menus, --removemake, --sudoloop
 sudo system/install.sh  # greeter (greetd) + boot splash (plymouth); see Login and boot
+sudo system/install.sh sudo  # opt-in: one sudo password per 15 min across all terminals
 ```
 
 Files that would block a link are moved to `~/.dotfiles-backup/<timestamp>/` first.
@@ -110,6 +112,9 @@ dotfiles/
 │                               colors from the generated dotshell.conf, gitignored)
 ├── fontconfig/.config/fontconfig/conf.d/   Departure Mono without antialiasing (hard pixels)
 ├── zsh/.zshrc                  → ~/.zshrc  (oh-my-zsh, powerlevel10k, eza, zoxide)
+├── zsh/.config/zsh/dotterm.zsh  terminal ↔ shell: notify when a command over 10 s ends or one
+│                               waits for input while you're elsewhere; `yay -S` without the [Y/n]
+├── zsh/.local/bin/dotwait      the waiting-for-input watcher dotterm.zsh starts per command
 ├── p10/                        the P10 wall's receiver, for the Raspberry Pi (not stowed):
 │                               dotwall-pi.py, dotwall.service
 ├── system/                     outside ~, installed by `sudo system/install.sh`
