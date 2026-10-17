@@ -1,4 +1,5 @@
 import QtQuick
+import QtMultimedia
 import Quickshell
 import Quickshell.Hyprland
 import Quickshell.Wayland
@@ -13,7 +14,9 @@ import qs
 //   dotshell ipc call tokens set wall dots
 //   dotshell ipc call tokens set wallpaper ~/wallpaper/some.jpg
 // Parallax: the image is a little wider than the screen and slides a step per
-// workspace, slower than the world layer's panels (panes/World.qml).
+// workspace, slower than the world layer's panels (panes/World.qml). The home
+// workspace (Tokens.home) shows the whole wallpaper unshifted, and plays the
+// `homeWall` token's animated wallpaper (gif, webp or video) when set.
 // The `screen` token's look (glass, led, board) is drawn here, over the
 // wallpaper only (shaders/wall.frag); windows are left alone.
 Variants {
@@ -46,7 +49,9 @@ Variants {
         onLiveWsChanged: if (liveWs > 0)
             wsId = liveWs
         // Parallax offset, 0 .. 1 of the screen width, eased.
-        property real slide: win.step * (Math.min(win.span, Math.max(1, win.wsId)) - 1)
+        readonly property bool atHome: wsId === Tokens.home
+        // Home: no shift at all. Elsewhere a step per workspace from home.
+        property real slide: atHome ? 0 : win.step * Math.min(win.span - 1, Math.abs(win.wsId - Tokens.home))
         Behavior on slide {
             NumberAnimation {
                 duration: 380
@@ -104,7 +109,8 @@ Variants {
             Image {
                 id: image
                 visible: Tokens.wall === "image"
-                width: win.width * (1 + win.step * (win.span - 1))
+                // Home: the whole picture fits the screen; elsewhere it is wider and slides.
+                width: win.atHome ? win.width : win.width * (1 + win.step * (win.span - 1))
                 height: win.height
                 x: -win.width * win.slide
                 source: visible ? win.source : ""
@@ -119,6 +125,31 @@ Variants {
                         duration: 400
                     }
                 }
+            }
+
+            // ── home's animated wallpaper ────────────────────────────────
+            readonly property string anim: Tokens.homeWall
+            readonly property bool animVideo: /\.(mp4|webm|mkv|mov)$/i.test(anim)
+            AnimatedImage {
+                anchors.fill: parent
+                visible: win.atHome && content.anim !== "" && !content.animVideo
+                source: visible ? "file://" + content.anim : ""
+                fillMode: Image.PreserveAspectCrop
+                playing: visible
+                asynchronous: true
+            }
+            MediaPlayer {
+                id: homeVideo
+                source: win.atHome && content.animVideo ? "file://" + content.anim : ""
+                videoOutput: homeOut
+                loops: MediaPlayer.Infinite
+                onSourceChanged: if (source != "") play()
+            }
+            VideoOutput {
+                id: homeOut
+                anchors.fill: parent
+                visible: win.atHome && content.animVideo
+                fillMode: VideoOutput.PreserveAspectCrop
             }
 
             // ── dots / off: the screen is one dot surface ────────────────
@@ -139,7 +170,7 @@ Variants {
                 // cell, so every dot is the mean of what it covers.
                 Image {
                     visible: Tokens.wall === "dots"
-                    width: board.cols * (1 + win.step * (win.span - 1))
+                    width: win.atHome ? board.cols : board.cols * (1 + win.step * (win.span - 1))
                     height: board.rows
                     x: -board.cols * win.slide
                     source: visible ? win.source : ""

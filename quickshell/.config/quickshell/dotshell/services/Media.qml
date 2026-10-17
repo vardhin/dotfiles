@@ -182,6 +182,84 @@ noise_reduction = 70
         }
     }
 
+    // ── Note bar (a second cava) ────────────────────────────────────
+    // One band per semitone, MIDI 48..83 (C3..B5, 131..988 Hz): cava spaces
+    // its bars logarithmically between the cutoffs, which is a semitone a
+    // bar at 36 bars. Each column rises in about 30 ms (two frames) and falls
+    // over `persistenceMs`, the duolightbars mapping. Same wants as `bars`.
+    readonly property int noteCount: 36
+    property int persistenceMs: 420
+    property var notes: Array(noteCount).fill(0)
+    property var noteWants: ({})
+    readonly property bool notesWanted: Object.values(noteWants).some(v => v)
+
+    function wantNotes(key: string, on: bool): void {
+        if (!!noteWants[key] === on)
+            return;
+        const w = Object.assign({}, noteWants);
+        if (on)
+            w[key] = true;
+        else
+            delete w[key];
+        noteWants = w;
+    }
+
+    FileView {
+        id: noteConf
+        path: Tokens.dirReady ? Tokens.dir + "/cava-notes.conf" : ""
+        printErrors: false
+        onPathChanged: {
+            if (path)
+                setText(`# dotshell: cava for the note bar (services/Media.qml)
+[general]
+bars = ${root.noteCount}
+framerate = 60
+lower_cutoff_freq = 127
+higher_cutoff_freq = 1017
+[input]
+method = pipewire
+source = auto
+[output]
+method = raw
+raw_target = /dev/stdout
+data_format = ascii
+ascii_max_range = 100
+bar_delimiter = 59
+frame_delimiter = 10
+[smoothing]
+noise_reduction = 20
+monstercat = 0
+`);
+        }
+    }
+
+    Process {
+        id: noteCava
+        running: root.notesWanted && root.isPlaying && noteConf.path !== ""
+        command: ["cava", "-p", noteConf.path]
+        property real last: 0
+        stdout: SplitParser {
+            onRead: line => {
+                const v = line.split(";");
+                const now = Date.now();
+                const dt = noteCava.last ? Math.min(100, now - noteCava.last) : 16;
+                noteCava.last = now;
+                // Attack: about 30 ms to the new level; decay over persistenceMs.
+                const up = Math.min(1, dt / 30), down = Math.exp(-dt / Math.max(30, root.persistenceMs / 3));
+                const old = root.notes, out = new Array(root.noteCount);
+                for (let i = 0; i < root.noteCount; i++) {
+                    const x = Math.min(1, (parseInt(v[i]) || 0) / 100), o = old[i] ?? 0;
+                    out[i] = x > o ? o + (x - o) * up : Math.max(x, o * down);
+                }
+                root.notes = out;
+            }
+        }
+        onRunningChanged: {
+            if (!running)
+                root.notes = Array(root.noteCount).fill(0);
+        }
+    }
+
     IpcHandler {
         target: "media"
 

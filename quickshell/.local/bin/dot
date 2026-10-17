@@ -1,33 +1,48 @@
 #!/usr/bin/env python3
 """dot: drive Dot Shell over its socket ($XDG_RUNTIME_DIR/dotshell.sock).
 
-  dot spawn note --shape circle --at 52,18 --size 32x28 [--id todo] [--ws 2]
-                 [--slot 1] [--raw] [--source FILE|PLAYER] [--text "..."]
+Panels (a template plus a feed; they live on the home workspace, or docked
+in the top strip or the side rail):
+  dot spawn TEMPLATE [--id ID] [--at X,Y] [--size WxH] [--place home|strip|rail]
+                 [--zone l|c|r|e] [--order N] [--feed FEED] [--layout JSON]
+                 [--shape S] [--slot 0|1|2] [--raw] [--source FILE] [--text "..."]
+  dot dock ID strip|rail|home [--zone r] [--order 0] [--at X,Y]
+  dot undo                          undo the last dock or undock (3 s)
+  dot home [--reset]                list home's panels; --reset lays out the 15
+  dot templates                     every template and its feed
   dot write sign "RAIN CITY"
   dot pixels vis < frame.rgb        raw RGB, panel resolution (see dot list)
   dot move clock 60 20
-  dot set player --dot false        any panel field: --shape hex --ws 3 ...
-  dot rm note
+  dot set ID --shape hex --slot 2   any panel field
+  dot rm ID
   dot list [--json]
+
+Feeds (live JSON a panel binds; dotd and scripts push them):
+  dot feed ID '{"state":"green","jobs":3}' [--merge]
+  dot feed ID --drop
+  dot feeds                         every feed, built-in and pushed
+  dot action "ws 3"                 run any panel action
+
+Look:
   dot era [NAME | next | prev]       no name: list the eras
   dot display --pitch 5 --depth 16 [--size 80] [--wall dots|image|off]
               [--wallpaper ~/w.jpg] [--hue era|wallpaper] [--cascade on|off]
               [--screen glass|led|board|off] [--night on|off] [--winfx on|off]
               [--borders on|off] [--top on|off] [--title on|off] [--side off|on|auto]
               [--winshade off|dim|all] [--scene on|off] [--sounds off|soft|full]
+              [--home 1..10] [--homeWall ~/loop.mp4]
   dot wall [status]                  the P10 wall (p10/ in the dotfiles)
   dot wall on HOST[:PORT] [--source scene|clock|media|text|pixels]
               [--text "OPEN 24 HRS"] [--size 64x32] [--fps 15]
-  dot wall off | source SOURCE | text "..." 
+  dot wall off | source SOURCE | text "..."
   dot wall pixels < frame.rgb       raw RGB at the wall's size
   dot raw '{"cmd":"tokens"}'        send one request as-is
 
-Kinds: clock sign note image mpris media vis pixels.
-  mpris  title and artist of a player (--source PLAYER), dithered art when wide
-  media  now playing: art, title, artist, progress, a spectrum when tall;
-         click it to play or pause
-  vis    a spectrum analyser (cava) of whatever plays
-Shapes: rect circle hex diamond strip, or an SVG path in a 0..100 box.
+Templates: nowplaying clock workspaces system battery messages capture
+caffeine tray downloads files clipboard todo screenshots dock, vis lyrics,
+and sign note image mpris media pixels board.
+A board panel draws a layout of its own (see Templates.js in the shell):
+  dot spawn board --id ci --feed ci --layout '{"col":[{"field":"big","text":"{state|upper}"}]}'
 Positions and sizes are grid units (12 px each).
 """
 import base64
@@ -87,6 +102,10 @@ def flags(args):
             out["dot"] = False
             i += 1
             continue
+        if key in ("merge", "drop", "reset", "json"):
+            out[key] = True
+            i += 1
+            continue
         if i + 1 >= len(args):
             die(f"{a} needs a value")
         out[key] = args[i + 1]
@@ -117,17 +136,19 @@ def panel_fields(f):
 
 def show(panels):
     if not panels:
-        print("no panels; try: dot spawn clock --at 4,6 --size 20x6")
+        print("no panels; try: dot home --reset")
         return
-    print(f"{'ID':12} {'KIND':7} {'SHAPE':8} {'WS':>3} {'AT':>7} {'SIZE':>7} {'DOTS':>9}  TEXT/SOURCE")
+    print(f"{'ID':14} {'TEMPLATE':11} {'PLACE':6} {'AT':>7} {'SIZE':>7} {'DOTS':>9}  FEED/TEXT")
     for p in panels:
-        at = f"{p['x']},{p['y']}"
+        if p.get("place", "home") == "home":
+            at = f"{p['x']},{p['y']}"
+        else:
+            at = f"{p.get('zone') or '-'}{p.get('order', 0)}"
         size = f"{p['w']}x{p['h']}"
         dots = f"{p['cols']}x{p['rows']}"
-        shape = p["shape"] if len(p["shape"]) <= 8 else "path"
-        extra = p.get("text") or p.get("source") or ""
+        extra = p.get("feed") or p.get("text") or p.get("source") or ""
         raw = "" if p.get("dot", True) else " (raw)"
-        print(f"{p['id']:12} {p['kind']:7} {shape:8} {p['workspace']:>3} {at:>7} {size:>7} {dots:>9}  {extra}{raw}")
+        print(f"{p['id']:14} {p.get('template', '?'):11} {p.get('place', 'home'):6} {at:>7} {size:>7} {dots:>9}  {extra}{raw}")
 
 
 def main(argv):
@@ -138,10 +159,46 @@ def main(argv):
 
     if cmd == "spawn":
         if not rest:
-            die("spawn needs a kind")
-        req = {"cmd": "spawn", "kind": rest[0], **panel_fields(flags(rest[1:]))}
+            die("spawn needs a template; dot templates lists them")
+        req = {"cmd": "spawn", "template": rest[0], **panel_fields(flags(rest[1:]))}
         p = call(req)["panel"]
         print(p["id"])
+    elif cmd == "feed":
+        if not rest:
+            die("usage: dot feed ID JSON [--merge] | dot feed ID --drop")
+        f = flags([a for a in rest[1:] if a.startswith("--")])
+        if f.get("drop"):
+            call({"cmd": "feed", "id": rest[0], "drop": True})
+            return
+        body = [a for a in rest[1:] if not a.startswith("--")]
+        text = " ".join(body) if body else sys.stdin.read()
+        try:
+            data = json.loads(text)
+        except ValueError as e:
+            die(f"feed data is not JSON: {e}")
+        call({"cmd": "feed", "id": rest[0], "data": data, "merge": bool(f.get("merge"))})
+    elif cmd == "feeds":
+        for f in call({"cmd": "feeds"})["feeds"]:
+            src = "pushed " if f["pushed"] else "built-in"
+            print(f"{f['id']:12} {src}  {' '.join(f['keys'])[:90]}")
+    elif cmd == "dock":
+        if len(rest) < 2:
+            die("usage: dot dock ID strip|rail|home [--zone Z] [--order N] [--at X,Y]")
+        f = panel_fields(flags(rest[2:]))
+        call({"cmd": "dock", "id": rest[0], "place": rest[1], **f})
+    elif cmd == "undo":
+        call({"cmd": "undo"})
+    elif cmd == "home":
+        if "--reset" in rest:
+            print(f"{call({'cmd': 'home', 'reset': True})['panels']} panels")
+        else:
+            r = call({"cmd": "home"})
+            print(f"home is workspace {r['home']}: {' '.join(r['panels'])}")
+    elif cmd == "templates":
+        for t in call({"cmd": "templates"})["templates"]:
+            print(f"{t['name']:12} {t['title']:12} {t['feed']}")
+    elif cmd == "action":
+        call({"cmd": "action", "run": " ".join(rest)})
     elif cmd == "write":
         if len(rest) < 2:
             die("usage: dot write ID TEXT")

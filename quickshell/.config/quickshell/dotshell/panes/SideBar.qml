@@ -10,9 +10,9 @@ import qs.services
 //   auto  hidden; touch the right edge of the screen and it slides out over
 //         the windows, then hides again shortly after the pointer leaves
 //   off   gone
-// It holds only what the strip does not: the launcher and file manager at the
-// top, CPU / memory / temperature meters and the media transport in the
-// middle, and the era switcher, wallpapers and session menu at the bottom.
+// It holds the launcher and file manager at the top, docked panels in their
+// rail form in the middle (services/Panels.qml; System by default), and the
+// era switcher, wallpapers and session menu at the bottom.
 // Settings: Super T, DISPLAY page (SIDE BAR), or `dot display --side auto`.
 Variants {
     model: Tokens.side === "off" ? [] : Quickshell.screens
@@ -103,51 +103,16 @@ Variants {
                 }
             }
 
-            // ── Middle: system meters, then the media transport ─────
-            Column {
+            // ── Middle: docked panels in their rail form ────────────
+            // System by default (CPU, memory, temperature meters); dock Now
+            // playing here for the transport. Drag them in and out like the
+            // strip's (DockRow.qml).
+            DockRow {
                 anchors.verticalCenter: parent.verticalCenter
-                spacing: 6
-
-                // CPU, memory, temperature: three 3-dot columns, left to
-                // right. Digits are 7 dots wide, so no numbers fit here.
-                Row {
-                    x: 2
-                    spacing: 1
-                    RailMeter {
-                        value: Sys.cpu
-                    }
-                    RailMeter {
-                        value: Sys.mem
-                    }
-                    RailMeter {
-                        visible: Sys.temp >= 0
-                        value: Sys.tempFraction
-                    }
-                }
-
-                Column {
-                    visible: Media.active
-                    spacing: 2
-
-                    RailButton {
-                        glyph: ""
-                        onClicked: Media.previous()
-                    }
-                    RailButton {
-                        glyph: Media.isPlaying ? "" : ""
-                        color: Tokens.slot2
-                        onClicked: Media.toggle()
-                    }
-                    RailButton {
-                        glyph: ""
-                        onClicked: Media.next()
-                    }
-                    RailButton {
-                        glyph: ""
-                        active: Ui.pane === "media"
-                        onClicked: Ui.toggle("media", bar.screen)
-                    }
-                }
+                place: "rail"
+                originX: bar.screen.width - bar.width + surface.x * 1
+                screenW: bar.screen.width
+                screenH: bar.screen.height
             }
 
             // ── Bottom: look and session ────────────────────────────

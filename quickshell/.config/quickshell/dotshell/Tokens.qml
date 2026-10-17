@@ -54,6 +54,11 @@ import Quickshell.Io
 //              idle, before the screen dims (not while a video plays) (panes/Scene.qml; Super Shift S now)
 //   sounds     off | soft | full: the era's UI sounds (services/Sound.qml):
 //              panes, toasts, the cascade, workspace switches
+//   home       the home workspace (1 .. 10): the only one with desktop
+//              panels, the whole wallpaper unshifted, and no apps (Hyprland
+//              moves anything opened there to the next empty workspace)
+//   homeWall   an animated wallpaper for home only: a .gif, .webp, .mp4,
+//              .webm or .mkv ("" = the still wallpaper)
 //   frosted    true: panes are LED dots on frosted glass: the glass between
 //              the dots turns translucent and Hyprland blurs what is behind
 //              (a layer rule from hypr/.config/hypr/lua/dotshell.lua)
@@ -86,10 +91,12 @@ Singleton {
     readonly property string sounds: soundModes.includes(store.sounds) ? store.sounds : "soft"
     readonly property var soundModes: ["off", "soft", "full"]
     readonly property bool frosted: store.frosted
+    readonly property int home: store.home >= 1 && store.home <= 10 ? store.home : 1
+    readonly property string homeWall: store.homeWall.replace(/^~(?=\/|$)/, Quickshell.env("HOME"))
 
     readonly property var walls: ["dots", "image", "off"]
     readonly property var screens: ["glass", "led", "board", "off"]
-    readonly property var keys: ["era", "pitch", "dotSize", "depth", "wall", "wallpaper", "hue", "cascade", "night", "screen", "winfx", "wsfx", "borders", "ledfx", "top", "title", "side", "winshade", "scene", "sounds", "frosted"]
+    readonly property var keys: ["era", "pitch", "dotSize", "depth", "wall", "wallpaper", "hue", "cascade", "night", "screen", "winfx", "wsfx", "borders", "ledfx", "top", "title", "side", "winshade", "scene", "sounds", "frosted", "home", "homeWall"]
 
     // ── What is on screen ───────────────────────────────────────────
     // `current` is the era as displayed: its colors after the wallpaper hue,
@@ -294,6 +301,8 @@ Singleton {
             property bool scene: true
             property string sounds: "soft"
             property bool frosted: false
+            property int home: 1
+            property string homeWall: ""
         }
     }
 
@@ -383,6 +392,16 @@ Singleton {
         case "frosted":
             store.frosted = truthy(value);
             break;
+        case "home": {
+            const n = parseInt(value);
+            if (!(n >= 1 && n <= 10))
+                return "home is a workspace, 1 .. 10";
+            store.home = n;
+            break;
+        }
+        case "homeWall":
+            store.homeWall = value;
+            break;
         case "sounds":
             if (!soundModes.includes(value))
                 return "sounds is one of: " + soundModes.join(", ");
@@ -416,7 +435,9 @@ Singleton {
             winshade: winshade,
             scene: scene,
             sounds: sounds,
-            frosted: frosted
+            frosted: frosted,
+            home: home,
+            homeWall: store.homeWall
         };
     }
 

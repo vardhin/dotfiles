@@ -4,11 +4,20 @@ import QtQuick
 import Quickshell
 import Quickshell.Io
 import qs
+import "../Templates.js" as Templates
 
 // The `dot` bus: one Unix socket, one JSON object per line each way.
 //   ${XDG_RUNTIME_DIR}/dotshell.sock
 // Same API for the `dot` CLI (bin/dot), scripts and agents:
-//   {"cmd":"spawn","kind":"note","id":"todo","shape":"circle","x":52,"y":18,"w":32,"h":28}
+//   {"cmd":"spawn","template":"todo","place":"home","x":52,"y":18,"w":32,"h":28}
+//   {"cmd":"spawn","template":"board","id":"ci","feed":"ci","layout":{...}}
+//   {"cmd":"feed","id":"ci","data":{"state":"green"},"merge":false}
+//   {"cmd":"feeds"}                        feed ids, and what each holds
+//   {"cmd":"dock","id":"todo","place":"strip","zone":"r","order":0}
+//   {"cmd":"undo"}                         the last dock or undock, within 3 s
+//   {"cmd":"home","reset":true}            lay the 15-panel set out again
+//   {"cmd":"templates"}
+//   {"cmd":"action","run":"ws 3"}          any panel action (services/Actions.qml)
 //   {"cmd":"write","id":"sign","text":"RAIN CITY"}
 //   {"cmd":"pixels","id":"vis","w":64,"h":32,"data":"<base64 PPM (P6)>"}
 //   {"cmd":"move","id":"clock","x":60,"y":20}
@@ -46,7 +55,25 @@ Singleton {
     function dispatch(q: var): var {
         switch (q.cmd) {
         case "spawn":
-            return { panel: Panels.spawn(q.kind, q) };
+            return { panel: Panels.spawn(q.template ?? q.kind, q) };
+        case "feed":
+            if (q.drop)
+                return Feeds.drop(String(q.id));
+            return Feeds.push(String(q.id ?? ""), q.data, !!q.merge);
+        case "feeds":
+            return { feeds: Feeds.ids().map(id => ({ id: id, pushed: Feeds.pushed[id] !== undefined, keys: Object.keys(Feeds.get(id) ?? {}) })) };
+        case "dock":
+            return { panel: Panels.place(q.id, q.place ?? "strip", q.zone ?? "r", parseInt(q.order ?? 99), parseInt(q.x ?? 4), parseInt(q.y ?? 6)) };
+        case "undo":
+            return Panels.undoLast();
+        case "home":
+            if (q.reset)
+                return Panels.reset();
+            return { home: Tokens.home, panels: Panels.home.map(p => p.id) };
+        case "templates":
+            return { templates: Templates.names.map(n => ({ name: n, title: Templates.get(n).title, feed: Templates.get(n).feed ?? "" })) };
+        case "action":
+            return msgAction(Actions.run(String(q.run ?? "")));
         case "rm":
             return Panels.remove(q.id);
         case "move":
@@ -106,8 +133,12 @@ Singleton {
                 return Wall.status();
             return Wall.configure(Object.assign({}, q.fields ?? {}, q.action === "on" ? { on: true } : q.action === "off" ? { on: false } : {}));
         default:
-            return { error: "unknown cmd; one of: spawn rm move set write pixels list era eras display tokens ws wall" };
+            return { error: "unknown cmd; one of: spawn rm move set write pixels list feed feeds dock undo home templates action era eras display tokens ws wall" };
         }
+    }
+
+    function msgAction(m: string): var {
+        return m === "ok" ? {} : { error: m };
     }
 
     // Tokens.set answers "ok" or a sentence.

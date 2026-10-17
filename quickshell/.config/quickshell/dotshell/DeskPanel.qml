@@ -2,84 +2,333 @@ import QtQuick
 import QtQuick.Effects
 import QtQuick.Shapes
 import Quickshell
-import Quickshell.Services.Mpris
 import qs.services
 import "Shapes.js" as Shapes
+import "Skins.js" as Skins
+import "Templates.js" as Templates
 
-// One desktop panel (see services/Panels.qml) drawn on its own DotSurface.
-// Placed in grid units; drag it to move it, it snaps to the grid on release.
+// One panel on the home workspace (see services/Panels.qml): its template's
+// layout (Templates.js) bound to its feed (Feeds.qml), drawn by PanelNode on
+// a DotSurface inside the era's frame (Skins.js).
+//   click            expand (or the template's own click); click outside folds
+//   hold 200 ms, or drag     lift it: the strip and the rail arm their slots;
+//                    drop near the top to dock it in the strip, near the right
+//                    edge for the rail, anywhere else to move it (24 px grid)
 Item {
     id: root
 
     required property var panel
-    // World offset of this panel's workspace (World.qml lays workspaces side by side).
-    property real originX: 0
+    // The screen size, for the dock zones and keeping expanded panels on it.
+    property int screenW: 1920
+    property int screenH: 1080
 
     readonly property int unit: Panels.unit
-    readonly property int cols: Math.max(1, Math.floor(panel.w * unit / Tokens.pitch))
-    readonly property int rows: Math.max(1, Math.floor(panel.h * unit / Tokens.pitch))
+    readonly property var template: Templates.get(panel.template)
+    readonly property bool expanded: Panels.expanded === panel.id
+    readonly property string mode: expanded ? "expanded" : "compact"
+    readonly property var layout: Templates.layout(template, mode, panel.layout)
+    readonly property string feedId: panel.feed || template?.feed || ""
+    readonly property var skin: Skins.get(Tokens.era)
+    readonly property var words: Skins.words(Tokens.era, template)
+
+    // The size in px: compact is the panel's own; expanded the template's
+    // big size (never smaller), kept on screen.
+    readonly property int pxW: (expanded ? Math.max(panel.w, template?.big?.w ?? panel.w) : panel.w) * unit
+    readonly property int pxH: (expanded ? Math.max(panel.h, template?.big?.h ?? panel.h) : panel.h) * unit
+    readonly property int homeX: Math.max(0, Math.min(panel.x * unit, screenW - pxW))
+    readonly property int homeY: Math.max(0, Math.min(panel.y * unit, screenH - pxH))
+
+    readonly property int cols: Math.max(1, Math.floor(pxW / Tokens.pitch))
+    readonly property int rows: Math.max(1, Math.floor(pxH / Tokens.pitch))
     readonly property color tube: [Tokens.slot0, Tokens.slot1, Tokens.slot2][panel.slot] ?? Tokens.slot0
     readonly property bool raw: panel.dot === false
-    readonly property bool photo: panel.kind === "image" || panel.kind === "mpris"
+    readonly property bool photo: panel.template === "image"
+    readonly property bool rect: panel.shape === "rect" || panel.shape === ""
 
-    // Live position while dragging, in px; snapped to whole units on release.
+    // Frame insets in dots: the ring, and the title band when the era has one.
+    readonly property bool header: skin.header === true && rows >= 30 && !["sign", "image", "pixels", "dock"].includes(panel.template)
+    readonly property int edge: raw ? 0 : skin.frame === "bezel" ? 4 : skin.frame === "double" ? 4 : 2
+    readonly property int topInset: edge + (header ? Tokens.lineDots + 1 : 0)
+    readonly property int inset: rect ? 0 : Math.round(Math.min(cols, rows) * 0.14)
+
+    // ── Feed ────────────────────────────────────────────────────────
+    readonly property var ctx: Object.assign({ "~": words, "@": panel }, Feeds.get(feedId))
+    Component.onCompleted: want(true)
+    Component.onDestruction: want(false)
+    onVisibleChanged: want(visible)
+    onExpandedChanged: Sys.want("top-" + panel.id, expanded && panel.template === "system")
+    function want(on: bool): void {
+        if (feedId)
+            Feeds.want(feedId, panel.id, on);
+        for (const w of template?.wants ?? [])
+            Feeds.want(w, panel.id, on);
+    }
+
+    // Actions from the layout: panel verbs here, the rest to Actions.qml.
+    QtObject {
+        id: sink
+        function run(a: string): void {
+            const w = a.split(/\s+/);
+            if (w[0] === "panel") {
+                if (w[1] === "expand")
+                    Panels.expand(root.panel.id);
+                else if (w[1] === "fold")
+                    Panels.fold();
+                else if (w[1] === "pop")
+                    Panels.pop(root.panel.id, w[2]);
+                else if (w[1] === "keys")
+                    Panels.typing = true;
+                return;
+            }
+            Actions.run(a);
+        }
+    }
+
+    // ── Placement and drag ──────────────────────────────────────────
     property point drag: Qt.point(0, 0)
-    property bool dragging: false
+    property bool lifted: false
+    readonly property string target: lifted ? (Panels.drag?.target ?? "home") : "home"
+    readonly property bool overDock: lifted && target !== "home"
 
-    x: originX + panel.x * unit + drag.x
-    y: panel.y * unit + drag.y
-    width: panel.w * unit
-    height: panel.h * unit
-    z: dragging ? 1 : 0
-
-    // Largest whole multiple of the pixel font that fits `chars` on the panel.
-    function fit(chars: int): int {
-        const byW = Math.floor((cols - 2) / Math.max(1, chars * Tokens.charDots));
-        const byH = Math.floor((rows - 2) / Tokens.fontPx);
-        return Math.max(1, Math.min(byW, byH));
+    x: homeX + drag.x
+    y: homeY + drag.y
+    width: pxW
+    height: pxH
+    z: lifted ? 3 : expanded ? 2 : 0
+    // Over a dock slot the board shrinks toward the cursor and fades: the
+    // slot shows its strip or rail form as a live ghost instead.
+    scale: overDock ? 0.42 : lifted ? 0.97 : 1
+    opacity: overDock ? 0.3 : 1
+    rotation: lifted && !overDock ? -1.5 : 0
+    transformOrigin: Item.TopLeft
+    Behavior on scale {
+        NumberAnimation {
+            duration: 140
+            easing.type: Easing.OutCubic
+        }
+    }
+    Behavior on width {
+        enabled: !root.lifted
+        NumberAnimation {
+            duration: 160
+            easing.type: Easing.OutCubic
+        }
+    }
+    Behavior on height {
+        enabled: !root.lifted
+        NumberAnimation {
+            duration: 160
+            easing.type: Easing.OutCubic
+        }
     }
 
-    SystemClock {
-        id: clock
-        enabled: root.panel.kind === "clock"
-        precision: SystemClock.Seconds
+    // Where would a drop at (sx, sy) screen px land?
+    function aim(sx: real, sy: real): var {
+        const stripH = Tokens.top ? Tokens.pitch * 11 : -1000;
+        const railW = Tokens.side === "off" ? -1000 : Tokens.pitch * 13;
+        if (Tokens.top && sy < stripH + 48)
+            return Object.assign({ target: "strip" }, Dock.stripAim(sx, screenW));
+        if (Tokens.side !== "off" && sx > screenW - railW - 48)
+            return { target: "rail", zone: "", order: Dock.railAim(sy) };
+        return { target: "home", zone: "", order: 0 };
     }
 
-    readonly property MprisPlayer player: {
-        if (panel.kind !== "mpris")
-            return null;
-        const all = Mpris.players.values;
-        const want = panel.source.toLowerCase();
-        return (want ? all.find(p => (p.identity ?? "").toLowerCase().includes(want) || (p.dbusName ?? "").toLowerCase().includes(want)) : null) ?? all[0] ?? null;
+    MouseArea {
+        id: grab
+        anchors.fill: parent
+        acceptedButtons: Qt.LeftButton
+        cursorShape: root.lifted ? Qt.ClosedHandCursor : Qt.ArrowCursor
+        property point start
+        property point grabOffset
+        property bool moved: false
+
+        Timer {
+            id: hold
+            interval: 200
+            onTriggered: root.lift()
+        }
+
+        onPressed: mouse => {
+            start = mapToItem(root.parent, mouse.x, mouse.y);
+            grabOffset = Qt.point(mouse.x, mouse.y);
+            moved = false;
+            hold.restart();
+        }
+        onPositionChanged: mouse => {
+            const p = mapToItem(root.parent, mouse.x, mouse.y);
+            const dx = p.x - start.x, dy = p.y - start.y;
+            if (!root.lifted && Math.abs(dx) + Math.abs(dy) > 6)
+                root.lift();
+            if (!root.lifted)
+                return;
+            moved = true;
+            root.drag = Qt.point(dx, dy);
+            const a = root.aim(p.x, p.y);
+            Panels.drag = Object.assign({ id: root.panel.id, from: "home", x: p.x, y: p.y }, a);
+        }
+        onReleased: mouse => {
+            hold.stop();
+            if (!root.lifted) {
+                root.click();
+                return;
+            }
+            const d = Panels.drag;
+            root.lifted = false;
+            Panels.drag = null;
+            if (d && d.target !== "home") {
+                root.drag = Qt.point(0, 0);
+                Panels.place(root.panel.id, d.target, d.zone, d.order, 0, 0);
+                return;
+            }
+            // Home: snap to the 24 px grid (two units).
+            const nx = Math.round((root.homeX + root.drag.x) / (root.unit * 2)) * 2;
+            const ny = Math.round((root.homeY + root.drag.y) / (root.unit * 2)) * 2;
+            root.drag = Qt.point(0, 0);
+            if (nx !== root.panel.x || ny !== root.panel.y)
+                Panels.move(root.panel.id, Math.max(0, nx), Math.max(0, ny));
+        }
+        onCanceled: {
+            hold.stop();
+            root.lifted = false;
+            root.drag = Qt.point(0, 0);
+            Panels.drag = null;
+        }
     }
 
+    function lift(): void {
+        if (lifted)
+            return;
+        lifted = true;
+        Panels.fold();
+        Panels.typing = false;
+        Panels.drag = { id: panel.id, from: "home", target: "home", zone: "", order: 0, x: x, y: y };
+    }
+
+    function click(): void {
+        const c = template?.click ?? "expand";
+        if (c === "none")
+            return;
+        if (c === "expand") {
+            if (template && (template.expanded || template.big))
+                Panels.expand(panel.id);
+            return;
+        }
+        sink.run(c);
+    }
+
+    // ── The board ───────────────────────────────────────────────────
     DotSurface {
         id: surface
         cols: root.cols
         rows: root.rows
-        // Fills the panel's px box; at pitch 5 or 8 a unit is not a whole
-        // number of dots, so the last partial dot row is left as glass.
-        // Raw: images and art get the crisp copy below; drawn content goes flat.
         flat: root.raw
         visible: !(root.raw && root.photo)
-        imageMode: root.panel.kind === "image" || root.panel.kind === "mpris"
-        dither: root.panel.kind === "mpris"
-        shape: Shapes.path(root.panel.shape, root.cols, root.rows)
+        shape: root.rect && root.skin.round > 0 && !root.raw ? Shapes.rounded(root.cols, root.rows, root.skin.round) : Shapes.path(root.panel.shape, root.cols, root.rows)
 
-        // Dots nothing lights stay unlit, so the board's shape shows when dark.
-
-        // LED border along the board's outline, at the dim level; animated by
-        // LedFx on rect boards, breathing with it (and the music) on the rest.
+        // ── Frame ──
         LedRing {
-            visible: Tokens.borders && !root.raw && root.panel.shape === "rect"
+            visible: Tokens.borders && !root.raw && root.rect && (root.skin.frame === "ring" || root.skin.frame === "double")
             width: root.cols
             height: root.rows
             color: root.tube
             gain: LedFx.on ? 0.7 : 0.6
             offset: (root.cols * 7 + root.rows * 13) % 100 / 100
         }
+        // Double rule: a second, still ring two dots in.
+        Rectangle {
+            visible: !root.raw && root.rect && root.skin.frame === "double"
+            x: 2
+            y: 2
+            width: root.cols - 4
+            height: root.rows - 4
+            color: "transparent"
+            border.width: 1
+            border.color: root.tube
+            opacity: 0.55
+        }
+        // Plain: one still ring.
+        Rectangle {
+            visible: !root.raw && root.rect && root.skin.frame === "plain"
+            anchors.fill: parent
+            color: "transparent"
+            border.width: 1
+            border.color: root.tube
+        }
+        // Bezel: a dim two-dot surround, then the ring.
+        Rectangle {
+            visible: !root.raw && root.rect && root.skin.frame === "bezel"
+            anchors.fill: parent
+            color: "transparent"
+            border.width: 2
+            border.color: Tokens.slot1
+            opacity: 0.3
+        }
+        Rectangle {
+            visible: !root.raw && root.rect && root.skin.frame === "bezel"
+            x: 2
+            y: 2
+            width: root.cols - 4
+            height: root.rows - 4
+            color: "transparent"
+            border.width: 1
+            border.color: root.tube
+        }
+        // Brackets: the four corners only.
+        Repeater {
+            model: !root.raw && root.skin.frame === "brackets" ? 4 : 0
+            Item {
+                required property int index
+                readonly property int len: Math.max(4, Math.min(12, Math.floor(Math.min(root.cols, root.rows) / 5)))
+                x: index % 2 ? root.cols - len : 0
+                y: index > 1 ? root.rows - len : 0
+                width: len
+                height: len
+                Rectangle {
+                    y: parent.index > 1 ? parent.len - 1 : 0
+                    width: parent.len
+                    height: 1
+                    color: root.tube
+                }
+                Rectangle {
+                    x: parent.index % 2 ? parent.len - 1 : 0
+                    width: 1
+                    height: parent.len
+                    color: root.tube
+                }
+            }
+        }
+        // Bevel: light from the top left, shade to the bottom right.
+        Item {
+            visible: !root.raw && root.rect && root.skin.frame === "bevel"
+            anchors.fill: parent
+            Rectangle {
+                width: parent.width
+                height: 1
+                color: Tokens.slot1
+            }
+            Rectangle {
+                width: 1
+                height: parent.height
+                color: Tokens.slot1
+            }
+            Rectangle {
+                y: parent.height - 1
+                width: parent.width
+                height: 1
+                color: root.tube
+                opacity: 0.6
+            }
+            Rectangle {
+                x: parent.width - 1
+                width: 1
+                height: parent.height
+                color: root.tube
+                opacity: 0.6
+            }
+        }
+        // Any other outline: the ring follows the shape.
         Shape {
-            visible: Tokens.borders && !root.raw && root.panel.shape !== "rect"
+            visible: Tokens.borders && !root.raw && (!root.rect || root.skin.round > 0) && root.skin.frame !== "brackets"
             width: root.cols
             height: root.rows
             preferredRendererType: Shape.CurveRenderer
@@ -89,213 +338,57 @@ Item {
                 strokeColor: root.tube
                 fillColor: "transparent"
                 PathSvg {
-                    path: Shapes.path(root.panel.shape, root.cols, root.rows)
+                    path: surface.shape
                 }
             }
         }
 
-        // ── clock ──
-        DotText {
-            visible: root.panel.kind === "clock"
-            width: root.cols
-            height: root.rows
-            size: root.fit(5)
-            horizontalAlignment: Text.AlignHCenter
-            text: Qt.formatDateTime(clock.date, clock.seconds % 2 ? "hh mm" : "hh:mm")
+        // ── Title band ──
+        Rectangle {
+            visible: root.header
+            x: root.edge
+            y: root.edge
+            width: root.cols - root.edge * 2
+            height: Tokens.lineDots
             color: root.tube
-        }
-
-        // ── sign ──
-        DotText {
-            visible: root.panel.kind === "sign"
-            width: root.cols
-            height: root.rows
-            size: root.fit(Math.max(1, root.panel.text.length))
-            horizontalAlignment: Text.AlignHCenter
-            elide: Text.ElideRight
-            text: root.panel.text.toUpperCase()
-            color: root.tube
-        }
-
-        // ── note: inset from curved edges, centered vertically ──
-        DotLabel {
-            readonly property int inset: root.panel.shape === "rect" ? 2 : Math.round(Math.min(root.cols, root.rows) * 0.16)
-            visible: root.panel.kind === "note"
-            x: inset
-            y: Math.max(1, Math.round((root.rows - height) / 2))
-            width: root.cols - inset * 2
-            wrapMode: Text.Wrap
-            maximumLineCount: Math.max(1, Math.floor((root.rows - inset * 2) / Tokens.lineDots))
-            text: root.panel.text
-            color: root.tube
-        }
-
-        // ── image (dot mode; raw mode draws the crisp copy below) ──
-        Image {
-            visible: root.panel.kind === "image"
-            width: root.cols
-            height: root.rows
-            source: root.panel.kind === "image" && root.panel.source ? "file://" + root.panel.source.replace(/^~(?=\/)/, Quickshell.env("HOME")) : ""
-            sourceSize: Qt.size(root.cols, root.rows)
-            fillMode: Image.PreserveAspectCrop
-            smooth: true
-            asynchronous: true
-        }
-
-        // ── mpris: art on the left when wide, title and artist ──
-        Item {
-            visible: root.panel.kind === "mpris"
-            width: root.cols
-            height: root.rows
-            readonly property bool wide: root.cols > root.rows * 1.6
-
-            Image {
-                id: art
-                visible: parent.wide && !!root.player?.trackArtUrl
-                width: root.rows
-                height: root.rows
-                source: root.player?.trackArtUrl ?? ""
-                sourceSize: Qt.size(root.rows, root.rows)
-                fillMode: Image.PreserveAspectCrop
+            DotText {
+                x: 2
+                width: parent.width - right.implicitWidth - 6
+                elide: Text.ElideRight
+                text: root.words.head
+                color: Tokens.glass
             }
-            Column {
-                x: art.visible ? root.rows + 3 : 2
-                y: Math.max(0, Math.round((root.rows - Tokens.lineDots * 2) / 2))
-                width: root.cols - x - 2
-
-                DotText {
-                    width: parent.width
-                    height: Tokens.lineDots
-                    elide: Text.ElideRight
-                    text: (root.player?.trackTitle || (root.player ? "NOTHING PLAYING" : "NO PLAYER")).toUpperCase()
-                    color: root.tube
-                }
-                DotText {
-                    width: parent.width
-                    height: Tokens.lineDots
-                    elide: Text.ElideRight
-                    text: (root.player?.trackArtist ?? "").toUpperCase()
-                    color: Tokens.slot1
-                }
+            DotText {
+                id: right
+                anchors.right: parent.right
+                anchors.rightMargin: 2
+                text: root.words.headR
+                color: Tokens.glass
             }
         }
 
-        // ── media: art, title, artist, progress; a spectrum below when tall ──
-        Item {
-            id: media
-            visible: root.panel.kind === "media"
-            width: root.cols
-            height: root.rows
-            readonly property bool wide: root.cols > root.rows * 1.4
-            // Wide: art on the left, full height. Otherwise art on top.
-            readonly property int artSize: wide ? root.rows - 2 : Math.max(0, Math.min(root.cols - 2, root.rows - Tokens.lineDots * 2 - 4))
-            readonly property int textX: wide ? artSize + 4 : 2
-            readonly property int textY: wide ? 1 : artSize + 3
-            readonly property int textW: root.cols - textX - 2
-
-            PlainArt {
-                visible: root.panel.kind === "media" && media.artSize >= 8
-                x: 1
-                y: 1
-                width: media.artSize
-                height: media.artSize
-                source: visible ? Media.art : ""
-            }
-            Column {
-                x: media.textX
-                y: media.textY
-                width: media.textW
-
-                Item {
-                    width: parent.width
-                    height: Tokens.lineDots
-                    readonly property string text: (Media.title || (Media.active ? "NOTHING PLAYING" : "NO PLAYER")).toUpperCase()
-                    readonly property bool long: fitTitle.implicitWidth > width
-
-                    DotText {
-                        id: fitTitle
-                        width: parent.width
-                        visible: !parent.long
-                        text: parent.text
-                        color: root.tube
-                    }
-                    Marquee {
-                        width: parent.width
-                        height: parent.height
-                        visible: parent.long && root.panel.kind === "media"
-                        passes: 1000000
-                        stepMs: 40
-                        text: parent.text
-                        color: root.tube
-                        onTextChanged: if (visible) run()
-                        onVisibleChanged: if (visible) run()
-                    }
-                }
-                DotText {
-                    width: parent.width
-                    height: Tokens.lineDots
-                    elide: Text.ElideRight
-                    text: Media.artist.toUpperCase()
-                    color: Tokens.slot1
-                }
-                // Progress: lit up to where the track is.
-                Item {
-                    width: parent.width
-                    height: 4
-                    Rectangle {
-                        y: 1
-                        width: parent.width
-                        height: 1
-                        color: Tokens.slot1
-                        opacity: 0.5
-                    }
-                    Rectangle {
-                        y: 1
-                        width: Math.round(parent.width * Media.progress)
-                        height: 1
-                        color: root.tube
-                    }
-                }
-                Spectrum {
-                    readonly property int room: root.rows - 1 - media.textY - Tokens.lineDots * 2 - 4
-                    visible: root.panel.kind === "media" && room >= 6
-                    width: parent.width
-                    height: Math.max(0, room)
-                    bars: Math.max(4, Math.min(32, Math.floor(parent.width / 3)))
-                }
-            }
-        }
-
-        // ── vis: a spectrum analyser over the whole board ──
-        Spectrum {
-            visible: root.panel.kind === "vis"
-            x: 1
-            y: 1
-            width: root.cols - 2
-            height: root.rows - 2
-            bars: Math.max(4, Math.min(32, Math.floor((root.cols - 2) / 3)))
-        }
-
-        // ── pixels: last frame from `dot pixels` (a PPM image, panel resolution) ──
-        Image {
-            readonly property var frame: Panels.frames[root.panel.id] ?? null
-            visible: root.panel.kind === "pixels"
-            width: root.cols
-            height: root.rows
-            source: frame ? "data:image/x-portable-pixmap;base64," + frame.data : ""
-            smooth: false
-            cache: false
+        // ── Content ──
+        PanelNode {
+            x: root.edge + root.inset + 1
+            y: root.topInset + root.inset + (root.header ? 0 : 1)
+            width: root.cols - (root.edge + root.inset + 1) * 2
+            height: root.rows - y - root.edge - root.inset - 1
+            node: root.layout ?? ({})
+            ctx: root.ctx
+            sink: sink
+            tube: root.tube
+            clip: true
         }
     }
 
-    // ── Raw mode for images and art: full resolution, cut to the shape ──
+    // ── Raw images: full resolution, cut to the shape ───────────────
     Item {
         id: crisp
         anchors.fill: parent
         visible: root.raw && root.photo
         layer.enabled: visible
         layer.effect: MultiEffect {
-            maskEnabled: root.panel.shape !== "rect"
+            maskEnabled: !root.rect
             maskSource: crispMask
             maskThresholdMin: 0.5
             maskSpreadAtMin: 0
@@ -303,7 +396,7 @@ Item {
 
         Image {
             anchors.fill: parent
-            source: root.panel.kind === "image" ? (root.panel.source ? "file://" + root.panel.source.replace(/^~(?=\/)/, Quickshell.env("HOME")) : "") : (root.player?.trackArtUrl ?? "")
+            source: root.photo && root.panel.source ? "file://" + root.panel.source.replace(/^~(?=\/)/, Quickshell.env("HOME")) : ""
             sourceSize: Qt.size(width, height)
             fillMode: Image.PreserveAspectCrop
             asynchronous: true
@@ -315,42 +408,12 @@ Item {
         visible: false
         layer.enabled: true
         preferredRendererType: Shape.CurveRenderer
-
         ShapePath {
             strokeWidth: -1
             fillColor: "white"
             PathSvg {
                 path: Shapes.path(root.panel.shape, root.width, root.height) || `M 0 0 L ${root.width} 0 L ${root.width} ${root.height} L 0 ${root.height} Z`
             }
-        }
-    }
-
-    // Drag to move; release snaps to whole grid units.
-    MouseArea {
-        anchors.fill: parent
-        cursorShape: root.dragging ? Qt.ClosedHandCursor : Qt.OpenHandCursor
-        property point start
-
-        onPressed: mouse => {
-            start = mapToItem(root.parent, mouse.x, mouse.y);
-            root.dragging = true;
-        }
-        onPositionChanged: mouse => {
-            if (!root.dragging)
-                return;
-            const p = mapToItem(root.parent, mouse.x, mouse.y);
-            root.drag = Qt.point(p.x - start.x, p.y - start.y);
-        }
-        onReleased: {
-            const dx = Math.round(root.drag.x / root.unit), dy = Math.round(root.drag.y / root.unit);
-            // Barely moved: a click. A media board plays or pauses.
-            const click = Math.abs(root.drag.x) < 4 && Math.abs(root.drag.y) < 4;
-            root.dragging = false;
-            root.drag = Qt.point(0, 0);
-            if (dx || dy)
-                Panels.move(root.panel.id, root.panel.x + dx, root.panel.y + dy);
-            else if (click && root.panel.kind === "media")
-                Media.toggle();
         }
     }
 }

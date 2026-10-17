@@ -29,6 +29,14 @@ function path(shape, w, h) {
     }
 }
 
+// A rectangle with rounded corners, radius r dots (the eras' panel corners).
+function rounded(w, h, r) {
+    r = Math.max(0, Math.min(r, Math.floor(Math.min(w, h) / 2)));
+    if (r === 0)
+        return "";
+    return `M ${r} 0 L ${w - r} 0 Q ${w} 0 ${w} ${r} L ${w} ${h - r} Q ${w} ${h} ${w - r} ${h} L ${r} ${h} Q 0 ${h} 0 ${h - r} L 0 ${r} Q 0 0 ${r} 0 Z`;
+}
+
 // Scale every number pair in a path of absolute commands (M L C Q A Z ...).
 // Arc flags are left alone by scaling only coordinate positions.
 function scale(d, sx, sy) {

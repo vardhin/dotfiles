@@ -17,6 +17,12 @@ Singleton {
     property real mem: 0
     property real memGb: 0
     property real temp: -1
+    // The last 60 samples (2 minutes), per-core load, and the busiest
+    // processes (only while someone wants "top": want("top-<key>", true)).
+    property var cpuHist: []
+    property var memHist: []
+    property var cores: []
+    property var top: []
     readonly property real tempFraction: temp < 0 ? 0 : Math.max(0, Math.min(1, (temp - 30) / 70))
 
     property var wants: ({})
@@ -38,13 +44,19 @@ Singleton {
         id: stat
         path: "/proc/stat"
         onLoaded: {
-            const f = text().split("\n")[0].trim().split(/\s+/).slice(1).map(Number);
-            const idle = f[3] + f[4], total = f.reduce((a, b) => a + b, 0);
-            if (root.last) {
-                const dt = total - root.last.total;
-                root.cpu = dt > 0 ? Math.max(0, Math.min(1, 1 - (idle - root.last.idle) / dt)) : 0;
+            const rows = text().split("\n").filter(l => /^cpu\d*\s/.test(l)).map(l => l.trim().split(/\s+/).slice(1).map(Number));
+            const now = rows.map(f => ({ idle: f[3] + f[4], total: f.reduce((a, b) => a + b, 0) }));
+            const load = (a, b) => {
+                const dt = a.total - b.total;
+                return dt > 0 ? Math.max(0, Math.min(1, 1 - (a.idle - b.idle) / dt)) : 0;
+            };
+            if (root.last && root.last.length === now.length) {
+                root.cpu = load(now[0], root.last[0]);
+                root.cores = now.slice(1).map((c, i) => load(c, root.last[i + 1]));
+                root.cpuHist = [...root.cpuHist, root.cpu].slice(-60);
+                root.memHist = [...root.memHist, root.mem].slice(-60);
             }
-            root.last = { idle: idle, total: total };
+            root.last = now;
         }
     }
     FileView {
@@ -71,6 +83,19 @@ Singleton {
         }
     }
 
+    readonly property bool topWanted: Object.keys(wants).some(k => k.startsWith("top-"))
+    Process {
+        id: ps
+        command: ["ps", "-eo", "comm=,%cpu=,%mem=", "--sort=-%cpu"]
+        stdout: StdioCollector {
+            onStreamFinished: root.top = text.split("\n").filter(l => l.trim()).slice(0, 8).map(l => {
+                const f = l.trim().split(/\s+/);
+                const mem = f.pop(), cpu = f.pop();
+                return { name: f.join(" "), cpu: cpu, mem: mem };
+            })
+        }
+    }
+
     Timer {
         running: root.wanted
         triggeredOnStart: true
@@ -81,6 +106,8 @@ Singleton {
             meminfo.reload();
             if (sensor.path)
                 sensor.reload();
+            if (root.topWanted)
+                ps.running = true;
         }
     }
 }

@@ -124,6 +124,9 @@ Singleton {
     function focusWindow(selector: string): void {
         dsp(`hl.dsp.focus({ window = ${lit(selector)} })`, "focuswindow " + selector);
     }
+    function closeWindow(selector: string): void {
+        dsp(`hl.dsp.window.close({ window = ${lit(selector)} })`, "closewindow " + selector);
+    }
     function dpms(on: bool): void {
         dsp(`hl.dsp.dpms({ action = "${on ? "on" : "off"}" })`, on ? "dpms on" : "dpms off");
     }
