@@ -2,7 +2,6 @@
 hl.on("hyprland.start", function()
     -- Session environment for D-Bus activated apps and portals (slow app launch fix).
     hl.exec_cmd("dbus-update-activation-environment --systemd --all")
-    hl.exec_cmd("systemctl --user import-environment")
 
     -- Boot sound at mpv's own volume; the sink volume is never touched.
     hl.exec_cmd("mpv --no-video --really-quiet --volume=60 ~/.config/hypr/sounds/boot.wav")

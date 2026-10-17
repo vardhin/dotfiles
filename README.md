@@ -13,7 +13,8 @@ cd ~/dotfiles
 ./install.sh            # pacman + AUR packages, oh-my-zsh + plugins, stow every module,
                         # enable mpd + mpd-mpris (user services), McMojave-circle icons
                         # (3 variants, from git), cursor + icon theme in gsettings
-./install.sh --link     # only (re)link the modules (then reloads a running Hyprland)
+./install.sh --link     # only (re)link the modules (then reloads a running Hyprland); checks the
+                        # compiled shaders and enables .githooks (pre-commit refuses stale .qsb)
 ./install.sh --dry-run  # show what stow would do
 ./install.sh --plugins  # build + load the Hyprland plugins (no hyprpm, no sudo): Hypr-DarkWindow, dynamic-cursors;
                         # rerun after a Hyprland update
@@ -41,6 +42,7 @@ dotfiles/
 │   │   └── dotshell.lua        plugins (Hypr-DarkWindow, dynamic-cursors) and dotshell.apply():
 │   │                           window shading and frosted panes from Dot Shell's hypr.lua state
 │   ├── shaders/dotled.glsl, dotglass.glsl   per-window LED shaders (Hypr-DarkWindow)
+│   │   dotflip.glsl            the era switch: flip dots over to the new era's board
 │   ├── scripts/screenshot.sh
 │   └── sounds/boot.wav
 ├── hypr/.local/bin/hyprdo      one dispatch in whichever config language Hyprland runs
@@ -55,7 +57,8 @@ dotfiles/
 │   ├── DotSurface.qml          low-res QML canvas → LED dots (shaders/dot.frag); optional shape cut
 │   ├── DeskPanel.qml, Shapes.js  one desktop panel (clock sign note image mpris pixels) and its outlines
 │   ├── Pane.qml                a floating LED pane (layer-shell window + DotSurface)
-│   ├── DitherArt.qml, Spectrum.qml  album art in era colors (ordered dither); cava VU bars
+│   ├── PlainArt.qml, Spectrum.qml   cover art and thumbnails drawn sharp above the dots; cava VU bars
+│   ├── LedRing.qml             animated one-dot LED border for a DotSurface (driven by LedFx)
 │   ├── Scroller.qml, TvScreen.qml   looping LED text; Dot TV's video as dots (tvled.frag)
 │   ├── TopStrip.qml            workspaces | clock / ticker | status words, tray
 │   ├── DotText DotLabel DotButton DotInput VuBar Marquee FlapText Frame Rule Line StatusWord
@@ -69,7 +72,10 @@ dotfiles/
 │   │                           (Dot TV library, SCREEN settings), Sys (CPU, memory, temperature),
 │   │                           Capture (screenshots, recording, color picker), Clip (clipboard history),
 │   │                           Hypr (every call into Hyprland, Lua or hyprlang), Sound (era UI sounds),
-│   │                           Wall + WallCtx.js (the P10 wall: sources, software canvas, sender)
+│   │                           Wall + WallCtx.js (the P10 wall: sources, software canvas, sender),
+│                           LedFx (animated LED borders, the `ledfx` token), WsFx (dissolving
+│                           workspace switches, the `wsfx` token), Anime (AniList + ani-cli
+│                           through `dotanime`)
 │   ├── panes/                  Launcher, Messages, ToastStack, Osd, Session, Cheatsheet,
 │   │                           Calendar, Audio, Brightness, Wifi, Bluetooth, Battery, Eras,
 │   │                           Packages, Media (NOW / TV / LISTS / SCREEN), Capture, Clip
@@ -78,16 +84,21 @@ dotfiles/
 │   │                           Wallpaper (dots/image/off, parallax), World
 │   │                           (desktop panels; slides with workspaces), WindowFx (window
 │   │                           open/close as LED dots), Scene + Scenes.js (the era scenes),
-│   │                           Overview (the switchboard)
+│   │                           Overview (the switchboard), WorkspaceFx (snapshot + dissolve on
+│                           workspace switch), Anime* (the MEDIA pane's ANIME page: shelves,
+│                           episodes, switches)
 │   ├── pam/dotshell            PAM stack for the lock screen (pam_unix only)
 │   ├── shaders/                dot.frag(.qsb) for DotSurface, winfx.frag(.qsb) for WindowFx,
-│   │                           art.frag(.qsb) for DitherArt, wall.frag(.qsb) the screen look
-│   │                           on the wallpaper; screen.glsl, night warmth for Hyprland's
-│   │                           screen shader (GLSL ES 3.00)
-│   ├── build-shaders.sh        recompile .qsb after editing a .frag (qt6-shadertools)
-│   └── (../../.local/bin/dot, dotws, dotcursor, dotsound, dotwall, dotanime)  the `dot` CLI,
-│                               `dotws` (workspace switches through the shell), the cursor and
-│                               sound makers, the wall sender, anime through ani-cli; linked to
+│   │                           wall.frag(.qsb) the screen look on the wallpaper, ledring.frag
+│   │                           for LedRing, wsfx.frag for WorkspaceFx, tvled.frag for TvScreen;
+│   │                           screen.glsl, night warmth for Hyprland's screen shader (GLSL ES 3.00);
+│   │                           SOURCES.sha256, the sources the committed .qsb were built from
+│   ├── build-shaders.sh        recompile .qsb after editing a .frag (qt6-shadertools);
+│   │                           --check fails when a .qsb is stale, missing or orphaned
+│   └── (../../.local/bin/dot, dotws, dotcursor, dotsound, dotwall, dotanime, dotreopen)  the
+│                               `dot` CLI, `dotws` (workspace switches through the shell), the
+│                               cursor and sound makers, the wall sender, anime through ani-cli,
+│                               Files restarted in the new era with its windows kept; linked to
 │                               ~/.local/bin
 ├── mpv/.config/mpv/            → ~/.config/mpv  mpv.conf; scripts/dottv.lua (Dot TV: titles, play
 │                               counts, Endless Mix, L); shaders/dotled.glsl (LED video)

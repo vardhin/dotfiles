@@ -2,7 +2,7 @@
 # Install these dotfiles on an Arch machine.
 #
 #   ./install.sh            packages + zsh framework + stow all modules + user services
-#   ./install.sh --link     only (re)stow the modules
+#   ./install.sh --link     only (re)stow the modules (and check the compiled shaders)
 #   ./install.sh --dry-run  show what stow would do, change nothing
 #   ./install.sh --plugins  only build and load the Hyprland plugins (no sudo)
 #
@@ -195,11 +195,19 @@ set_theme() {
   gsettings set org.gnome.desktop.interface icon-theme McMojave-circle-dark
 }
 
+# The committed .qsb shaders must match their sources (build-shaders.sh
+# records them); warn here, and refuse commits that would break it.
+check_shaders() {
+  git -C "$DOTFILES" config core.hooksPath .githooks 2>/dev/null || true
+  "$DOTFILES/quickshell/.config/quickshell/dotshell/build-shaders.sh" --check \
+    || log "shaders: rebuild with quickshell/.config/quickshell/dotshell/build-shaders.sh"
+}
+
 case "${1:-}" in
   --dry-run) link_modules --dry-run ;;
-  --link)    link_modules ;;
+  --link)    link_modules; check_shaders ;;
   --plugins) install_plugins ;;
-  "")        install_packages; install_zsh_framework; link_modules; enable_services; install_icons; install_plugins; set_theme ;;
+  "")        install_packages; install_zsh_framework; link_modules; check_shaders; enable_services; install_icons; install_plugins; set_theme ;;
   *)         echo "usage: $0 [--link|--dry-run|--plugins]" >&2; exit 2 ;;
 esac
 

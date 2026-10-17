@@ -1,0 +1,6 @@
+#!/usr/bin/env bash
+# Refuse a commit whose compiled shaders (.qsb) don't match their sources.
+# Enabled by install.sh (git config core.hooksPath .githooks).
+set -euo pipefail
+git diff --cached --name-only | grep -q '^quickshell/.config/quickshell/dotshell/shaders/' || exit 0
+exec "$(git rev-parse --show-toplevel)/quickshell/.config/quickshell/dotshell/build-shaders.sh" --check
