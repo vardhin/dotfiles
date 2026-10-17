@@ -13,3 +13,8 @@ hypr/.config/hypr/hyprland.conf
 *.db
 *.sqlite
 __pycache__/
+
+# Editor swap files
+.*.sw?
+.sw?
+*~
