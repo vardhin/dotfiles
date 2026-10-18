@@ -1,0 +1,20 @@
+# dotd rules: what happens to an event (see dotd/src/rules.rs).
+# Tried in order; the first match runs, unless it says `continue = true`.
+# match keys: source, kind, or any data field; values are globs with *.
+# Sinks run in this order: sort, index, feed, notify.
+# Saved edits are picked up at once (or: dotd reload).
+
+# A download finished: sort it by sort.toml, queue it for the index, show
+# it on the Downloads panel, and say so (with an undo if it was moved).
+[[rule]]
+match  = { source = "downloads", kind = "finished" }
+sort   = true
+index  = true
+feed   = "downloads"
+notify = { title = "Downloaded", body = "{name}  →  {bin}", urgency = "low", actions = ["open", "reveal", "undo"] }
+
+# Anything a script sends with a feed field goes straight to that feed:
+#   dotd event git dirty '{"feed":"git","repo":"dotfiles","files":3}'
+# [[rule]]
+# match = { source = "git" }
+# feed  = "git"

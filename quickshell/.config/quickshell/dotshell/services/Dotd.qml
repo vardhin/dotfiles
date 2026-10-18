@@ -45,14 +45,20 @@ Singleton {
             sock.flush();
         } else {
             pending = [...pending, req].slice(-50);
-            sock.connected = true;
+            connect();
         }
+    }
+
+    // Socket keeps wanting a connection after one fails, so setting
+    // connected again is a no-op: drop the want, then ask again.
+    function connect(): void {
+        sock.connected = false;
+        sock.connected = true;
     }
 
     Socket {
         id: sock
         path: root.path
-        connected: true
         onConnectionStateChanged: {
             root.up = connected;
             if (connected) {
@@ -87,7 +93,7 @@ Singleton {
         running: !sock.connected
         interval: 30000
         repeat: true
-        onTriggered: sock.connected = true
+        onTriggered: root.connect()
     }
 
     // ── Shell events in ─────────────────────────────────────────────
@@ -96,7 +102,8 @@ Singleton {
     readonly property int temp: Math.round(Sys.temp)
     onIdleChanged: sendState()
     onAcChanged: sendState()
-    onTempChanged: tempSend.restart()
+    // At most every 5 s: the temperature moves on every 2 s poll.
+    onTempChanged: if (!tempSend.running) tempSend.start()
 
     IdleMonitor {
         id: idleMon
@@ -109,7 +116,10 @@ Singleton {
         onTriggered: root.sendState()
     }
     // dotd needs the temperature even with no panel showing it.
-    Component.onCompleted: Sys.want("dotd", true)
+    Component.onCompleted: {
+        Sys.want("dotd", true);
+        connect();
+    }
 
     function sendState(): void {
         if (!sock.connected)

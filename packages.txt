@@ -6,6 +6,7 @@ stow
 socat           # dotws: workspace switches over the Dot Shell socket
 git
 base-devel
+rustup          # cargo for dotd (install.sh runs `rustup default stable` if needed)
 
 # Compositor + session
 hyprland

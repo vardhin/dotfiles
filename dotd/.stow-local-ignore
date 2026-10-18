@@ -1,0 +1,9 @@
+# Stow links only .config/ from this module; the Rust source is built by
+# install.sh into ~/.local/bin/dotd.
+^/Cargo\.toml
+^/Cargo\.lock
+^/src
+^/target
+^/README.*
+\.stow-local-ignore
+^/\.gitignore

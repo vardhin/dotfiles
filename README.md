@@ -115,6 +115,10 @@ dotfiles/
 ├── zsh/.config/zsh/dotterm.zsh  terminal ↔ shell: notify when a command over 10 s ends or one
 │                               waits for input while you're elsewhere; `yay -S` without the [Y/n]
 ├── zsh/.local/bin/dotwait      the waiting-for-input watcher dotterm.zsh starts per command
+├── dotd/                       dotd, the event daemon (Rust; install.sh --dotd builds ~/.local/bin/dotd)
+│   ├── src/                    sources → events → rules → sinks (notify, feed, sort, index)
+│   ├── .config/dotd/           → ~/.config/dotd  rules.toml, sort.toml (stowed; reloaded on save)
+│   └── .config/systemd/user/dotd.service
 ├── p10/                        the P10 wall's receiver, for the Raspberry Pi (not stowed):
 │                               dotwall-pi.py, dotwall.service
 ├── system/                     outside ~, installed by `sudo system/install.sh`
@@ -378,6 +382,27 @@ dot list;  dot rm rain
 
 Field types for a layout: `label` `big` `meter` `progress` `spark` `list` `art` `status` `marquee`.
 Positions and sizes are grid units (12 px).
+
+### dotd
+
+`dotd` is a small Rust user service that turns things happening on the laptop into notifications,
+panel feeds and (soon) a searchable index; the shell only renders. A **source** produces events
+(`{source, kind, data}`), **rules** in `~/.config/dotd/rules.toml` pick what happens to them, and
+**sinks** do it: `sort` (move the file), `index` (queue it), `feed` (push it to a panel), `notify`.
+
+**Downloads.** A file that lands in `~/Downloads` (a browser's `.part` renamed into place, or anything
+closed after writing) waits 2 s, then is sorted by `~/.config/dotd/sort.toml`: documents →
+`~/Documents/Downloads`, images → `~/Pictures/Downloads`, video → `~/Videos`, audio → `~/Music`,
+archives and installers → `~/Archives`; anything else stays. A notification offers Open, Show in folder
+and Undo, and the Downloads panel lists it with an UNDO. Every move is in
+`~/.local/state/dotd/moves.log`. Files already there when dotd starts are left alone.
+
+```bash
+dotd status                  # rules, moves, feeds, what the shell last said (idle, AC, temperature)
+dotd undo                    # put the last sorted download back (or: dotd undo 7)
+dotd event git dirty '{"repo":"dotfiles","files":3}'   # any script can send an event
+systemctl --user restart dotd;  journalctl --user -u dotd -f
+```
 
 ### Media
 

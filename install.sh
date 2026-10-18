@@ -6,13 +6,14 @@
 #   ./install.sh --dry-run  show what stow would do, change nothing
 #   ./install.sh --plugins  only build and load the Hyprland plugins (no sudo)
 #   ./install.sh --yay      only save the yay defaults (no menus, sudo loop)
+#   ./install.sh --dotd     only build dotd and (re)start its service
 #
 # Existing files that would block a symlink are moved to
 # ~/.dotfiles-backup/<timestamp>/ before stowing.
 set -euo pipefail
 
 DOTFILES="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-MODULES=(hypr quickshell ghostty fontconfig zsh mpv mpd cava)
+MODULES=(hypr quickshell ghostty fontconfig zsh mpv mpd cava dotd)
 BACKUP="$HOME/.dotfiles-backup/$(date +%Y%m%d-%H%M%S)"
 
 log() { printf '\033[1;33m::\033[0m %s\n' "$*"; }
@@ -119,6 +120,19 @@ enable_services() {
   done
 }
 
+# dotd, the event daemon (dotd/ in the dotfiles): built with cargo into
+# ~/.local/bin/dotd; its config and unit are stowed with the dotd module.
+install_dotd() {
+  command -v cargo >/dev/null || { log "no cargo (pacman -S rust); dotd skipped"; return 0; }
+  log "dotd"
+  command -v rustup >/dev/null && ! rustup default >/dev/null 2>&1 && rustup default stable
+  cargo build --release --manifest-path "$DOTFILES/dotd/Cargo.toml" || { log "dotd did not build"; return 0; }
+  install -Dm 755 "$DOTFILES/dotd/target/release/dotd" "$HOME/.local/bin/dotd"
+  systemctl --user daemon-reload
+  systemctl --user enable dotd.service
+  systemctl --user restart dotd.service
+}
+
 # McMojave-circle, -light and -dark into ~/.local/share/icons, unless some
 # copy (yours, or the AUR package's) is there already.
 install_icons() {
@@ -218,8 +232,9 @@ case "${1:-}" in
   --link)    link_modules; check_shaders ;;
   --plugins) install_plugins ;;
   --yay)     configure_yay ;;
-  "")        install_packages; configure_yay; install_zsh_framework; link_modules; check_shaders; enable_services; install_icons; install_plugins; set_theme ;;
-  *)         echo "usage: $0 [--link|--dry-run|--plugins|--yay]" >&2; exit 2 ;;
+  --dotd)    install_dotd ;;
+  "")        install_packages; configure_yay; install_zsh_framework; link_modules; check_shaders; enable_services; install_dotd; install_icons; install_plugins; set_theme ;;
+  *)         echo "usage: $0 [--link|--dry-run|--plugins|--yay|--dotd]" >&2; exit 2 ;;
 esac
 
 log "done"

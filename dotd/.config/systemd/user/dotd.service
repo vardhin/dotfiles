@@ -1,0 +1,15 @@
+[Unit]
+Description=dotd, Dot Shell's event daemon (downloads, feeds, index)
+Documentation=file://%h/dotfiles/README.md
+
+[Service]
+ExecStart=%h/.local/bin/dotd
+ExecReload=kill -HUP $MAINPID
+Restart=on-failure
+RestartSec=3
+# The heavy extraction tier (Phase 14) stays out of the way of the desktop.
+Nice=10
+IOSchedulingClass=idle
+
+[Install]
+WantedBy=default.target

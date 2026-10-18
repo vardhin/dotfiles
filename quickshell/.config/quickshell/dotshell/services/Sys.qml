@@ -69,10 +69,18 @@ Singleton {
             root.memGb = (total - avail) / 1048576;
         }
     }
-    FileView {
+    // A sysfs file reports no size, so FileView never loads it; cat it instead.
+    Process {
         id: sensor
-        path: ""
-        onLoaded: root.temp = Number(text()) / 1000
+        property string path: ""
+        command: ["cat", path]
+        stdout: StdioCollector {
+            onStreamFinished: {
+                const v = Number(text.trim());
+                if (text.trim() !== "" && !isNaN(v))
+                    root.temp = v / 1000;
+            }
+        }
     }
 
     Process {
@@ -105,7 +113,7 @@ Singleton {
             stat.reload();
             meminfo.reload();
             if (sensor.path)
-                sensor.reload();
+                sensor.running = true;
             if (root.topWanted)
                 ps.running = true;
         }
