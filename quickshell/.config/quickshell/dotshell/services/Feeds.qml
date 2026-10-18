@@ -14,6 +14,7 @@ import qs
 //             one of the same name, so dotd's downloads win over the fallback.
 //   built-in  the shell's own state, below: clock media workspaces sys power
 //             notifs capture caffeine tray downloads files clip todo shots dock
+//             tv
 // Several panels can bind one feed. Feeds that poll (sys, downloads, files,
 // shots, caffeine) only do so while some panel on screen wants them:
 // want(feed, key, on).
@@ -79,12 +80,14 @@ Singleton {
             return shotsFeed;
         case "dock":
             return dockFeed;
+        case "tv":
+            return tvFeed;
         default:
             return ({});
         }
     }
 
-    readonly property var builtin: ["clock", "media", "workspaces", "sys", "power", "notifs", "capture", "caffeine", "tray", "downloads", "files", "clip", "todo", "shots", "dock"]
+    readonly property var builtin: ["clock", "media", "workspaces", "sys", "power", "notifs", "capture", "caffeine", "tray", "downloads", "files", "clip", "todo", "shots", "dock", "tv"]
     function ids(): var {
         return [...new Set([...builtin, ...Object.keys(pushed)])];
     }
@@ -105,6 +108,8 @@ Singleton {
         wants = w;
         if (feed === "sys")
             Sys.want("feed-" + key, on);
+        if (feed === "tv")
+            Tv.panels = wanted("tv");
     }
     function wanted(feed: string): bool {
         return Object.keys(wants[feed] ?? {}).length > 0;
@@ -175,6 +180,36 @@ Singleton {
             lyricNext: Lyrics.next,
             hasVideo: Media.isVideo || VideoMatch.url !== ""
         })
+
+    // ── tv ──────────────────────────────────────────────────────────
+    // Dot TV: what plays (dottv's queue, polled while a panel shows it), up
+    // next, and the library, most played first.
+    readonly property var tvFeed: {
+        const st = Tv.status;
+        const cur = st.current ? (Tv.byId[st.current.id] ?? st.current) : null;
+        const on = Media.isTv;
+        const top = Tv.library.slice(0, 12).map(e => ({ id: e.id, title: e.title, channel: e.channel ?? "", thumb: e.thumb ?? "", plays: e.plays ?? 0, duration: e.duration ?? "" }));
+        return {
+            running: !!st.running,
+            on: on,
+            playing: on && Media.isPlaying,
+            title: cur?.title ?? "",
+            channel: cur?.channel ?? "",
+            thumb: cur?.thumb ?? "",
+            progress: on ? Media.progress : 0,
+            pos: on ? Media.position : 0,
+            len: on ? Media.length : 0,
+            mix: !!st.mix,
+            hasVideo: Media.isVideo,
+            next: (st.queue ?? []).slice(0, 6).map(q => ({ id: q.id, title: q.title ?? Tv.byId[q.id]?.title ?? q.id })),
+            hasNext: (st.queue ?? []).length > 0,
+            top: top,
+            // Compact lists up next while playing, the library otherwise.
+            shown: on && (st.queue ?? []).length ? (st.queue ?? []).slice(0, 3).map(q => ({ id: q.id, title: q.title ?? q.id })) : top.slice(0, 3),
+            mixSlot: st.mix ? 2 : "dim",
+            count: Tv.library.length
+        };
+    }
 
     // ── workspaces ──────────────────────────────────────────────────
     readonly property var windows: (Hyprland.toplevels?.values ?? []).map(t => ({

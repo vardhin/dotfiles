@@ -22,7 +22,7 @@ import "../Templates.js" as Templates
 //     shape, source, text }
 //   template  a name from Templates.js (nowplaying clock workspaces system
 //             battery messages capture caffeine tray downloads files
-//             clipboard todo screenshots dock, the popped vis and lyrics
+//             clipboard todo screenshots dock tv, the popped vis and lyrics
 //             boards, and the Phase 4 kinds: sign note image mpris media
 //             pixels board)
 //   feed      the feed it binds ("" = the template's own)
@@ -93,11 +93,18 @@ Singleton {
     }
 
     // Phase 4 panels (kind, workspace) become templates on home; the first
-    // time, the 15-panel set is added: the old strip items docked where they
+    // time, the 16-panel set is added: the old strip items docked where they
     // were, System in the rail, the rest on home.
     function migrate(): void {
-        if (store.version >= 2)
+        if (store.version >= 3)
             return;
+        // v3: Dot TV joins the set, on the free right half of home.
+        if (store.version === 2) {
+            if (!store.panels.some(p => p.template === "tv"))
+                store.panels = [...store.panels, Object.assign(base("tv"), { id: freeId("tv"), x: 82, y: 6 })];
+            store.version = 3;
+            return;
+        }
         const out = store.panels.map(p => {
             const q = Object.assign({}, p);
             if (!q.template)
@@ -113,7 +120,7 @@ Singleton {
         store.panels = [...out, ...seed(out)];
         if (!store.pinned.length)
             store.pinned = ["firefox", "com.mitchellh.ghostty", "org.gnome.Nautilus", "code"].filter(id => DesktopEntries.byId(id));
-        store.version = 2;
+        store.version = 3;
     }
 
     function seed(existing: var): var {
@@ -145,7 +152,8 @@ Singleton {
             mk("files", { place: "home", x: 8, y: 20 }),
             mk("clipboard", { place: "home", x: 8, y: 36 }),
             mk("todo", { place: "home", x: 42, y: 6 }),
-            mk("screenshots", { place: "home", x: 42, y: 25 })
+            mk("screenshots", { place: "home", x: 42, y: 25 }),
+            mk("tv", { place: "home", x: 82, y: 6 })
         ];
     }
 

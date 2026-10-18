@@ -137,6 +137,16 @@ Item {
         }
     }
 
+    // Presses on a clickable node also go to the sink's grip(kind, x, y)
+    // (window px), so the panel or docked item can still be held or dragged
+    // from there; a press that became a drag is not a click.
+    function grip(kind: string, area: Item, mouse: var): bool {
+        if (!sink || typeof sink.grip !== "function")
+            return false;
+        const p = area.mapToItem(null, mouse?.x ?? 0, mouse?.y ?? 0);
+        return sink.grip(kind, p.x, p.y);
+    }
+
     // A click anywhere on a node with an action (inputs and seek bars take
     // their own clicks).
     MouseArea {
@@ -145,7 +155,21 @@ Item {
         enabled: root.action !== "" && root.kind !== "input" && root.kind !== "progress"
         hoverEnabled: enabled
         cursorShape: enabled ? Qt.PointingHandCursor : Qt.ArrowCursor
-        onClicked: root.run(root.action)
+        property bool dragged: false
+        onPressed: mouse => {
+            dragged = false;
+            root.grip("press", hit, mouse);
+        }
+        onPositionChanged: mouse => {
+            if (pressed)
+                root.grip("move", hit, mouse);
+        }
+        onReleased: mouse => dragged = root.grip("release", hit, mouse)
+        onCanceled: root.grip("cancel", hit, null)
+        onClicked: {
+            if (!dragged)
+                root.run(root.action);
+        }
     }
 
     // ── Containers ──────────────────────────────────────────────────

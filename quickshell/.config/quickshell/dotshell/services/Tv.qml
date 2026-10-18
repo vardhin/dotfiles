@@ -55,6 +55,8 @@ Singleton {
     property string searched: ""
     // Set while a pane shows the queue: status is polled only then.
     property bool watching: false
+    // Set while a Dot TV panel is on screen (Feeds.want): polled then too.
+    property bool panels: false
 
     // ── Screen settings ─────────────────────────────────────────────
     readonly property var screen: ({
@@ -199,7 +201,7 @@ Singleton {
         }
     }
     Timer {
-        running: root.watching || root.syncing
+        running: root.watching || root.panels || root.syncing
         triggeredOnStart: true
         interval: 1500
         repeat: true

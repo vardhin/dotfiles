@@ -2,6 +2,7 @@ name = "exif"
 mimes = ["image/jpeg", "image/heic", "image/heif", "image/tiff", "image/webp", "image/png", "image/x-*"]
 exts = ["heic", "dng", "cr2", "nef", "arw"]
 tier = "cheap"
-version = 1
+# 2: re-run now that exiftool is installed (1 fell back to ImageMagick)
+version = 2
 exec = "exif"
 timeout = 20

@@ -449,6 +449,75 @@ all.dock = {
     rail: C([L("", { align: "center", slot: 2, action: "launcher" }), LIST("running", L("{glyph}", { align: "center", slot: "{slot}", action: "jump {cls}" }), { max: 8, h: "auto", gap: 2 })], { gap: 3 })
 };
 
+// ── Dot TV ───────────────────────────────────────────────────────────
+// What Dot TV plays, up next, and the library (most played first): a click
+// plays, QUE queues. Expanded shows the video as dots.
+all.tv = {
+    name: "tv", title: "Dot TV", feed: "tv", wants: ["media"],
+    size: { w: 34, h: 16 }, big: { w: 48, h: 40 },
+    words: { idle: "DOT TV", lib: "LIBRARY", next: "UP NEXT", mix: "MIX", win: "WINDOW", play: "", pause: "", skip: "" },
+    compact: C([
+        R([
+            F("art", { src: "thumb", w: 40, h: 23, when: "thumb" }),
+            C([
+                L("{title=~idle|upper}", { scroll: "always" }),
+                L("{channel|upper}", { slot: 1, when: "channel" }),
+                L("{count} IN THE LIBRARY", { slot: "dim", when: "!on" }),
+                F("progress", { value: "progress", h: 3, when: "on" }),
+                R([
+                    L("{~pause}", { action: "media toggle", when: "playing" }),
+                    L("{~play}", { action: "media toggle", when: "on&&!playing" }), GAP,
+                    L("{~skip}", { action: "tv skip", when: "on" }),
+                    SPACE,
+                    L("{~mix}", { slot: "{mixSlot}", action: "tv mix" }), GAP,
+                    L("{~lib}", { slot: 2, action: "tv library" })
+                ])
+            ], { pad: 1 })
+        ], { gap: 3 }),
+        LIST("shown", R([L("{title|upper}", { w: "fill", scroll: true, action: "tv play {id}" }), L("QUE", { slot: "dim", action: "tv queue {id}" })], { gap: 4 }), { max: 3 })
+    ], { pad: 2, gap: 2 }),
+    expanded: C([
+        F("video", { h: 60, when: "hasVideo" }),
+        R([
+            F("art", { src: "thumb", w: 54, h: 30, when: "thumb&&!hasVideo" }),
+            C([
+                L("{title=~idle|upper}", { scroll: true }),
+                L("{channel|upper}", { slot: 1, scroll: true }),
+                R([L("{pos|clock}", { slot: 1, when: "on" }), SPACE, L("{len|clock}", { slot: 1, when: "on" })]),
+                F("progress", { value: "progress", h: 3, action: "media seek", when: "on" }),
+                R([
+                    L("{~pause}", { action: "media toggle", when: "playing" }),
+                    L("{~play}", { action: "media toggle", when: "on&&!playing" }), GAP,
+                    L("{~skip}", { action: "tv skip", when: "on" }),
+                    SPACE,
+                    L("{~mix}", { slot: "{mixSlot}", action: "tv mix" }), GAP,
+                    L("{~win}", { slot: 1, action: "tv window" }), GAP,
+                    L("{~lib}", { slot: 2, action: "tv library" })
+                ])
+            ], { pad: 1 })
+        ], { gap: 3 }),
+        L("{~next}", { slot: 2, when: "hasNext" }),
+        LIST("next", L("{title|upper}", { scroll: true, action: "tv play {id}" }), { max: 4, when: "hasNext" }),
+        RULE,
+        LIST("top", R([
+            L("{title|upper}", { w: "fill", scroll: true, action: "tv play {id}" }),
+            L("{duration}", { slot: "dim" }), GAP,
+            L("QUE", { slot: 1, action: "tv queue {id}" }), GAP,
+            L("NEXT", { slot: 1, action: "tv next {id}" })
+        ], { gap: 3 }), { max: 10 })
+    ], { pad: 2, gap: 2 }),
+    strip: R([
+        L("{~pause}", { slot: 2, when: "playing", action: "media toggle" }),
+        L("{~play}", { slot: 2, when: "!playing", action: "media toggle" }),
+        L("{title|upper}", { slot: 2, scroll: "always", w: 112, action: "tv library" })
+    ], { gap: 7, when: "on" }),
+    rail: C([
+        L("{~pause}", { align: "center", slot: 2, action: "media toggle", when: "playing" }),
+        L("{~play}", { align: "center", slot: 2, action: "media toggle", when: "!playing" }),
+        L("{~skip}", { align: "center", action: "tv skip" })
+    ], { gap: 2, when: "on" })
+};
+
 // ── Popped boards (Now playing's VIS and LYR) ────────────────────────
 all.vis = {
     name: "vis", title: "Spectrum", feed: "media", wants: ["media"], size: { w: 30, h: 10 }, big: { w: 40, h: 20 },
@@ -504,7 +573,7 @@ all.board = {
 };
 
 // The 15-panel home set, in the order `dot home --reset` lays it out.
-var homeSet = ["nowplaying", "clock", "workspaces", "system", "battery", "messages", "capture", "caffeine", "tray", "downloads", "files", "clipboard", "todo", "screenshots", "dock"];
+var homeSet = ["nowplaying", "clock", "workspaces", "system", "battery", "messages", "capture", "caffeine", "tray", "downloads", "files", "clipboard", "todo", "screenshots", "dock", "tv"];
 var names = Object.keys(all);
 
 function get(name) {

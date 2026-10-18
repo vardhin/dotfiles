@@ -12,6 +12,9 @@ FocusScope {
     property bool mask: false
     // The modifiers held on the last Enter, for onAccepted (Shift Enter).
     property int acceptMods: 0
+    // Sees every key before the field does; returns true to take it
+    // (the launcher's Alt shortcuts, which would otherwise type a letter).
+    property var keyFilter: null
     signal accepted
 
     readonly property real dpr: QsWindow.window?.devicePixelRatio ?? 1
@@ -40,6 +43,10 @@ FocusScope {
         clip: true
         onAccepted: root.accepted()
         Keys.onPressed: event => {
+            if (root.keyFilter && root.keyFilter(event)) {
+                event.accepted = true;
+                return;
+            }
             if (event.key === Qt.Key_Return || event.key === Qt.Key_Enter)
                 root.acceptMods = event.modifiers;
         }

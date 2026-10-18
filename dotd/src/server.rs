@@ -6,12 +6,16 @@
 //                                                   the shell's state (no reply);
 //                                                   a new shell gets the feeds again
 //   {"cmd":"undo","arg":"7"}                        undo a sort ("" = the last)
-//   {"cmd":"query","q":"red bike","limit":20}       search the index
+//   {"cmd":"query","q":"red bike","limit":20}       search the index; narrowed by
+//      "mime":"image/", "dir":["~/Music"]         a mime prefix and folders
+//                                                   (no words: the newest that fit)
+//   {"cmd":"downloads","q":"invoice","limit":20}    sorted downloads, newest first
 //   {"cmd":"rescan"}                                walk the indexed folders again
 //   {"cmd":"status"}  {"cmd":"reload"}  {"cmd":"feeds"}
 
 use crate::daemon::{self, Shared};
 use crate::event::{Event, now_ms};
+use crate::index::Want;
 use crate::paths;
 use anyhow::Result;
 use serde_json::{Value, json};
@@ -98,14 +102,44 @@ async fn answer(d: &Shared, events: &mpsc::UnboundedSender<Event>, cmd: &str, re
         "query" => {
             let q = req.get("q").and_then(Value::as_str).unwrap_or(arg).to_string();
             let limit = req.get("limit").and_then(Value::as_u64).unwrap_or(20).min(200) as usize;
+            let want: Want = serde_json::from_value(req.clone()).unwrap_or_default();
             let Some(ix) = d.borrow().index.clone() else {
                 return json!({ "ok": false, "error": "the index is not running" });
             };
-            match tokio::task::spawn_blocking(move || ix.query(&q, limit)).await {
+            match tokio::task::spawn_blocking(move || ix.query(&q, limit, &want)).await {
                 Ok(Ok(hits)) => json!({ "ok": true, "results": hits }),
                 Ok(Err(e)) => json!({ "ok": false, "error": format!("{e:#}") }),
                 Err(e) => json!({ "ok": false, "error": e.to_string() }),
             }
+        }
+        "downloads" => {
+            let q = req.get("q").and_then(Value::as_str).unwrap_or(arg).to_lowercase();
+            let limit = req.get("limit").and_then(Value::as_u64).unwrap_or(20).min(200) as usize;
+            let dm = d.borrow();
+            let hits: Vec<Value> = dm
+                .moves
+                .moves
+                .iter()
+                .rev()
+                .filter(|m| !m.undone)
+                .filter(|m| {
+                    let name = m.to.file_name().map(|n| n.to_string_lossy().to_lowercase()).unwrap_or_default();
+                    q.split_whitespace().all(|w| name.contains(w))
+                })
+                .take(limit)
+                .map(|m| {
+                    json!({
+                        "id": m.id,
+                        "at": m.at,
+                        "name": m.to.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default(),
+                        "path": m.to,
+                        "from": m.from,
+                        "dir": m.to.parent(),
+                        "here": m.to.exists(),
+                    })
+                })
+                .collect();
+            json!({ "ok": true, "results": hits })
         }
         "rescan" => match &d.borrow().index {
             Some(ix) => {
@@ -135,6 +169,6 @@ async fn answer(d: &Shared, events: &mpsc::UnboundedSender<Event>, cmd: &str, re
                 "index": dm.index.as_ref().map(|ix| ix.stats()),
             })
         }
-        _ => json!({ "ok": false, "error": "unknown cmd; one of: event shell undo query rescan reload feeds status" }),
+        _ => json!({ "ok": false, "error": "unknown cmd; one of: event shell undo query downloads rescan reload feeds status" }),
     }
 }

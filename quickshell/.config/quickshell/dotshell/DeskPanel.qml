@@ -82,6 +82,19 @@ Item {
             }
             Actions.run(a);
         }
+        // Held or dragged from a clickable node (PanelNode.grip).
+        function grip(kind: string, x: real, y: real): bool {
+            const p = root.parent.mapFromItem(null, x, y);
+            if (kind === "press")
+                root.press(p);
+            else if (kind === "move")
+                root.move(p);
+            else if (kind === "release")
+                return root.release();
+            else
+                root.cancel();
+            return false;
+        }
     }
 
     // ── Placement and drag ──────────────────────────────────────────
@@ -133,66 +146,68 @@ Item {
         return { target: "home", zone: "", order: 0 };
     }
 
+    // Press, move, release in root.parent's px: from the grab area below,
+    // and from clickable nodes through sink.grip. release() says whether
+    // the press became a drag.
+    property point start
+    function press(p: point): void {
+        start = p;
+        hold.restart();
+    }
+    function move(p: point): void {
+        const dx = p.x - start.x, dy = p.y - start.y;
+        if (!lifted && Math.abs(dx) + Math.abs(dy) > 6)
+            lift();
+        if (!lifted)
+            return;
+        drag = Qt.point(dx, dy);
+        Panels.drag = Object.assign({ id: panel.id, from: "home", x: p.x, y: p.y }, aim(p.x, p.y));
+    }
+    function release(): bool {
+        hold.stop();
+        if (!lifted)
+            return false;
+        const d = Panels.drag;
+        lifted = false;
+        Panels.drag = null;
+        if (d && d.target !== "home") {
+            drag = Qt.point(0, 0);
+            Panels.place(panel.id, d.target, d.zone, d.order, 0, 0);
+            return true;
+        }
+        // Home: snap to the 24 px grid (two units).
+        const nx = Math.round((homeX + drag.x) / (unit * 2)) * 2;
+        const ny = Math.round((homeY + drag.y) / (unit * 2)) * 2;
+        drag = Qt.point(0, 0);
+        if (nx !== panel.x || ny !== panel.y)
+            Panels.move(panel.id, Math.max(0, nx), Math.max(0, ny));
+        return true;
+    }
+    function cancel(): void {
+        hold.stop();
+        lifted = false;
+        drag = Qt.point(0, 0);
+        Panels.drag = null;
+    }
+    Timer {
+        id: hold
+        interval: 200
+        onTriggered: root.lift()
+    }
+
     MouseArea {
         id: grab
         anchors.fill: parent
         acceptedButtons: Qt.LeftButton
         cursorShape: root.lifted ? Qt.ClosedHandCursor : Qt.ArrowCursor
-        property point start
-        property point grabOffset
-        property bool moved: false
 
-        Timer {
-            id: hold
-            interval: 200
-            onTriggered: root.lift()
-        }
-
-        onPressed: mouse => {
-            start = mapToItem(root.parent, mouse.x, mouse.y);
-            grabOffset = Qt.point(mouse.x, mouse.y);
-            moved = false;
-            hold.restart();
-        }
-        onPositionChanged: mouse => {
-            const p = mapToItem(root.parent, mouse.x, mouse.y);
-            const dx = p.x - start.x, dy = p.y - start.y;
-            if (!root.lifted && Math.abs(dx) + Math.abs(dy) > 6)
-                root.lift();
-            if (!root.lifted)
-                return;
-            moved = true;
-            root.drag = Qt.point(dx, dy);
-            const a = root.aim(p.x, p.y);
-            Panels.drag = Object.assign({ id: root.panel.id, from: "home", x: p.x, y: p.y }, a);
-        }
-        onReleased: mouse => {
-            hold.stop();
-            if (!root.lifted) {
+        onPressed: mouse => root.press(mapToItem(root.parent, mouse.x, mouse.y))
+        onPositionChanged: mouse => root.move(mapToItem(root.parent, mouse.x, mouse.y))
+        onReleased: {
+            if (!root.release())
                 root.click();
-                return;
-            }
-            const d = Panels.drag;
-            root.lifted = false;
-            Panels.drag = null;
-            if (d && d.target !== "home") {
-                root.drag = Qt.point(0, 0);
-                Panels.place(root.panel.id, d.target, d.zone, d.order, 0, 0);
-                return;
-            }
-            // Home: snap to the 24 px grid (two units).
-            const nx = Math.round((root.homeX + root.drag.x) / (root.unit * 2)) * 2;
-            const ny = Math.round((root.homeY + root.drag.y) / (root.unit * 2)) * 2;
-            root.drag = Qt.point(0, 0);
-            if (nx !== root.panel.x || ny !== root.panel.y)
-                Panels.move(root.panel.id, Math.max(0, nx), Math.max(0, ny));
         }
-        onCanceled: {
-            hold.stop();
-            root.lifted = false;
-            root.drag = Qt.point(0, 0);
-            Panels.drag = null;
-        }
+        onCanceled: root.cancel()
     }
 
     function lift(): void {

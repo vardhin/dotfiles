@@ -27,7 +27,8 @@ import qs
 //   tray ID                    activate a tray item
 //   pin CLASS | unpin ID | movehere ADDR | closeall CLASS
 //   video bad                  the matched video is wrong; try the next
-//   find TEXT                  search (the launcher until dotd's index)
+//   tv play|queue|next ID | tv mix | tv window | tv library | tv skip
+//   find TEXT                  the launcher in files mode (dotd's index)
 //   dotd VERB ARGS             passed to dotd's socket
 //   run CMD                    sh -c CMD
 // Panel verbs (panel expand|fold|pop|keys) are taken by DeskPanel first.
@@ -186,6 +187,18 @@ Singleton {
             return "ok";
         case "dotd":
             Dotd.send(rest);
+            return "ok";
+        case "tv":
+            if (w1 === "play" || w1 === "queue" || w1 === "next")
+                Tv.play(words[2] ?? "", w1 === "play" ? "" : w1);
+            else if (w1 === "mix")
+                Tv.mix(!Tv.status.mix);
+            else if (w1 === "window")
+                Tv.open();
+            else if (w1 === "library")
+                Ui.openPage("media", "tv", null);
+            else if (w1 === "skip")
+                Media.next();
             return "ok";
         case "run":
             sh(["sh", "-c", rest]);

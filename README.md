@@ -153,7 +153,7 @@ media center), hyprlock, hypridle, polkit-gnome, awww and hyprsunset.
 |---|---|
 | Panes | `dotshell ipc call pane toggle <launcher\|session\|notifs\|cheatsheet\|calendar\|audio\|brightness\|wifi\|bluetooth\|battery\|capture\|clip>`; strip words open them too |
 | Notifications | Dot Shell is the daemon. New ones scroll across the strip and pop top right; `Super N` lists live ones and the log (`~/.local/state/dotshell/notifications.json`); `Super Shift N` is do-not-disturb |
-| Launcher | `Alt Space`: departure board. Type, arrows or Ctrl J/K, Enter; Ctrl 1–8 jumps to a gate. Launch counts rank results |
+| Launcher | `Alt Space`: departure board over apps and dotd's index. A prefix picks the mode: `a` apps, `f` files, `d` downloads, `i` images, `m` songs, `n` messages, `c` clipboard, `t` Dot TV, `an` anime, `>` a shell command (none: apps, then files). Arrows or Ctrl J/K, Enter; `Alt` + the letter on the preview line for the other actions (reveal, copy, undo sort, queue…); Ctrl 1–8 jumps to a gate. Launch counts rank apps |
 | Lock | `Super L` (`loginctl lock-session`), idle, the session menu and suspend all lock through logind. PAM stack: `pam/dotshell` |
 | Idle | dim 5 min, lock 7.5 min, screen off 7.75 min. Caffeine (`Super Shift C`, or the brightness pane) holds all three |
 | Screen look | The `screen` token, drawn over the wallpaper only (`panes/Wallpaper.qml`, `shaders/wall.frag`); windows stay untouched. **glass**: faint dot mask on the shell's grid, phosphor tint, vignette. **LED** (`Super Shift T`, `dotshell ipc call screen toggle`): the wallpaper as dots in the era's colors (or the color depth). **board**: one color per dot, a true LED board. **off** |
@@ -354,10 +354,13 @@ A panel is a **template** (its layout, `Templates.js`) bound to a **feed** (live
 | **strip** | docked in the top strip, in a zone: `l` left, `c` center, `r` before the settings words, `e` after them |
 | **rail** | docked in the side rail, between the launcher and the session buttons |
 
-Hold a panel for 200 ms to lift it, then drop it on the strip or the rail (the slots light up as
-you pass) or back on home. A dock or undock can be undone for 3 s (`Ctrl Z`, or `dot undo`).
+Hold a panel for 200 ms (or just drag it, from anywhere on it) to lift it, then drop it on the strip
+or the rail (the slots light up as you pass) or back on home. Strip and rail items pull out the same
+way; dropped below the strip they land on home, even from another workspace. A dock or undock can be
+undone for 3 s (`Ctrl Z`, or `dot undo`).
 The set: nowplaying clock workspaces system battery messages capture caffeine tray downloads files
-clipboard todo screenshots dock, plus the popped `vis` and `lyrics` boards. Expanded Now playing has
+clipboard todo screenshots dock tv, plus the popped `vis` and `lyrics` boards. **Dot TV** shows what
+plays, up next and the library (click plays, QUE queues; MIX, WINDOW, LIBRARY). Expanded Now playing has
 synced lyrics from LRCLIB (cached in `~/.cache/dot/lyrics/`), a music video found with yt-dlp (mark
 a wrong one bad and the next is tried), and a note bar beside the spectrum.
 
@@ -368,7 +371,7 @@ Panels persist in `~/.local/state/dotshell/panels.json`. Scripts and agents driv
 `$XDG_RUNTIME_DIR/dotshell.sock` (one JSON object per line), or the `dot` CLI:
 
 ```bash
-dot templates;  dot home;  dot home --reset      # list templates / home's panels; lay out the 15 again
+dot templates;  dot home;  dot home --reset      # list templates / home's panels; lay out the 16 again
 dot dock todo strip --zone r;  dot dock system rail;  dot dock todo home --at 52,18;  dot undo
 dot feed ci '{"state":"green","jobs":3}'         # push a feed (--merge, --drop); dot feeds lists them
 dot spawn board --id ci --feed ci --layout '{"col":[{"field":"big","text":"{state|upper}"}]}'
@@ -406,6 +409,10 @@ beside the file, so a move or rename costs one hash. Extractors are plugins in
 Bumping `version` re-runs only that one. Work goes newest file first; the cheap tier (text, PDF,
 office, EXIF, audio tags, archive listings) runs before the medium one (OCR of screenshots and
 scanned PDFs, video subtitles, thumbnails).
+
+The launcher asks the index over `dotd.sock`: `{"cmd":"query","q":…,"mime":"image/","dir":["~/Music"]}`
+(no words: the newest files that fit) and `{"cmd":"downloads"}` (sorted downloads, newest first).
+Results rank by text match, then a file name holding every word, then how new the file is.
 
 ```bash
 dotd query phd research      # name, folder and text; prefixes match ("phd res")

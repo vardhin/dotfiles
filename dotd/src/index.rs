@@ -124,6 +124,21 @@ pub struct Index {
     reader: Arc<Mutex<Option<Connection>>>,
 }
 
+// What a query is narrowed to: a mime prefix ("image/") and folders ("~/Music").
+#[derive(Debug, Default, Clone, Deserialize)]
+pub struct Want {
+    #[serde(default)]
+    pub mime: String,
+    #[serde(default)]
+    pub dir: Vec<String>,
+}
+
+impl Want {
+    pub fn is_empty(&self) -> bool {
+        self.mime.is_empty() && self.dir.is_empty()
+    }
+}
+
 #[derive(Debug, Serialize)]
 pub struct Hit {
     pub path: String,
@@ -222,22 +237,58 @@ impl Index {
     }
 
     // Full-text search: every word as a prefix, the name weighed most.
-    pub fn query(&self, q: &str, limit: usize) -> Result<Vec<Hit>> {
+    // `want` narrows it to a mime prefix and to folders; with no words it
+    // lists the newest files that fit instead.
+    pub fn query(&self, q: &str, limit: usize, want: &Want) -> Result<Vec<Hit>> {
         let expr = fts_query(q);
-        if expr.is_empty() {
+        if expr.is_empty() && want.is_empty() {
             return Ok(Vec::new());
         }
-        self.with_reader(|c| {
-            let mut st = c.prepare_cached(
+        let dirs: Vec<String> = want.dir.iter().map(|d| paths::expand(d).to_string_lossy().into_owned()).collect();
+        // Prefix tests by substr, so % and _ in names are plain letters.
+        let mut cond = Vec::new();
+        let mut args: Vec<Box<dyn rusqlite::ToSql>> = Vec::new();
+        if !want.mime.is_empty() {
+            cond.push(format!("substr(f.mime, 1, length(?{0})) = ?{0}", args.len() + 1));
+            args.push(Box::new(want.mime.clone()));
+        }
+        if !dirs.is_empty() {
+            let mut any = Vec::new();
+            for d in &dirs {
+                any.push(format!("substr(f.path, 1, length(?{0})) = ?{0}", args.len() + 1));
+                args.push(Box::new(format!("{}/", d.trim_end_matches('/'))));
+            }
+            cond.push(format!("({})", any.join(" OR ")));
+        }
+        let sql = if expr.is_empty() {
+            let w = if cond.is_empty() { String::new() } else { format!("WHERE {}", cond.join(" AND ")) };
+            args.push(Box::new(limit as i64));
+            format!(
+                "SELECT f.path, f.name, f.mime, f.mtime, '', 0.0 FROM files f {w}
+                 ORDER BY f.mtime DESC LIMIT ?{}",
+                args.len()
+            )
+        } else {
+            args.push(Box::new(expr));
+            let m = args.len();
+            // Candidates for the re-rank below.
+            args.push(Box::new((limit * 5).clamp(40, 400) as i64));
+            let extra: String = cond.iter().map(|c| format!(" AND {c}")).collect();
+            format!(
                 "SELECT f.path, f.name, f.mime, f.mtime,
                         snippet(fts, 2, '[', ']', '…', 10),
                         bm25(fts, 10.0, 2.0, 1.0)
                  FROM fts JOIN files f ON f.id = fts.rowid
-                 WHERE fts MATCH ?1
+                 WHERE fts MATCH ?{m}{extra}
                  ORDER BY bm25(fts, 10.0, 2.0, 1.0)
-                 LIMIT ?2",
-            )?;
-            let rows = st.query_map(params![expr, limit as i64], |r| {
+                 LIMIT ?{}",
+                args.len()
+            )
+        };
+        self.with_reader(|c| {
+            let mut st = c.prepare_cached(&sql)?;
+            let refs: Vec<&dyn rusqlite::ToSql> = args.iter().map(|b| b.as_ref()).collect();
+            let rows = st.query_map(refs.as_slice(), |r| {
                 let path: String = r.get(0)?;
                 let dir = Path::new(&path).parent().map(|d| d.to_string_lossy().into_owned()).unwrap_or_default();
                 Ok(Hit {
@@ -250,7 +301,12 @@ impl Index {
                     dir,
                 })
             })?;
-            Ok(rows.filter_map(|r| r.ok()).collect())
+            let mut hits: Vec<Hit> = rows.filter_map(|r| r.ok()).collect();
+            if !q.trim().is_empty() {
+                rerank(&mut hits, q);
+                hits.truncate(limit);
+            }
+            Ok(hits)
         })
     }
 
@@ -267,6 +323,25 @@ impl Index {
         })
         .unwrap_or_else(|e| json!({ "error": format!("{e:#}") }))
     }
+}
+
+// Match first, then recency: +6 when every word starts a word of the file
+// name, and up to +4 for a new file (halving every 90 days), on top of bm25
+// (about 0..20). Without it, long code and logs that repeat a word beat the
+// document named after it.
+fn rerank(hits: &mut [Hit], q: &str) {
+    let words: Vec<String> = q.split_whitespace().map(|w| w.trim_matches(|c: char| !c.is_alphanumeric()).to_lowercase()).filter(|w| !w.is_empty()).collect();
+    let now = std::time::SystemTime::now().duration_since(UNIX_EPOCH).map(|d| d.as_millis() as i64).unwrap_or(0);
+    for h in hits.iter_mut() {
+        let name = h.name.to_lowercase();
+        let parts: Vec<&str> = name.split(|c: char| !c.is_alphanumeric()).filter(|p| !p.is_empty()).collect();
+        if words.iter().all(|w| parts.iter().any(|p| p.starts_with(w.as_str()))) {
+            h.score += 6.0;
+        }
+        let days = ((now - h.mtime).max(0) as f64) / 86_400_000.0;
+        h.score += 4.0 * 0.5f64.powf(days / 90.0);
+    }
+    hits.sort_by(|a, b| b.score.partial_cmp(&a.score).unwrap_or(std::cmp::Ordering::Equal));
 }
 
 // "red bike" -> "red"* "bike"*  (quotes doubled, so any text is safe)

@@ -69,6 +69,7 @@ PanelWindow {
             place: "strip"
             zone: "l"
             screenW: strip.width
+            screenH: strip.screen.height
         }
 
         // The focused window's title, in whatever room is left before the
@@ -94,6 +95,7 @@ PanelWindow {
             place: "strip"
             zone: "c"
             screenW: strip.width
+            screenH: strip.screen.height
             x: Math.max(surface.centerMin, Math.min(Math.round((strip.cols - width) / 2), surface.centerMax - width))
             visible: !ticker.visible
         }
@@ -141,6 +143,7 @@ PanelWindow {
                 place: "strip"
                 zone: "r"
                 screenW: strip.width
+                screenH: strip.screen.height
             }
 
             Row {
@@ -195,6 +198,7 @@ PanelWindow {
                 place: "strip"
                 zone: "e"
                 screenW: strip.width
+                screenH: strip.screen.height
             }
         }
     }

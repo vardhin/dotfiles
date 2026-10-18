@@ -31,7 +31,6 @@ Item {
     readonly property var ctx: Object.assign({ "~": Skins.words(Tokens.era, template), "@": panel }, Feeds.get(feedId))
     readonly property color tube: [Tokens.slot0, Tokens.slot1, Tokens.slot2][panel.slot] ?? Tokens.slot0
 
-    readonly property bool lifted: grab.lifted
     visible: layout !== null && node.shown
     implicitWidth: mode === "rail" ? 13 : node.implicitWidth
     implicitHeight: mode === "rail" ? node.implicitHeight : 11
@@ -84,6 +83,20 @@ Item {
                 return;
             Actions.run(a);
         }
+        // Held or dragged from a clickable part of the item (PanelNode.grip);
+        // x y in the bar window's px.
+        function grip(kind: string, x: real, y: real): bool {
+            const p = Qt.point(root.originX + x, y);
+            if (kind === "press")
+                root.press(p);
+            else if (kind === "move")
+                root.move(p);
+            else if (kind === "release")
+                return root.release();
+            else
+                root.cancel();
+            return false;
+        }
     }
 
     PanelNode {
@@ -98,73 +111,87 @@ Item {
     }
 
     // ── Drag out ────────────────────────────────────────────────────
-    // Below the node, so the item's own actions (clicks) win.
+    // Press, move, release in screen px, from the grab area below or from
+    // a clickable node through sink.grip. release() says whether the press
+    // became a drag.
+    property bool lifted: false
+    property point start
+    Timer {
+        id: hold
+        interval: 200
+        onTriggered: root.lift()
+    }
+    function lift(): void {
+        if (lifted)
+            return;
+        lifted = true;
+        Panels.drag = { id: panel.id, from: place, target: place, zone: panel.zone, order: panel.order, x: start.x, y: start.y };
+    }
+    function press(p: point): void {
+        start = p;
+        hold.restart();
+    }
+    function move(p: point): void {
+        if (!lifted && Math.abs(p.x - start.x) + Math.abs(p.y - start.y) > 6)
+            lift();
+        if (!lifted)
+            return;
+        const stripH = Tokens.top ? Tokens.pitch * 11 : -1000;
+        const railW = Tokens.side === "off" ? -1000 : Tokens.pitch * 13;
+        let aim;
+        if (Tokens.top && p.y < stripH + 48)
+            aim = Object.assign({ target: "strip" }, Dock.stripAim(p.x, screenW));
+        else if (Tokens.side !== "off" && p.x > screenW - railW - 48)
+            aim = { target: "rail", zone: "", order: Dock.railAim(p.y) };
+        else
+            aim = { target: "home", zone: "", order: 0 };
+        Panels.drag = Object.assign({ id: panel.id, from: place, x: p.x, y: p.y }, aim);
+    }
+    function release(): bool {
+        hold.stop();
+        if (!lifted)
+            return false;
+        lifted = false;
+        const d = Panels.drag;
+        Panels.drag = null;
+        if (!d)
+            return true;
+        if (d.target === "home") {
+            // Pulled out anywhere: it lands on home with its corner at the
+            // cursor (24 px grid, where World draws the outline), kept on
+            // screen, and shows there when you go home.
+            const t = Templates.get(panel.template);
+            const w = panel.w * Panels.unit, h = panel.h * Panels.unit;
+            const x = Math.max(0, Math.min(d.x, screenW - w)), y = Math.max(Tokens.pitch * 11, Math.min(d.y, screenH - h));
+            Panels.place(panel.id, "home", "", 0, Math.round(x / 24) * 2, Math.round(y / 24) * 2);
+            if ((Hyprland.focusedWorkspace?.id ?? 0) !== Tokens.home)
+                Notify.send("Dot Shell", (t?.title ?? panel.template) + " is on home now", { urgency: "low", transient: true });
+        } else {
+            Panels.place(panel.id, d.target, d.zone, d.order, 0, 0);
+        }
+        return true;
+    }
+    function cancel(): void {
+        hold.stop();
+        lifted = false;
+        Panels.drag = null;
+    }
+
+    // Below the node, so the item's own actions (clicks) win; those pass
+    // their presses on through sink.grip.
     MouseArea {
         id: grab
         z: -1
         anchors.fill: parent
         enabled: !root.ghost
-        property bool lifted: false
-        property point start
-
-        Timer {
-            id: hold
-            interval: 200
-            onTriggered: grab.lift()
-        }
-        function lift(): void {
-            if (lifted)
-                return;
-            lifted = true;
-            Panels.drag = { id: root.panel.id, from: root.place, target: root.place, zone: root.panel.zone, order: root.panel.order, x: start.x, y: start.y };
-        }
+        cursorShape: root.lifted ? Qt.ClosedHandCursor : Qt.ArrowCursor
         function screenPos(mouse: var): point {
             const p = mapToItem(null, mouse.x, mouse.y);
             return Qt.point(root.originX + p.x, p.y);
         }
-        onPressed: mouse => {
-            start = screenPos(mouse);
-            hold.restart();
-        }
-        onPositionChanged: mouse => {
-            const p = screenPos(mouse);
-            if (!lifted && Math.abs(p.x - start.x) + Math.abs(p.y - start.y) > 6)
-                lift();
-            if (!lifted)
-                return;
-            const stripH = Tokens.top ? Tokens.pitch * 11 : -1000;
-            const railW = Tokens.side === "off" ? -1000 : Tokens.pitch * 13;
-            let aim;
-            if (Tokens.top && p.y < stripH + 48)
-                aim = Object.assign({ target: "strip" }, Dock.stripAim(p.x, root.screenW));
-            else if (Tokens.side !== "off" && p.x > root.screenW - railW - 48)
-                aim = { target: "rail", zone: "", order: Dock.railAim(p.y) };
-            else
-                aim = { target: "home", zone: "", order: 0 };
-            Panels.drag = Object.assign({ id: root.panel.id, from: root.place, x: p.x, y: p.y }, aim);
-        }
-        onReleased: {
-            hold.stop();
-            if (!lifted)
-                return;
-            lifted = false;
-            const d = Panels.drag;
-            Panels.drag = null;
-            if (!d)
-                return;
-            if (d.target === "home") {
-                // Panels live only on home: anywhere else, it snaps back.
-                if ((Hyprland.focusedWorkspace?.id ?? 0) !== Tokens.home)
-                    return;
-                Panels.place(root.panel.id, "home", "", 0, Math.max(0, Math.round(d.x / 24) * 2), Math.max(0, Math.round(d.y / 24) * 2));
-            } else {
-                Panels.place(root.panel.id, d.target, d.zone, d.order, 0, 0);
-            }
-        }
-        onCanceled: {
-            hold.stop();
-            lifted = false;
-            Panels.drag = null;
-        }
+        onPressed: mouse => root.press(screenPos(mouse))
+        onPositionChanged: mouse => root.move(screenPos(mouse))
+        onReleased: root.release()
+        onCanceled: root.cancel()
     }
 }
