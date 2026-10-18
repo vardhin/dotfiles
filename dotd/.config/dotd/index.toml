@@ -1,0 +1,25 @@
+# What dotd indexes (see dotd/src/index.rs). Saved edits apply at once; files
+# that fall out of scope leave the index at the next rescan (dotd rescan).
+
+# Walked recursively. Dotfolders (~/.wine, ~/.config, …) are always skipped,
+# and so is any folder holding a .noindex file.
+roots = ["~"]
+
+# Folders left out, with everything below them: code, SDKs and games.
+exclude = [
+    "~/Documents/git",
+    "~/Games",
+    "~/go",
+    "~/Android",
+    "~/StudioProjects",
+    "~/dotfiles",
+]
+
+# Folder names left out wherever they are.
+exclude_names = ["node_modules", "__pycache__", "target", "venv", "site-packages"]
+
+# Characters of extracted text kept per extractor and file.
+max_text = 1000000
+
+# Hours between full rescans; inotify catches changes in between.
+rescan_hours = 6

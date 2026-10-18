@@ -6,7 +6,8 @@
 //                                                   the shell's state (no reply);
 //                                                   a new shell gets the feeds again
 //   {"cmd":"undo","arg":"7"}                        undo a sort ("" = the last)
-//   {"cmd":"query","q":"f red bike"}                search (the index, Phase 12)
+//   {"cmd":"query","q":"red bike","limit":20}       search the index
+//   {"cmd":"rescan"}                                walk the indexed folders again
 //   {"cmd":"status"}  {"cmd":"reload"}  {"cmd":"feeds"}
 
 use crate::daemon::{self, Shared};
@@ -94,8 +95,25 @@ async fn answer(d: &Shared, events: &mpsc::UnboundedSender<Event>, cmd: &str, re
                 Err(e) => json!({ "ok": false, "error": format!("{e:#}") }),
             }
         }
-        // The index arrives in Phase 12; until then nothing matches.
-        "query" => json!({ "ok": true, "results": [] }),
+        "query" => {
+            let q = req.get("q").and_then(Value::as_str).unwrap_or(arg).to_string();
+            let limit = req.get("limit").and_then(Value::as_u64).unwrap_or(20).min(200) as usize;
+            let Some(ix) = d.borrow().index.clone() else {
+                return json!({ "ok": false, "error": "the index is not running" });
+            };
+            match tokio::task::spawn_blocking(move || ix.query(&q, limit)).await {
+                Ok(Ok(hits)) => json!({ "ok": true, "results": hits }),
+                Ok(Err(e)) => json!({ "ok": false, "error": format!("{e:#}") }),
+                Err(e) => json!({ "ok": false, "error": e.to_string() }),
+            }
+        }
+        "rescan" => match &d.borrow().index {
+            Some(ix) => {
+                ix.send(crate::index::Msg::Rescan);
+                json!({ "ok": true })
+            }
+            None => json!({ "ok": false, "error": "the index is not running" }),
+        },
         "reload" => match d.borrow_mut().reload() {
             Ok(()) => json!({ "ok": true }),
             Err(e) => json!({ "ok": false, "error": format!("{e:#}") }),
@@ -114,8 +132,9 @@ async fn answer(d: &Shared, events: &mpsc::UnboundedSender<Event>, cmd: &str, re
                 "active": dm.downloads.active.len(),
                 "feeds": dm.feeds.keys().collect::<Vec<_>>(),
                 "shell": dm.shell,
+                "index": dm.index.as_ref().map(|ix| ix.stats()),
             })
         }
-        _ => json!({ "ok": false, "error": "unknown cmd; one of: event shell undo query reload feeds status" }),
+        _ => json!({ "ok": false, "error": "unknown cmd; one of: event shell undo query rescan reload feeds status" }),
     }
 }

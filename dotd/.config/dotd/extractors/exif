@@ -1,0 +1,39 @@
+#!/usr/bin/env -S python3 -I
+# dotd extractor: when and where a photo was taken, and with what. exiftool
+# if it is installed, else ImageMagick's identify.
+import json, shutil, subprocess, sys
+
+p = sys.argv[1]
+meta = {}
+if shutil.which("exiftool"):
+    r = subprocess.run(["exiftool", "-json", "-n", "-DateTimeOriginal", "-CreateDate", "-Make", "-Model",
+                        "-LensModel", "-GPSLatitude", "-GPSLongitude", "-ImageWidth", "-ImageHeight", p],
+                       capture_output=True, text=True, errors="replace")
+    try:
+        d = json.loads(r.stdout)[0]
+    except (ValueError, IndexError):
+        d = {}
+    pick = {"date": d.get("DateTimeOriginal") or d.get("CreateDate"), "make": d.get("Make"), "model": d.get("Model"),
+            "lens": d.get("LensModel"), "lat": d.get("GPSLatitude"), "lon": d.get("GPSLongitude"),
+            "width": d.get("ImageWidth"), "height": d.get("ImageHeight")}
+else:
+    fmt = "%[EXIF:DateTimeOriginal]|%[EXIF:Make]|%[EXIF:Model]|%[EXIF:GPSLatitude]|%[EXIF:GPSLatitudeRef]|%[EXIF:GPSLongitude]|%[EXIF:GPSLongitudeRef]|%w|%h"
+    r = subprocess.run(["magick", "identify", "-format", fmt, p + "[0]"], capture_output=True, text=True, errors="replace")
+    f = (r.stdout.split("|") + [""] * 9)[:9]
+
+    def deg(v, ref):
+        try:
+            d, m, s = (float(a) / float(b) for a, b in (x.split("/") for x in v.split(",")))
+            x = d + m / 60 + s / 3600
+            return -x if ref.strip() in ("S", "W") else x
+        except ValueError:
+            return None
+
+    pick = {"date": f[0], "make": f[1], "model": f[2], "lat": deg(f[3], f[4]), "lon": deg(f[5], f[6]),
+            "width": f[7], "height": f[8]}
+for k, v in pick.items():
+    if v not in (None, ""):
+        meta[k] = v if isinstance(v, (int, float)) else str(v).strip()
+# Words for search: "2024 05 Canon EOS R6".
+words = " ".join(str(meta[k]) for k in ("date", "make", "model", "lens") if k in meta).replace(":", " ")
+print(json.dumps({"meta": meta, "text": words}))

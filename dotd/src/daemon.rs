@@ -14,7 +14,6 @@ use serde::Serialize;
 use serde_json::{Map, Value, json};
 use std::cell::RefCell;
 use std::collections::{BTreeMap, HashSet};
-use std::io::Write;
 use std::path::{Path, PathBuf};
 use std::rc::Rc;
 use std::time::Instant;
@@ -111,6 +110,7 @@ pub struct Daemon {
     pub shell: ShellState,
     // Paths dotd itself put in ~/Downloads (an undo): not sorted again.
     pub ignore: HashSet<PathBuf>,
+    pub index: Option<crate::index::Index>,
     shell_down: bool,
 }
 
@@ -126,6 +126,7 @@ impl Daemon {
             feeds: BTreeMap::new(),
             shell: ShellState::default(),
             ignore: HashSet::new(),
+            index: None,
             shell_down: false,
         };
         if let Err(e) = d.reload() {
@@ -139,6 +140,9 @@ impl Daemon {
         let dir = paths::config_dir();
         self.rules = Rules::load(&dir.join("rules.toml"))?;
         self.sort = SortConfig::load(&dir.join("sort.toml"))?;
+        if let Some(ix) = &self.index {
+            ix.send(crate::index::Msg::Reload);
+        }
         eprintln!("dotd: {} rules, {} sort targets", self.rules.rules.len(), self.sort.rules.len());
         Ok(())
     }
@@ -228,7 +232,9 @@ pub async fn handle(d: &Shared, mut e: Event) {
             sort(d, &mut e);
         }
         if r.index {
-            index(&e);
+            if let (Some(ix), Some(p)) = (&d.borrow().index, e.field("path")) {
+                ix.send(crate::index::Msg::Touch(p.into()));
+            }
         }
         if let Some(feed) = &r.feed {
             if feed == "downloads" && e.source == "downloads" {
@@ -312,20 +318,6 @@ pub fn set_path(e: &mut Event, p: &Path) {
         e.data.insert("dir".into(), s(dir));
     }
     e.data.insert("bin".into(), paths::bin(p).into());
-}
-
-// The index (Phase 12) reads this queue; until then files wait in it.
-fn index(e: &Event) {
-    let Some(path) = e.field("path") else { return };
-    let q = paths::state_dir().join("index.queue");
-    let line = json!({ "path": path, "at": now_ms(), "source": e.source });
-    let r = std::fs::create_dir_all(paths::state_dir()).and_then(|_| {
-        let mut f = std::fs::OpenOptions::new().create(true).append(true).open(&q)?;
-        writeln!(f, "{line}")
-    });
-    if let Err(err) = r {
-        eprintln!("dotd: index queue: {err}");
-    }
 }
 
 // Undo a move (None = the last); the file goes back to ~/Downloads and the

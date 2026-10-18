@@ -1,0 +1,8 @@
+name = "text"
+mimes = ["text/*", "application/json", "application/xml", "application/x-sh", "application/javascript", "application/toml", "application/yaml", "application/x-yaml"]
+exts = ["md", "txt", "csv", "tex", "org", "rst", "log", "ini", "conf", "srt", "vtt", "py", "rs", "js", "ts", "qml", "lua", "c", "h", "cpp", "java", "kt", "go", "sh", "html", "css"]
+tier = "cheap"
+version = 1
+exec = "text"
+timeout = 10
+max_size = 4000000

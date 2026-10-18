@@ -1,0 +1,18 @@
+#!/usr/bin/env -S python3 -I
+# dotd extractor: an audio file's tags (title, artist, album, genre, year)
+# and its length. Audio is indexed by tags, name and folder only.
+import json, subprocess, sys
+r = subprocess.run(["ffprobe", "-v", "quiet", "-print_format", "json", "-show_format", sys.argv[1]],
+                   capture_output=True, text=True, errors="replace")
+try:
+    fmt = json.loads(r.stdout).get("format", {})
+except ValueError:
+    sys.exit(1)
+tags = {k.lower(): v for k, v in (fmt.get("tags") or {}).items()}
+meta = {k: tags[k] for k in ("title", "artist", "album", "album_artist", "genre", "date", "composer") if tags.get(k)}
+if fmt.get("duration"):
+    meta["duration"] = round(float(fmt["duration"]))
+out = {"meta": meta, "text": " ".join(str(v) for k, v in meta.items() if k != "duration")}
+if meta.get("title"):
+    out["title"] = meta["title"]
+print(json.dumps(out))

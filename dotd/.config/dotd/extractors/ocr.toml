@@ -1,0 +1,7 @@
+name = "ocr"
+mimes = ["image/png", "image/jpeg", "image/webp", "application/pdf"]
+tier = "medium"
+version = 1
+exec = "ocr"
+timeout = 180
+max_size = 60000000

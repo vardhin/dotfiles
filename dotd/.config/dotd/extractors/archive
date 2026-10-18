@@ -1,0 +1,9 @@
+#!/usr/bin/env -S python3 -I
+# dotd extractor: the names inside an archive (first 5000), so a file can be
+# found by something it contains.
+import json, subprocess, sys
+r = subprocess.run(["bsdtar", "-tf", sys.argv[1]], capture_output=True, text=True, errors="replace")
+names = r.stdout.splitlines()
+if r.returncode != 0 and not names:
+    sys.exit(1)
+print(json.dumps({"text": "\n".join(names[:5000]), "meta": {"entries": len(names)}}))

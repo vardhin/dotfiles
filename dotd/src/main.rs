@@ -7,17 +7,21 @@
 //   dotd status | reload | feeds
 //   dotd undo [ID]                      put a sorted download back
 //   dotd event SOURCE KIND ['{json}']   send an event (for scripts)
-//   dotd query TEXT
+//   dotd query TEXT                     search the index
+//   dotd rescan                         walk the indexed folders again
 
 mod daemon;
 mod downloads;
 mod event;
+mod extract;
+mod index;
 mod notify;
 mod paths;
 mod rules;
 mod server;
 mod shell;
 mod sort;
+mod watch;
 
 use anyhow::{Context, Result, bail};
 use serde_json::{Value, json};
@@ -43,6 +47,12 @@ fn main() {
 
 async fn serve() -> Result<()> {
     let d: daemon::Shared = Rc::new(RefCell::new(daemon::Daemon::new()));
+    // The queue file Phase 11 wrote before the index existed: the walk covers it.
+    let _ = std::fs::remove_file(paths::state_dir().join("index.queue"));
+    match index::Index::spawn() {
+        Ok(ix) => d.borrow_mut().index = Some(ix),
+        Err(e) => eprintln!("dotd: index: {e:#}"),
+    }
     let (tx, mut rx) = mpsc::unbounded_channel::<event::Event>();
 
     // Feeds out as soon as the shell is there (it may not be yet).
@@ -94,7 +104,7 @@ async fn serve() -> Result<()> {
 
 async fn client(args: &[String]) -> Result<()> {
     let req = match args[0].as_str() {
-        "status" | "reload" | "feeds" => json!({ "cmd": args[0] }),
+        "status" | "reload" | "feeds" | "rescan" => json!({ "cmd": args[0] }),
         "undo" => json!({ "cmd": "undo", "arg": args.get(1).cloned().unwrap_or_default() }),
         "query" => json!({ "cmd": "query", "q": args[1..].join(" ") }),
         "event" => {
@@ -135,7 +145,10 @@ dotd: Dot Shell's event daemon
   dotd undo [ID]                      put a sorted download back (no ID: the last)
   dotd event SOURCE KIND ['{json}']   send an event, for scripts
   dotd query TEXT                     search the index
+  dotd rescan                         walk the indexed folders again
 
-Config: ~/.config/dotd/rules.toml and sort.toml (reloaded when saved).
-State:  ~/.local/state/dotd/moves.log, index.queue.
+Config: ~/.config/dotd/rules.toml, sort.toml, index.toml (reloaded when saved),
+        extractors/*.toml (dotd reload)
+State:  ~/.local/state/dotd/moves.log
+Data:   ~/.local/share/dotd/index.db, derived/<blake3>.json, thumbs/
 ";

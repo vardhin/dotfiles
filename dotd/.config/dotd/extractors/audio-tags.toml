@@ -1,0 +1,8 @@
+name = "audio-tags"
+mimes = ["audio/*"]
+exts = ["flac", "opus", "m4a"]
+tier = "cheap"
+version = 1
+exec = "audio-tags"
+timeout = 20
+max_size = 2000000000

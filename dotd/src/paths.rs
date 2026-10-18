@@ -25,6 +25,11 @@ pub fn state_dir() -> PathBuf {
     xdg("XDG_STATE_HOME", ".local/state").join("dotd")
 }
 
+// ~/.local/share/dotd: index.db, derived/<blake3>.json, thumbs/
+pub fn data_dir() -> PathBuf {
+    xdg("XDG_DATA_HOME", ".local/share").join("dotd")
+}
+
 pub fn runtime_dir() -> PathBuf {
     env::var_os("XDG_RUNTIME_DIR")
         .map(PathBuf::from)

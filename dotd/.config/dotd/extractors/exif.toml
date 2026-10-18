@@ -1,0 +1,7 @@
+name = "exif"
+mimes = ["image/jpeg", "image/heic", "image/heif", "image/tiff", "image/webp", "image/png", "image/x-*"]
+exts = ["heic", "dng", "cr2", "nef", "arw"]
+tier = "cheap"
+version = 1
+exec = "exif"
+timeout = 20

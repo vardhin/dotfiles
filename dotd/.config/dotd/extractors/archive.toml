@@ -1,0 +1,8 @@
+name = "archive"
+mimes = ["application/zip", "application/x-tar", "application/gzip", "application/x-7z-compressed", "application/vnd.rar", "application/x-rar-compressed", "application/x-xz", "application/zstd", "application/x-bzip2"]
+exts = ["zip", "tar", "tar.gz", "tar.xz", "tar.zst", "tar.bz2", "tgz", "7z", "rar", "jar", "apk"]
+tier = "cheap"
+version = 1
+exec = "archive"
+timeout = 60
+max_size = 20000000000

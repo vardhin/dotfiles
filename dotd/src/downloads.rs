@@ -73,7 +73,7 @@ pub async fn run(d: Shared, events: mpsc::UnboundedSender<Event>) -> Result<()> 
                 let ev = ev?;
                 let Some(name) = ev.name.map(|n| n.to_string_lossy().into_owned()) else { continue };
                 if Some(&ev.wd) == conf_wd.as_ref() {
-                    if name == "rules.toml" || name == "sort.toml" {
+                    if name == "rules.toml" || name == "sort.toml" || name == "index.toml" {
                         if let Err(e) = d.borrow_mut().reload() {
                             eprintln!("dotd: {e:#}");
                         }

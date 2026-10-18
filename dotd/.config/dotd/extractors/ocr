@@ -1,0 +1,29 @@
+#!/usr/bin/env -S python3 -I
+# dotd extractor: text in screenshots and scanned PDFs, with tesseract
+# (English). Photos are skipped: OCR on them is slow and finds noise. An
+# image counts as a screenshot when it is a PNG/WebP or its path says
+# screenshot or scan; a PDF counts as scanned when pdftotext finds no text.
+import json, os, re, subprocess, sys, tempfile
+
+p = sys.argv[1]
+mime = os.environ.get("DOTD_MIME", "")
+
+def ocr(img):
+    r = subprocess.run(["tesseract", img, "-", "-l", "eng", "--psm", "3"], capture_output=True, text=True, errors="replace")
+    return r.stdout
+
+if mime == "application/pdf":
+    t = subprocess.run(["pdftotext", "-l", "3", p, "-"], capture_output=True, text=True, errors="replace").stdout
+    if len(t.strip()) > 40:
+        print("{}")
+        sys.exit()
+    with tempfile.TemporaryDirectory() as d:
+        subprocess.run(["pdftoppm", "-r", "200", "-l", "20", "-png", p, os.path.join(d, "pg")], capture_output=True)
+        text = "\n".join(ocr(os.path.join(d, f)) for f in sorted(os.listdir(d)))
+else:
+    screenshot = mime in ("image/png", "image/webp") or re.search(r"screenshot|screen shot|scan|receipt|document", p, re.I)
+    if not screenshot:
+        print("{}")
+        sys.exit()
+    text = ocr(p)
+print(json.dumps({"text": text}))

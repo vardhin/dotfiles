@@ -1,0 +1,22 @@
+#!/usr/bin/env -S python3 -I
+# dotd extractor: a PDF's text (first 200 pages) and its title, author, pages.
+import json, subprocess, sys
+p = sys.argv[1]
+out = {}
+info = subprocess.run(["pdfinfo", p], capture_output=True, text=True, errors="replace").stdout
+meta = {}
+for line in info.splitlines():
+    k, _, v = line.partition(":")
+    v = v.strip()
+    if k in ("Title", "Author", "Subject", "Keywords") and v:
+        meta[k.lower()] = v
+    elif k == "Pages":
+        meta["pages"] = v
+if "title" in meta:
+    out["title"] = meta["title"]
+out["meta"] = meta
+r = subprocess.run(["pdftotext", "-l", "200", "-enc", "UTF-8", p, "-"], capture_output=True, text=True, errors="replace")
+if r.returncode != 0 and not r.stdout:
+    sys.exit(1)
+out["text"] = r.stdout
+print(json.dumps(out))

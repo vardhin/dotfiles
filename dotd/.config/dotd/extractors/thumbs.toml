@@ -1,0 +1,8 @@
+name = "thumbs"
+mimes = ["image/*", "video/*", "application/pdf"]
+exts = ["heic"]
+tier = "medium"
+version = 1
+exec = "thumbs"
+timeout = 60
+max_size = 50000000000

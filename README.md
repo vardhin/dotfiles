@@ -117,7 +117,8 @@ dotfiles/
 ├── zsh/.local/bin/dotwait      the waiting-for-input watcher dotterm.zsh starts per command
 ├── dotd/                       dotd, the event daemon (Rust; install.sh --dotd builds ~/.local/bin/dotd)
 │   ├── src/                    sources → events → rules → sinks (notify, feed, sort, index)
-│   ├── .config/dotd/           → ~/.config/dotd  rules.toml, sort.toml (stowed; reloaded on save)
+│   ├── .config/dotd/           → ~/.config/dotd  rules.toml, sort.toml, index.toml (stowed; reloaded
+│   │                           on save), extractors/ (one manifest + one script each)
 │   └── .config/systemd/user/dotd.service
 ├── p10/                        the P10 wall's receiver, for the Raspberry Pi (not stowed):
 │                               dotwall-pi.py, dotwall.service
@@ -386,7 +387,7 @@ Positions and sizes are grid units (12 px).
 ### dotd
 
 `dotd` is a small Rust user service that turns things happening on the laptop into notifications,
-panel feeds and (soon) a searchable index; the shell only renders. A **source** produces events
+panel feeds and a searchable index; the shell only renders. A **source** produces events
 (`{source, kind, data}`), **rules** in `~/.config/dotd/rules.toml` pick what happens to them, and
 **sinks** do it: `sort` (move the file), `index` (queue it), `feed` (push it to a panel), `notify`.
 
@@ -397,8 +398,19 @@ archives and installers → `~/Archives`; anything else stays. A notification of
 and Undo, and the Downloads panel lists it with an UNDO. Every move is in
 `~/.local/state/dotd/moves.log`. Files already there when dotd starts are left alone.
 
+**Index.** Every file under `~` (minus dotfolders, the folders in `~/.config/dotd/index.toml`, and
+any folder with a `.noindex` file) is hashed with blake3 and searched by name, folder and content.
+What extractors learn is kept by content hash in `~/.local/share/dotd/derived/<hash>.json`, never
+beside the file, so a move or rename costs one hash. Extractors are plugins in
+`~/.config/dotd/extractors/`: a manifest (mimes, tier, version) and a program that prints JSON.
+Bumping `version` re-runs only that one. Work goes newest file first; the cheap tier (text, PDF,
+office, EXIF, audio tags, archive listings) runs before the medium one (OCR of screenshots and
+scanned PDFs, video subtitles, thumbnails).
+
 ```bash
-dotd status                  # rules, moves, feeds, what the shell last said (idle, AC, temperature)
+dotd query phd research      # name, folder and text; prefixes match ("phd res")
+dotd rescan                  # walk again after editing index.toml
+dotd status                  # rules, moves, feeds, index counts, what the shell last said
 dotd undo                    # put the last sorted download back (or: dotd undo 7)
 dotd event git dirty '{"repo":"dotfiles","files":3}'   # any script can send an event
 systemctl --user restart dotd;  journalctl --user -u dotd -f

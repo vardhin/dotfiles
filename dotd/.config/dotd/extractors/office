@@ -1,0 +1,53 @@
+#!/usr/bin/env -S python3 -I
+# dotd extractor: Word, PowerPoint, Excel, OpenDocument and EPUB files are
+# zips of XML; their text is the XML's text. No pandoc needed.
+import json, re, sys, zipfile
+from xml.etree import ElementTree as ET
+
+p = sys.argv[1]
+ext = p.rsplit(".", 1)[-1].lower()
+try:
+    z = zipfile.ZipFile(p)
+except zipfile.BadZipFile:
+    sys.exit(1)
+names = z.namelist()
+if ext == "docx":
+    parts = [n for n in names if re.match(r"word/(document|header\d*|footer\d*|footnotes)\.xml$", n)]
+elif ext == "pptx":
+    parts = sorted((n for n in names if re.match(r"ppt/slides/slide\d+\.xml$", n)), key=lambda n: int(re.findall(r"\d+", n)[-1]))
+elif ext == "xlsx":
+    parts = [n for n in names if n == "xl/sharedStrings.xml"]
+elif ext == "epub":
+    parts = [n for n in names if n.endswith((".xhtml", ".html", ".htm"))]
+else:
+    parts = [n for n in names if n == "content.xml"]
+
+def text_of(xml):
+    try:
+        root = ET.fromstring(xml)
+    except ET.ParseError:
+        return re.sub(r"<[^>]+>", " ", xml.decode("utf-8", "replace"))
+    out = []
+    for el in root.iter():
+        tag = el.tag.rsplit("}", 1)[-1]
+        if el.text and el.text.strip():
+            out.append(el.text)
+        if tag in ("p", "br", "tab", "h", "si", "tr", "li", "div", "h1", "h2", "h3"):
+            out.append("\n")
+        if el.tail and el.tail.strip():
+            out.append(el.tail)
+    return " ".join(out)
+
+text, total = [], 0
+for n in parts:
+    t = text_of(z.read(n))
+    text.append(t)
+    total += len(t)
+    if total > 2_000_000:
+        break
+out = {"text": re.sub(r"\s*\n\s*", "\n", re.sub(r"[ \t]+", " ", "\n".join(text))).strip()}
+if "docProps/core.xml" in names:
+    m = re.search(rb"<dc:title>([^<]+)</dc:title>", z.read("docProps/core.xml"))
+    if m:
+        out["title"] = m.group(1).decode("utf-8", "replace")
+print(json.dumps(out))

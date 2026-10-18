@@ -1,0 +1,6 @@
+name = "pdf-text"
+mimes = ["application/pdf"]
+tier = "cheap"
+version = 1
+exec = "pdf-text"
+timeout = 60

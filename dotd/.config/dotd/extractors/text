@@ -1,0 +1,16 @@
+#!/usr/bin/env -S python3 -I
+# dotd extractor: plain text files, the first 256 KB, if it is text at all.
+import json, sys
+p = sys.argv[1]
+with open(p, "rb") as f:
+    data = f.read(262144)
+if b"\0" in data[:8192]:
+    print("{}")
+    sys.exit()
+for enc in ("utf-8", "utf-16", "latin-1"):
+    try:
+        text = data.decode(enc)
+        break
+    except UnicodeDecodeError:
+        continue
+print(json.dumps({"text": text}))

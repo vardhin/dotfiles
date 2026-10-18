@@ -1,0 +1,6 @@
+name = "office"
+exts = ["docx", "pptx", "xlsx", "odt", "odp", "ods", "epub"]
+tier = "cheap"
+version = 1
+exec = "office"
+timeout = 60

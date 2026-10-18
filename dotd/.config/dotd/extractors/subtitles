@@ -1,0 +1,28 @@
+#!/usr/bin/env -S python3 -I
+# dotd extractor: a video's title tag, length and its first text subtitle
+# track (the lines only), so a film can be found by what is said in it.
+import json, re, subprocess, sys
+p = sys.argv[1]
+r = subprocess.run(["ffprobe", "-v", "quiet", "-print_format", "json", "-show_format", "-show_streams", p],
+                   capture_output=True, text=True, errors="replace")
+try:
+    info = json.loads(r.stdout)
+except ValueError:
+    sys.exit(1)
+fmt = info.get("format", {})
+meta = {}
+if fmt.get("duration"):
+    meta["duration"] = round(float(fmt["duration"]))
+title = (fmt.get("tags") or {}).get("title")
+out = {"meta": meta}
+if title:
+    out["title"] = title
+text_codecs = {"subrip", "ass", "ssa", "webvtt", "mov_text", "text"}
+subs = [s for s in info.get("streams", []) if s.get("codec_type") == "subtitle" and s.get("codec_name") in text_codecs]
+if subs:
+    i = subs[0]["index"]
+    srt = subprocess.run(["ffmpeg", "-v", "quiet", "-i", p, "-map", f"0:{i}", "-f", "srt", "-"],
+                         capture_output=True, text=True, errors="replace").stdout
+    lines = [l for l in srt.splitlines() if l.strip() and not l.strip().isdigit() and "-->" not in l]
+    out["text"] = re.sub(r"<[^>]+>|\{[^}]+\}", "", "\n".join(lines))
+print(json.dumps(out))
