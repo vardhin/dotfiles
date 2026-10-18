@@ -484,13 +484,22 @@ print(json.dumps({"recent": res[:20], "places": places[:8]}))
     }
 
     // ── clip ────────────────────────────────────────────────────────
+    // Clip.items are { t: text, at: ms }.
+    // A path shows its name and the folder it is in, not /home/you/...
     function preview(t: string): string {
-        return String(t ?? "").replace(/\s+/g, " ").trim().slice(0, 120);
+        const raw = String(t ?? "");
+        const s = raw.replace(/\s+/g, " ").trim();
+        if (!raw.includes("\n") && /^(\/|~\/)/.test(s)) {
+            const parts = s.replace(home, "~").split("/").filter(x => x);
+            if (parts.length > 2)
+                return parts[parts.length - 1] + "  " + parts[parts.length - 2];
+        }
+        return s.slice(0, 120);
     }
     readonly property var clipFeed: ({
             count: Clip.items.length,
-            items: Clip.items.slice(0, 20).map(t => ({ text: t, preview: root.preview(t) })),
-            lastPreview: root.preview(Clip.items[0] ?? "")
+            items: Clip.items.slice(0, 20).map(x => ({ text: x.t, preview: root.preview(x.t), at: x.at })),
+            lastPreview: root.preview(Clip.items[0]?.t ?? "")
         })
 
     // ── shots ───────────────────────────────────────────────────────
@@ -555,30 +564,26 @@ print(json.dumps({"recent": res[:20], "places": places[:8]}))
     }
 
     // ── dock ────────────────────────────────────────────────────────
+    // One Nerd Font glyph per app kind: a dock cell is one glyph wide.
     function glyphFor(entry: var, cls: string): string {
         const c = (entry?.categories ?? []).join(" ") + " " + cls.toLowerCase();
-        if (/TerminalEmulator|ghostty|kitty|alacritty|foot|terminal/i.test(c))
-            return ">_";
-        if (/WebBrowser|firefox|librewolf|chrom/i.test(c))
-            return "@";
-        if (/TextEditor|IDE|Development|code/i.test(c))
-            return "{}";
-        if (/FileManager|nautilus|thunar|nemo/i.test(c))
-            return "[]";
-        if (/InstantMessaging|Chat|telegram|discord|vesktop/i.test(c))
-            return "<>";
-        if (/Audio|Music|spotify|rmpc/i.test(c))
-            return "";
-        if (/Video|mpv|dottv/i.test(c))
-            return "";
-        if (/Graphics|gimp|inkscape|krita/i.test(c))
-            return "";
-        if (/Office|libreoffice/i.test(c))
-            return "";
-        if (/Game|steam/i.test(c))
-            return "";
-        if (/Settings|System/i.test(c))
-            return "";
+        const kinds = [
+            [/TerminalEmulator|ghostty|kitty|alacritty|foot|terminal/i, "\uf120"],
+            [/firefox|librewolf/i, "\uf269"],
+            [/WebBrowser|chrom/i, "\uf0ac"],
+            [/TextEditor|IDE|Development|code/i, "\uf121"],
+            [/FileManager|nautilus|thunar|nemo/i, "\uf07b"],
+            [/InstantMessaging|Chat|telegram|discord|vesktop/i, "\uf086"],
+            [/Audio|Music|spotify|rmpc/i, "\uf001"],
+            [/Video|mpv|dottv/i, "\uf03d"],
+            [/Graphics|gimp|inkscape|krita/i, "\uf1fc"],
+            [/Office|libreoffice/i, "\uf15c"],
+            [/Game|steam/i, "\uf11b"],
+            [/Settings|System/i, "\uf013"]
+        ];
+        for (const [re, g] of kinds)
+            if (re.test(c))
+                return g;
         return (entry?.name ?? cls).slice(0, 1).toUpperCase() || "?";
     }
     function entryFor(cls: string): var {

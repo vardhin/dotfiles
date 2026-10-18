@@ -302,7 +302,7 @@ all.downloads = {
     size: { w: 32, h: 12 }, big: { w: 44, h: 28 },
     words: { none: "NO DOWNLOADS", today: "TODAY" },
     compact: C([
-        LIST("active", C([R([L("{name|upper}", { w: "fill", scroll: true }), L("{pct|pct}%", { slot: 1 })]), F("progress", { value: "pct", h: 3 })]), { max: 2 }),
+        LIST("active", C([R([L("{name|upper}", { w: "fill", scroll: true }), L("{pct|pct}%", { slot: 1 })]), F("progress", { value: "pct", h: 3 })]), { max: 2, h: "auto", when: "active" }),
         LIST("recent", R([L("{name|upper}", { w: "fill", scroll: true, action: "open {path}" }), L("{ts|ago}", { slot: "dim" })], { gap: 4 }), { max: 4, empty: "{~none}", when: "!active" })
     ], { pad: 2, gap: 1 }),
     expanded: C([
@@ -395,14 +395,13 @@ all.todo = {
 // ── Screenshots ──────────────────────────────────────────────────────
 all.screenshots = {
     name: "screenshots", title: "Screenshots", feed: "shots",
-    size: { w: 30, h: 22 }, big: { w: 46, h: 34 },
+    size: { w: 32, h: 22 }, big: { w: 46, h: 34 },
     compact: C([
         F("art", { src: "latest", h: "fill", action: "open {latest}" }),
-        LIST("thumbs", F("art", { src: "path", w: "fill", action: "open {path}" }), { dir: "row", gap: 2, h: 18, max: 4 }),
-        R([L("COPY", { action: "copyimg {latest}" }), L("EDIT", { action: "edit {latest}" }), L("OCR", { action: "ocr {latest}" }), SPACE, L("{~del}", { slot: 2, action: "trash {latest}" })], { gap: 7 })
+        R([L("{count}", { slot: 2 }), SPACE, L("COPY", { slot: 1, action: "copyimg {latest}" }), L("EDIT", { slot: 1, action: "edit {latest}" }), L("OCR", { slot: 1, action: "ocr {latest}" })], { gap: 4 })
     ], { pad: 2, gap: 2 }),
     expanded: C([
-        R([L("{count} SHOTS", { slot: 2, w: "fill" }), L("NEW", { slot: 1, action: "capture shot area" })]),
+        R([L("{count} SHOTS", { slot: 2, w: "fill" }), L("NEW", { slot: 1, action: "capture shot area" }), GAP, L("{~del} LATEST", { slot: 2, action: "trash {latest}" })]),
         LIST("days", C([
             L("{day|upper}", { slot: 1 }),
             LIST("shots", F("art", { src: "path", w: 40, action: "open {path}" }), { dir: "row", gap: 2, h: 24, max: 6 })
@@ -419,7 +418,7 @@ all.screenshots = {
 // next empty workspace.
 all.dock = {
     name: "dock", title: "Dock", feed: "dock",
-    size: { w: 5, h: 40 }, big: { w: 26, h: 40 }, click: "none",
+    size: { w: 7, h: 40 }, big: { w: 26, h: 40 }, click: "none",
     words: { title: "RUNNING" },
     compact: C([
         L("", { align: "center", slot: 2, action: "launcher" }),
@@ -588,6 +587,9 @@ function layout(t, mode, own) {
         return own.compact;
     if (!t)
         return null;
+    // Rail forms stand centred in the rail.
+    if (mode === "rail" && t.rail && t.rail.col)
+        return Object.assign({ center: true }, t.rail);
     if (t[mode])
         return t[mode];
     if (mode === "expanded")

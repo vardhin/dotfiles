@@ -21,6 +21,7 @@ ShellRoot {
 
     Wallpaper {}
     World {}
+    DragLayer {}
     WindowFx {}
     WorkspaceFx {}
     WindowBorders {}
@@ -50,6 +51,7 @@ ShellRoot {
     MediaPane {}
     CapturePane {}
     ClipPane {}
+    PeekPane {}
     OverviewPane {}
     PolkitPane {}
     Scene {}

@@ -8,18 +8,19 @@ import "../Templates.js" as Templates
 
 // Desktop panels: one template (Templates.js) plus one feed (Feeds.qml) each,
 // drawn by DeskPanel.qml. A panel lives in one of three places:
-//   home    on the home workspace (Tokens.home), at x y in grid units;
-//           compact, or expanded after a click
+//   home    on a workspace's desktop (ws; 0 = the home workspace,
+//           Tokens.home), at x y in grid units; compact, or expanded after
+//           a click. Windows cover it like any desktop.
 //   strip   docked in the top strip, in a zone (l left, c center, r before
 //           the settings words, e after them) at an order
 //   rail    docked in the side rail, at an order
-// Panels never sit on any other workspace. Persisted to
+// Persisted to
 //   ${XDG_STATE_HOME:-~/.local/state}/dotshell/panels.json
 // and driven from the `dot` CLI over services/DotBus.qml.
 //
 // A panel:
-//   { id, template, feed, layout, place, x, y, w, h, zone, order, slot, dot,
-//     shape, source, text }
+//   { id, template, feed, layout, place, ws, x, y, w, h, zone, order, slot,
+//     dot, shape, source, text }
 //   template  a name from Templates.js (nowplaying clock workspaces system
 //             battery messages capture caffeine tray downloads files
 //             clipboard todo screenshots dock tv, the popped vis and lyrics
@@ -47,6 +48,12 @@ Singleton {
     property var frames: ({})
 
     // ── Runtime state (not saved) ───────────────────────────────────
+    // A docked item opened in place (PeekPane.qml): { id, x, y, place }, the
+    // item's centre in screen px.
+    property var peek: null
+    // The docked item under the pointer, for its name (DragLayer.qml):
+    // { id, place, x, y, w, h } in screen px.
+    property var hint: null
     // The one expanded panel on home ("" = none).
     property string expanded: ""
     onExpandedChanged: if (expanded === "") typing = false
@@ -62,6 +69,10 @@ Singleton {
     property var slots: ({})
 
     readonly property var home: panels.filter(p => p.place === "home")
+    // The workspace a desktop panel sits on.
+    function wsOf(p: var): int {
+        return p.ws > 0 ? p.ws : Tokens.home;
+    }
     readonly property var strip: panels.filter(p => p.place === "strip").sort((a, b) => zones.indexOf(a.zone) - zones.indexOf(b.zone) || a.order - b.order)
     readonly property var rail: panels.filter(p => p.place === "rail").sort((a, b) => a.order - b.order)
     function inStrip(zone: string): var {
@@ -217,7 +228,7 @@ Singleton {
     // Copy the allowed fields of `fields` onto p, coerced. `loose` ignores
     // fields that are not panel fields (spawn passes the whole request).
     function apply(p: var, fields: var, loose: bool): var {
-        const allowed = ["template", "kind", "feed", "layout", "place", "x", "y", "w", "h", "zone", "order", "shape", "slot", "dot", "source", "text"];
+        const allowed = ["template", "kind", "feed", "layout", "place", "ws", "x", "y", "w", "h", "zone", "order", "shape", "slot", "dot", "source", "text"];
         for (const k in fields) {
             if (!allowed.includes(k)) {
                 if (loose)
@@ -225,7 +236,7 @@ Singleton {
                 return { error: "unknown field " + k + "; one of: " + allowed.join(", ") };
             }
             let v = fields[k];
-            if (["x", "y", "w", "h", "slot", "order"].includes(k))
+            if (["x", "y", "w", "h", "slot", "order", "ws"].includes(k))
                 v = Math.round(Number(v));
             else if (k === "dot")
                 v = v === true || v === "true" || v === "on" || v === "1";
@@ -289,19 +300,21 @@ Singleton {
         return set(id, { x: x, y: y });
     }
 
-    // Dock, undock or reorder: place a panel at (place, zone, order); the
-    // other items in that row shift to make room. Remembered for undo().
-    function place(id: string, where: string, zone: string, order: int, x: int, y: int): var {
+    // Dock, undock or reorder: place a panel at (place, zone, order), or on
+    // a desktop at x y (workspace ws, 0 = home); the other items in that
+    // row shift to make room. Remembered for undo().
+    function place(id: string, where: string, zone: string, order: int, x: int, y: int, ws: int): var {
         const old = find(id);
         if (!old)
             return { error: "no panel " + id };
         if (!places.includes(where))
             return { error: "place is one of: " + places.join(", ") };
-        const before = { place: old.place, zone: old.zone, order: old.order, x: old.x, y: old.y };
+        const before = { place: old.place, zone: old.zone, order: old.order, x: old.x, y: old.y, ws: old.ws ?? 0 };
         const p = Object.assign({}, old, { place: where });
         if (where === "home") {
             p.x = x;
             p.y = y;
+            p.ws = ws > 0 && ws !== Tokens.home ? ws : 0;
         } else {
             p.zone = where === "strip" ? (zones.includes(zone) ? zone : "r") : "";
             p.order = order;
@@ -335,7 +348,7 @@ Singleton {
         const u = undo;
         undo = null;
         const b = u.before;
-        return place(u.id, b.place, b.zone, b.order, b.x, b.y);
+        return place(u.id, b.place, b.zone, b.order, b.x, b.y, b.ws ?? 0);
     }
     Timer {
         id: undoTimer

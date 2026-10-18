@@ -2,7 +2,7 @@ import QtQuick
 
 // One glyph on the side rail you can click. A lit bar on the rail's left
 // edge marks it while `active` (its pane is open); hovering lights it dimly.
-// As wide as the rail (13 dots: Nerd Font icons are up to 11), one text line
+// As wide as the rail (Tokens.railDots; Nerd Font icons are up to 11), one text line
 // tall.
 Item {
     id: btn
@@ -11,7 +11,7 @@ Item {
     property bool active: false
     signal clicked
 
-    width: 13
+    width: Tokens.railDots
     height: Tokens.lineDots
 
     Rectangle {

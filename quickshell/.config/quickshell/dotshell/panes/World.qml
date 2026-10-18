@@ -4,17 +4,15 @@ import Quickshell.Hyprland
 import Quickshell.Wayland
 import qs
 import qs.services
-import "../Templates.js" as Templates
 
-// The world layer: the home workspace's desktop panels, behind windows and
+// The world layer: every workspace's desktop panels, behind windows and
 // above the wallpaper. Workspaces lie side by side and switching slides the
-// strip, so home's panels scroll away when you leave home (Tokens.home).
-// Panels live only on home; the strip and the rail are their other places.
+// strip, so a workspace's panels scroll away when you leave it. Windows
+// cover panels like any desktop; home (Tokens.home) keeps no windows.
 //
-// While a panel is dragged this layer also draws the home snap grid (24 px),
-// the landing outline of a panel pulled out of the strip or the rail, and,
-// for 3 s after a dock, the outline of the spot it left (click it, or press
-// Ctrl Z, to undo).
+// For 3 s after a dock it draws the outline of the spot the panel left
+// (click it, or press Ctrl Z, to undo). The drag feedback (snap grid,
+// landing outline) is DragLayer.qml's, above the windows.
 Variants {
     model: Quickshell.screens
 
@@ -44,10 +42,8 @@ Variants {
         onLiveWsChanged: {
             if (liveWs > 0)
                 wsId = liveWs;
-            if (liveWs !== Tokens.home)
-                Panels.fold();
+            Panels.fold();
         }
-        readonly property bool atHome: wsId === Tokens.home
         // Home on the focused screen only.
         readonly property bool homeScreen: screen === Ui.focusedScreen() || Quickshell.screens.length === 1
 
@@ -81,62 +77,10 @@ Variants {
             }
         }
 
-        // ── The snap grid, while a panel is over home ───────────────
-        Item {
-            anchors.fill: parent
-            visible: win.atHome && Panels.drag !== null && Panels.drag.target === "home"
-            opacity: 0.55
-            Repeater {
-                model: parent.visible ? Math.ceil(win.height / 24) : 0
-                Row {
-                    required property int index
-                    y: index * 24
-                    spacing: 23
-                    Repeater {
-                        model: Math.ceil(win.width / 24)
-                        Rectangle {
-                            width: 1
-                            height: 1
-                            color: Tokens.slot1
-                        }
-                    }
-                }
-            }
-        }
-
-        // ── Landing outline for a panel pulled out of the strip or rail ─
-        Rectangle {
-            readonly property var d: Panels.drag
-            readonly property var p: d && d.from !== "home" ? Panels.find(d.id) : null
-            readonly property var t: p ? Templates.get(p.template) : null
-            visible: win.atHome && p !== null && d.target === "home"
-            x: d ? Math.round(d.x / 24) * 24 : 0
-            y: d ? Math.round(d.y / 24) * 24 : 0
-            width: (p?.w ?? 0) * Panels.unit
-            height: (p?.h ?? 0) * Panels.unit
-            color: "transparent"
-            border.width: 1
-            border.color: Tokens.slot1
-            DotText {
-                x: 6
-                y: parent.height - Tokens.fontPx - 4
-                text: "RELEASE TO PLACE"
-                color: Tokens.slot1
-            }
-        }
-        // Off home a pulled panel has nowhere to land: refused, it snaps back.
-        DotText {
-            visible: !win.atHome && Panels.drag !== null && Panels.drag.from !== "home" && Panels.drag.target === "home"
-            x: (Panels.drag?.x ?? 0) + 12
-            y: (Panels.drag?.y ?? 0) + 12
-            text: "PANELS LIVE ON HOME"
-            color: Tokens.slot2
-        }
-
         // ── Undo: the spot a docked panel left, for 3 s ─────────────
         Rectangle {
             readonly property var u: Panels.undo
-            visible: win.atHome && u !== null && u.before.place === "home"
+            visible: u !== null && u.before.place === "home" && (u.before.ws > 0 ? u.before.ws : Tokens.home) === win.wsId
             readonly property var p: u ? Panels.find(u.id) : null
             x: (u?.before.x ?? 0) * Panels.unit
             y: (u?.before.y ?? 0) * Panels.unit
@@ -178,9 +122,11 @@ Variants {
                 DeskPanel {
                     required property var modelData
                     panel: modelData
+                    originX: (Panels.wsOf(modelData) - Tokens.home) * win.width
                     screenW: win.width
                     screenH: win.height
-                    visible: win.atHome || Math.abs(world.x) < win.width
+                    // Its own workspace, and while sliding past it.
+                    visible: Math.abs(world.x + originX) < win.width
                 }
             }
         }

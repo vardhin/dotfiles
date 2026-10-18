@@ -8,8 +8,9 @@ import qs
 // all ask here), from the slots the strip and the rail publish in
 // Panels.slots: { id: { place, zone, order, x, y, w, h } } in screen px.
 //   stripAim(x, screenW) -> { zone, order }   rail: railAim(y) -> order
-// The strip's zones by x: left (l) up to 35% of the screen, center (c) to
-// 60%, then right (r) up to the settings words and end (e) after them.
+// The strip's zones by x, from where TopStrip says they meet (_zones):
+// left (l), center (c), right (r) up to the middle of the settings words,
+// end (e) after it.
 Singleton {
     id: root
 
@@ -25,10 +26,12 @@ Singleton {
 
     function stripAim(x: real, screenW: real): var {
         const skip = Panels.drag?.id ?? "";
-        const settings = Panels.slots["_settings"];
-        let zone = x < screenW * 0.35 ? "l" : x < screenW * 0.6 ? "c" : "r";
-        if (settings && x > settings.x + settings.w)
-            zone = "e";
+        const z = Panels.slots["_zones"];
+        let zone;
+        if (z)
+            zone = x < z.lc ? "l" : x < z.cr ? "c" : x < z.re ? "r" : "e";
+        else
+            zone = x < screenW * 0.35 ? "l" : x < screenW * 0.6 ? "c" : "r";
         const order = items("strip", skip).filter(s => s.zone === zone && s.x + s.w / 2 < x).length;
         return { zone: zone, order: order };
     }

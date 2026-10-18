@@ -63,9 +63,18 @@ Singleton {
         case "feeds":
             return { feeds: Feeds.ids().map(id => ({ id: id, pushed: Feeds.pushed[id] !== undefined, keys: Object.keys(Feeds.get(id) ?? {}) })) };
         case "dock":
-            return { panel: Panels.place(q.id, q.place ?? "strip", q.zone ?? "r", parseInt(q.order ?? 99), parseInt(q.x ?? 4), parseInt(q.y ?? 6)) };
+            return { panel: Panels.place(q.id, q.place ?? "strip", q.zone ?? "r", parseInt(q.order ?? 99), parseInt(q.x ?? 4), parseInt(q.y ?? 6), parseInt(q.ws ?? 0)) };
         case "undo":
             return Panels.undoLast();
+        case "peek": {
+            // Open a docked item's whole panel beside it, as a click would.
+            const s = Panels.slots[q.id];
+            if (!s)
+                return { error: "no docked item " + q.id };
+            Panels.peek = { id: q.id, place: s.place, x: s.x + s.w / 2, y: s.y + s.h / 2 };
+            Ui.open("peek", null);
+            return { ok: true };
+        }
         case "home":
             if (q.reset)
                 return Panels.reset();

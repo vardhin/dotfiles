@@ -100,7 +100,7 @@ Singleton {
             Qt.callLater(Feeds.rescanShots);
             return "ok";
         case "paste": {
-            const t = Clip.items[Number(rest)];
+            const t = Clip.items[Number(rest)]?.t;
             if (t !== undefined)
                 Clip.use(t, true);
             return "ok";
@@ -109,7 +109,7 @@ Singleton {
             if (w1 === "clear")
                 Clip.clear();
             else if (w1 === "forget") {
-                const t = Clip.items[Number(words[2])];
+                const t = Clip.items[Number(words[2])]?.t;
                 if (t !== undefined)
                     Clip.remove(t);
             }

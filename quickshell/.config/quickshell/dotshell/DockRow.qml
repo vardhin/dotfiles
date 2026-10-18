@@ -32,7 +32,7 @@ Item {
     readonly property var others: docked.filter(p => p.id !== dragId).map(p => p.id)
     readonly property var dragged: aimed ? Panels.find(dragId) : null
 
-    implicitWidth: vertical ? 13 : flow.implicitWidth + (endGhost.active ? endGhost.width + (flow.implicitWidth ? spacing : 0) : 0) + (armed ? arm.width + spacing : 0)
+    implicitWidth: vertical ? Tokens.railDots : flow.implicitWidth + (endGhost.active ? endGhost.width + (flow.implicitWidth ? spacing : 0) : 0) + (armed ? arm.width + spacing : 0)
     implicitHeight: vertical ? flow.implicitHeight + (endGhost.active ? endGhost.height + (flow.implicitHeight ? spacing : 0) : 0) + (armed ? arm.height + spacing : 0) : 11
 
     Grid {
@@ -65,7 +65,7 @@ Item {
                 // slot bring their own).
                 readonly property int tail: index === root.docked.length - 1 ? 0 : gap
 
-                implicitWidth: root.vertical ? 13 : (ghostHere ? ghost.width + gap : 0) + (folded || !item.visible ? 0 : item.width + tail)
+                implicitWidth: root.vertical ? Tokens.railDots : (ghostHere ? ghost.width + gap : 0) + (folded || !item.visible ? 0 : item.width + tail)
                 implicitHeight: root.vertical ? (ghostHere ? ghost.height + gap : 0) + (folded || !item.visible ? 0 : item.height + tail) : 11
                 width: implicitWidth
                 height: implicitHeight
@@ -118,7 +118,7 @@ Item {
         visible: root.armed
         x: root.vertical ? 1 : flow.implicitWidth + (flow.implicitWidth ? root.spacing : 0)
         y: root.vertical ? flow.implicitHeight + (flow.implicitHeight ? root.spacing : 0) : 1
-        width: root.vertical ? 11 : 9
+        width: root.vertical ? Tokens.railDots - 2 : 9
         height: root.vertical ? 9 : 9
         color: "transparent"
         border.width: 1

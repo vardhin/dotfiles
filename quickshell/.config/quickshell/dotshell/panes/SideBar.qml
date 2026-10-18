@@ -24,9 +24,9 @@ Variants {
         screen: modelData
 
         readonly property bool auto: Tokens.side === "auto"
-        // About the strip's 11 dot rows, turned on end; 13 so the 11-dot
-        // Nerd Font icons keep a dot of room either side.
-        readonly property int cols: 13
+        // Two glyphs wide (Tokens.railDots), so a docked item can show a
+        // two-digit number: the hour, a battery percent, a count.
+        readonly property int cols: Tokens.railDots
         readonly property int full: cols * Tokens.pitch
 
         // Auto: out while the pointer is on it, and a moment after.

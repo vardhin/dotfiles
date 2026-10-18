@@ -9,8 +9,9 @@ import "Templates.js" as Templates
 // (Templates.js), drawn straight onto the strip's or rail's dot canvas
 // (1 px = 1 dot). It tells Panels where it sits, so a dragged panel can aim
 // between items, and it can itself be dragged: hold 200 ms (or just drag)
-// and pull it out onto home, or along the bar to reorder, or across to the
-// other bar.
+// and pull it out onto the desktop of the workspace you are on, or along
+// the bar to reorder, or across to the other bar. A click where the item has
+// no action of its own opens the whole panel beside it (PeekPane.qml).
 //   DockItem { panel: p; place: "strip"; originX: 0 }
 Item {
     id: root
@@ -32,7 +33,7 @@ Item {
     readonly property color tube: [Tokens.slot0, Tokens.slot1, Tokens.slot2][panel.slot] ?? Tokens.slot0
 
     visible: layout !== null && node.shown
-    implicitWidth: mode === "rail" ? 13 : node.implicitWidth
+    implicitWidth: mode === "rail" ? Tokens.railDots : node.implicitWidth
     implicitHeight: mode === "rail" ? node.implicitHeight : 11
     width: implicitWidth
     height: implicitHeight
@@ -78,9 +79,17 @@ Item {
 
     QtObject {
         id: sink
+        // A docked item has no room to expand: "panel expand" opens the
+        // peek; pop works as on the desktop.
         function run(a: string): void {
-            if (a.startsWith("panel "))
+            const w = a.split(/\s+/);
+            if (w[0] === "panel") {
+                if (w[1] === "expand")
+                    root.peek();
+                else if (w[1] === "pop")
+                    Panels.pop(root.panel.id, w[2]);
                 return;
+            }
             Actions.run(a);
         }
         // Held or dragged from a clickable part of the item (PanelNode.grip);
@@ -99,9 +108,11 @@ Item {
         }
     }
 
+    // In the rail the form stands centred in its two glyphs of width.
     PanelNode {
         id: node
-        width: root.width
+        width: root.mode === "rail" ? Math.min(root.width, Math.max(1, implicitWidth)) : root.width
+        x: root.mode === "rail" ? Math.floor((root.width - width) / 2) : 0
         height: root.height
         node: root.layout ?? ({})
         ctx: root.ctx
@@ -128,16 +139,18 @@ Item {
         Panels.drag = { id: panel.id, from: place, target: place, zone: panel.zone, order: panel.order, x: start.x, y: start.y };
     }
     function press(p: point): void {
+        console.warn("DBGDRAG press", panel.id, p.x, p.y);
         start = p;
         hold.restart();
     }
     function move(p: point): void {
+        console.warn("DBGDRAG move", panel.id, p.x, p.y, lifted);
         if (!lifted && Math.abs(p.x - start.x) + Math.abs(p.y - start.y) > 6)
             lift();
         if (!lifted)
             return;
         const stripH = Tokens.top ? Tokens.pitch * 11 : -1000;
-        const railW = Tokens.side === "off" ? -1000 : Tokens.pitch * 13;
+        const railW = Tokens.side === "off" ? -1000 : Tokens.pitch * Tokens.railDots;
         let aim;
         if (Tokens.top && p.y < stripH + 48)
             aim = Object.assign({ target: "strip" }, Dock.stripAim(p.x, screenW));
@@ -148,6 +161,7 @@ Item {
         Panels.drag = Object.assign({ id: panel.id, from: place, x: p.x, y: p.y }, aim);
     }
     function release(): bool {
+        console.warn("DBGDRAG release", panel.id, lifted, JSON.stringify(Panels.drag));
         hold.stop();
         if (!lifted)
             return false;
@@ -157,25 +171,59 @@ Item {
         if (!d)
             return true;
         if (d.target === "home") {
-            // Pulled out anywhere: it lands on home with its corner at the
-            // cursor (24 px grid, where World draws the outline), kept on
-            // screen, and shows there when you go home.
-            const t = Templates.get(panel.template);
+            // Pulled out anywhere: it lands on this workspace's desktop
+            // with its corner at the cursor (24 px grid, where DragLayer
+            // drew the outline), kept on screen.
             const w = panel.w * Panels.unit, h = panel.h * Panels.unit;
             const x = Math.max(0, Math.min(d.x, screenW - w)), y = Math.max(Tokens.pitch * 11, Math.min(d.y, screenH - h));
-            Panels.place(panel.id, "home", "", 0, Math.round(x / 24) * 2, Math.round(y / 24) * 2);
-            if ((Hyprland.focusedWorkspace?.id ?? 0) !== Tokens.home)
-                Notify.send("Dot Shell", (t?.title ?? panel.template) + " is on home now", { urgency: "low", transient: true });
+            Panels.place(panel.id, "home", "", 0, Math.round(x / 24) * 2, Math.round(y / 24) * 2, Hyprland.focusedWorkspace?.id ?? 0);
         } else {
-            Panels.place(panel.id, d.target, d.zone, d.order, 0, 0);
+            Panels.place(panel.id, d.target, d.zone, d.order, 0, 0, 0);
         }
         return true;
+    }
+
+    // Open the whole panel beside the item.
+    function peek(): void {
+        const c = mapToItem(null, width / 2, height / 2);
+        const open = Ui.pane === "peek" && Panels.peek?.id === panel.id;
+        Panels.peek = { id: panel.id, place: place, x: originX + c.x, y: c.y };
+        if (open)
+            Ui.close();
+        else
+            Ui.open("peek", null);
     }
     function cancel(): void {
         hold.stop();
         lifted = false;
         Panels.drag = null;
     }
+
+    // ── Its name, while hovered ─────────────────────────────────────
+    HoverHandler {
+        id: hov
+        enabled: !root.ghost
+        onHoveredChanged: {
+            if (hovered) {
+                hintLater.restart();
+            } else {
+                hintLater.stop();
+                if (Panels.hint?.id === root.panel.id)
+                    Panels.hint = null;
+            }
+        }
+    }
+    Timer {
+        id: hintLater
+        interval: 450
+        onTriggered: {
+            if (root.lifted || !hov.hovered)
+                return;
+            const a = root.mapToItem(null, 0, 0), b = root.mapToItem(null, root.width, root.height);
+            Panels.hint = { id: root.panel.id, place: root.place, x: root.originX + a.x, y: a.y, w: b.x - a.x, h: b.y - a.y };
+        }
+    }
+    onLiftedChanged: if (lifted && Panels.hint?.id === panel.id) Panels.hint = null
 
     // Below the node, so the item's own actions (clicks) win; those pass
     // their presses on through sink.grip.
@@ -191,7 +239,10 @@ Item {
         }
         onPressed: mouse => root.press(screenPos(mouse))
         onPositionChanged: mouse => root.move(screenPos(mouse))
-        onReleased: root.release()
+        onReleased: {
+            if (!root.release())
+                root.peek();
+        }
         onCanceled: root.cancel()
     }
 }

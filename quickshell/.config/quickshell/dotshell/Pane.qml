@@ -55,8 +55,8 @@ PanelWindow {
 
     // Never wider or taller than the screen at the current pitch.
     // The side bar's columns are taken too when it reserves space (side on;
-    // SideBar.qml's 13 cols): the compositor already narrows the window.
-    readonly property int sideW: Tokens.side === "on" ? 13 * Tokens.pitch : 0
+    // SideBar.qml's Tokens.railDots cols): the compositor already narrows the window.
+    readonly property int sideW: Tokens.side === "on" ? Tokens.railDots * Tokens.pitch : 0
     readonly property int maxCols: screen ? Math.floor((screen.width - sideW) / Tokens.pitch) : cols
     // The strip's rows are taken (the pane sits under it): its real height,
     // which TopStrip rounds to whole device px.

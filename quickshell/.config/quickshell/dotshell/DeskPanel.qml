@@ -7,7 +7,7 @@ import "Shapes.js" as Shapes
 import "Skins.js" as Skins
 import "Templates.js" as Templates
 
-// One panel on the home workspace (see services/Panels.qml): its template's
+// One desktop panel (see services/Panels.qml): its template's
 // layout (Templates.js) bound to its feed (Feeds.qml), drawn by PanelNode on
 // a DotSurface inside the era's frame (Skins.js).
 //   click            expand (or the template's own click); click outside folds
@@ -18,6 +18,9 @@ Item {
     id: root
 
     required property var panel
+    // Where its workspace starts in the world layer (World.qml lays the
+    // workspaces side by side), in px.
+    property real originX: 0
     // The screen size, for the dock zones and keeping expanded panels on it.
     property int screenW: 1920
     property int screenH: 1080
@@ -48,7 +51,10 @@ Item {
     // Frame insets in dots: the ring, and the title band when the era has one.
     readonly property bool header: skin.header === true && rows >= 30 && !["sign", "image", "pixels", "dock"].includes(panel.template)
     readonly property int edge: raw ? 0 : skin.frame === "bezel" ? 4 : skin.frame === "double" ? 4 : 2
-    readonly property int topInset: edge + (header ? Tokens.lineDots + 1 : 0)
+    // Eras with no title band name the panel in the frame's top edge
+    // instead, so every panel says what it is.
+    readonly property bool legend: !header && !raw && rect && !["sign", "image", "pixels", "dock"].includes(panel.template)
+    readonly property int topInset: header ? edge + Tokens.lineDots + 1 : legend ? Tokens.lineDots : edge
     readonly property int inset: rect ? 0 : Math.round(Math.min(cols, rows) * 0.14)
 
     // ── Feed ────────────────────────────────────────────────────────
@@ -103,7 +109,7 @@ Item {
     readonly property string target: lifted ? (Panels.drag?.target ?? "home") : "home"
     readonly property bool overDock: lifted && target !== "home"
 
-    x: homeX + drag.x
+    x: originX + homeX + drag.x
     y: homeY + drag.y
     width: pxW
     height: pxH
@@ -138,7 +144,7 @@ Item {
     // Where would a drop at (sx, sy) screen px land?
     function aim(sx: real, sy: real): var {
         const stripH = Tokens.top ? Tokens.pitch * 11 : -1000;
-        const railW = Tokens.side === "off" ? -1000 : Tokens.pitch * 13;
+        const railW = Tokens.side === "off" ? -1000 : Tokens.pitch * Tokens.railDots;
         if (Tokens.top && sy < stripH + 48)
             return Object.assign({ target: "strip" }, Dock.stripAim(sx, screenW));
         if (Tokens.side !== "off" && sx > screenW - railW - 48)
@@ -148,7 +154,8 @@ Item {
 
     // Press, move, release in root.parent's px: from the grab area below,
     // and from clickable nodes through sink.grip. release() says whether
-    // the press became a drag.
+    // the press became a drag. Aiming is in screen px (the world layer
+    // covers the screen; its parent is shifted by the workspace).
     property point start
     function press(p: point): void {
         start = p;
@@ -161,7 +168,8 @@ Item {
         if (!lifted)
             return;
         drag = Qt.point(dx, dy);
-        Panels.drag = Object.assign({ id: panel.id, from: "home", x: p.x, y: p.y }, aim(p.x, p.y));
+        const s = root.parent.mapToItem(null, p.x, p.y);
+        Panels.drag = Object.assign({ id: panel.id, from: "home", x: s.x, y: s.y }, aim(s.x, s.y));
     }
     function release(): bool {
         hold.stop();
@@ -172,7 +180,7 @@ Item {
         Panels.drag = null;
         if (d && d.target !== "home") {
             drag = Qt.point(0, 0);
-            Panels.place(panel.id, d.target, d.zone, d.order, 0, 0);
+            Panels.place(panel.id, d.target, d.zone, d.order, 0, 0, 0);
             return true;
         }
         // Home: snap to the 24 px grid (two units).
@@ -216,7 +224,8 @@ Item {
         lifted = true;
         Panels.fold();
         Panels.typing = false;
-        Panels.drag = { id: panel.id, from: "home", target: "home", zone: "", order: 0, x: x, y: y };
+        const s = root.parent.mapToItem(null, start.x, start.y);
+        Panels.drag = { id: panel.id, from: "home", target: "home", zone: "", order: 0, x: s.x, y: s.y };
     }
 
     function click(): void {
@@ -347,7 +356,8 @@ Item {
             width: root.cols
             height: root.rows
             preferredRendererType: Shape.CurveRenderer
-            opacity: !LedFx.on ? 0.6 : LedFx.musical ? 0.4 + 0.6 * Math.min(1, LedFx.bass + LedFx.beat * 0.5) : 0.45 + 0.35 * Math.sin(LedFx.time * 2)
+            // Breathes, but never so far down that the outline reads as missing.
+            opacity: !LedFx.on ? 0.7 : LedFx.musical ? 0.6 + 0.4 * Math.min(1, LedFx.bass + LedFx.beat * 0.5) : 0.75 + 0.2 * Math.sin(LedFx.time * 2)
             ShapePath {
                 strokeWidth: 2
                 strokeColor: root.tube
@@ -379,6 +389,23 @@ Item {
                 anchors.rightMargin: 2
                 text: root.words.headR
                 color: Tokens.glass
+            }
+        }
+
+        // ── Legend: the name cut into the top edge ──
+        Rectangle {
+            visible: root.legend
+            x: root.edge + 3
+            y: 0
+            width: legendText.implicitWidth + 4
+            height: Tokens.lineDots - 2
+            color: Tokens.glass
+            DotText {
+                id: legendText
+                x: 2
+                height: parent.height
+                text: (root.template?.title ?? root.panel.template).toUpperCase()
+                color: Tokens.slot2
             }
         }
 

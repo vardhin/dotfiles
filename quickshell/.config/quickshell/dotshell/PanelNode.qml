@@ -201,6 +201,8 @@ Item {
                     readonly property int fixedH: typeof spec.h === "number" ? spec.h : spec.lines ? spec.lines * Tokens.lineDots : -1
 
                     Layout.fillWidth: fixedW < 0 && fillW
+                    // center: true stands a column's narrow children in the middle.
+                    Layout.alignment: !root.horizontal && root.node.center ? Qt.AlignHCenter : (root.horizontal ? Qt.AlignVCenter : Qt.AlignLeft)
                     Layout.fillHeight: fixedH < 0 && fillH
                     Layout.preferredWidth: fixedW >= 0 ? fixedW : (item ? item.implicitWidth : 0)
                     Layout.preferredHeight: fixedH >= 0 ? fixedH : (item ? item.implicitHeight : 0)

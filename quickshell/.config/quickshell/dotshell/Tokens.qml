@@ -119,6 +119,7 @@ Singleton {
     readonly property int fontPx: 11
     readonly property int charDots: 7       // advance of one glyph
     readonly property int lineDots: 13      // one text line in multi-line panes
+    readonly property int railDots: 16      // the side rail's width: two glyphs (7 each) and a dot either side
 
     // DotSurfaces snapshot their canvas when this fires; the era swaps two
     // frames later, so the snapshot still holds the old colors.

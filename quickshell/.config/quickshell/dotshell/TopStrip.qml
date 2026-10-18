@@ -55,6 +55,31 @@ PanelWindow {
         return compact ? short : full;
     }
 
+    // Where the zones meet, in screen px, so a drop aims at the zone it is
+    // over (services/Dock.qml): l|c halfway between the left run and the
+    // center, c|r halfway between the center and the right run, r|e at the
+    // middle of the settings words.
+    function publishZones(): void {
+        const px = (item, dx) => item.mapToItem(null, dx, 0).x;
+        const leftEnd = px(left, left.width);
+        const centerStart = center.visible && center.width > 0 ? px(center, 0) : strip.width / 2;
+        const centerEnd = center.visible && center.width > 0 ? px(center, center.width) : strip.width / 2;
+        const rightStart = px(right, 0);
+        const s = Object.assign({}, Panels.slots);
+        s["_zones"] = {
+            place: "strip",
+            lc: (leftEnd + centerStart) / 2,
+            cr: (centerEnd + rightStart) / 2,
+            re: px(settings, settings.width / 2)
+        };
+        Panels.slots = s;
+    }
+    Timer {
+        id: zonesLater
+        interval: 50
+        onTriggered: strip.publishZones()
+    }
+
     DotSurface {
         id: surface
         anchors.horizontalCenter: parent.horizontalCenter
@@ -70,6 +95,7 @@ PanelWindow {
             zone: "l"
             screenW: strip.width
             screenH: strip.screen.height
+            onWidthChanged: zonesLater.restart()
         }
 
         // The focused window's title, in whatever room is left before the
@@ -98,6 +124,8 @@ PanelWindow {
             screenH: strip.screen.height
             x: Math.max(surface.centerMin, Math.min(Math.round((strip.cols - width) / 2), surface.centerMax - width))
             visible: !ticker.visible
+            onXChanged: zonesLater.restart()
+            onWidthChanged: zonesLater.restart()
         }
 
         Marquee {
@@ -138,6 +166,7 @@ PanelWindow {
             anchors.rightMargin: 2
             height: strip.rows
             spacing: strip.compact ? 4 : 6
+            onXChanged: zonesLater.restart()
 
             DockRow {
                 place: "strip"
