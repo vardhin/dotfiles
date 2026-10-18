@@ -39,9 +39,9 @@ Look:
   dot wall pixels < frame.rgb       raw RGB at the wall's size
   dot raw '{"cmd":"tokens"}'        send one request as-is
 
-Templates: nowplaying clock workspaces system battery messages capture
+Templates: media clock workspaces system battery messages capture
 caffeine tray downloads files clipboard todo screenshots dock, vis lyrics,
-and sign note image mpris media pixels board.
+and sign note image pixels board. (nowplaying, mpris and tv make a media panel.)
 A board panel draws a layout of its own (see Templates.js in the shell):
   dot spawn board --id ci --feed ci --layout '{"col":[{"field":"big","text":"{state|upper}"}]}'
 Positions and sizes are grid units (12 px each).

@@ -13,6 +13,7 @@ import qs
 //   ws N | ws empty            go to a workspace (with the dissolve)
 //   pane NAME | launcher       toggle a pane
 //   media toggle|next|previous|seek F
+//   media page now|tv|anime|lists|screen   MEDIA on that page
 //   launch DESKTOP-ID          on the next empty workspace (from home)
 //   jump CLASS                 focus the app's window, or launch it
 //   launch-query TEXT          the launcher with this query
@@ -68,6 +69,8 @@ Singleton {
                 Media.previous();
             else if (w1 === "seek")
                 Media.seekTo(Number(words[2] ?? 0));
+            else if (w1 === "page")
+                Ui.togglePage("media", words[2] ?? "now", null);
             return "ok";
         case "launch":
             Apps.launch(rest, false);

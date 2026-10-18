@@ -24,7 +24,7 @@ var eras = {
     phosphor: {
         frame: "double", header: true, round: 0, upper: false,
         all: { del: "rm", ok: "OK", head: "┤ {name} ├", headR: "TTY1" },
-        nowplaying: { head: "┤ mpv · now playing ├", lyr: "┤ lyrics · lrclib ├", prev: "[|<", play: "[>]", pause: "[||]", next: "[>|]" },
+        media: { head: "┤ mpv · now playing ├", lyr: "┤ lyrics · lrclib ├", prev: "[|<", play: "[>]", pause: "[||]", next: "[>|]" },
         clock: { head: "┤ cal ├", foot: "~ $ _" },
         workspaces: { head: "┤ workspaces ├" },
         system: { head: "┤ top ├", foot: "F9 KILL · ENTER FOCUS" },
@@ -58,7 +58,7 @@ var eras = {
     matrix: {
         frame: "plain", header: true, round: 0, upper: false,
         all: { del: "rm -f", head: "//{name}" },
-        nowplaying: { head: "//signal.locked", lyr: "//lyrics.stream", prev: "<<", play: ">", pause: "||", next: ">>" },
+        media: { head: "//signal.locked", lyr: "//lyrics.stream", prev: "<<", play: ">", pause: "||", next: ">>" },
         clock: { head: "//sys.cal" },
         workspaces: { head: "//sys.workspaces --tree" },
         system: { head: "//proc --top" },
@@ -77,7 +77,7 @@ var eras = {
     vfd: {
         frame: "bezel", header: false, round: 1, upper: true,
         all: { del: "ERASE" },
-        nowplaying: { lyr: "LYR · LRCLIB" },
+        media: { lyr: "LYR · LRCLIB" },
         messages: { title: "MESSAGES", icon: "MSG" },
         caffeine: { icon: "WARM" },
         files: { find: "FIND" },
@@ -88,7 +88,7 @@ var eras = {
     aero: {
         frame: "ring", header: false, round: 6, upper: false,
         all: { del: "Delete" },
-        nowplaying: { lyr: "Lyrics" },
+        media: { lyr: "Lyrics" },
         clock: { foot: "No appointments today" },
         messages: { title: "Notifications" },
         files: { find: "Search" },
@@ -118,7 +118,7 @@ var eras = {
     flap: {
         frame: "plain", header: true, round: 0, upper: true, flaps: true,
         all: { del: "CANCEL", head: "{name}", headR: "● LIVE" },
-        nowplaying: { head: "NOW PLAYING", headR: "● ON AIR" },
+        media: { head: "NOW PLAYING", headR: "● ON AIR" },
         clock: { head: "DEPARTURES" },
         workspaces: { head: "PLATFORMS" },
         system: { head: "SYSTEM STATUS", headR: "● NOMINAL" },
@@ -137,7 +137,7 @@ var eras = {
     nightvision: {
         frame: "brackets", header: false, round: 0, upper: true,
         all: { del: "BURN" },
-        nowplaying: { lyr: "AUDIO · TRANSCRIPT" },
+        media: { lyr: "AUDIO · TRANSCRIPT" },
         clock: { foot: "NO TASKING · STANDBY" },
         messages: { title: "COMMS LOG", icon: "RX" },
         caffeine: { icon: "SENTRY" },
@@ -150,7 +150,7 @@ var eras = {
     vapor: {
         frame: "bevel", header: true, round: 0, upper: false,
         all: { del: "Recycle", head: "{name}.exe", headR: "_ □ ×" },
-        nowplaying: { head: "now_playing.exe", lyr: "lyrics.txt" },
+        media: { head: "now_playing.exe", lyr: "lyrics.txt" },
         clock: { head: "date_time.exe" },
         workspaces: { head: "pager.exe" },
         system: { head: "taskmgr.exe" },
@@ -169,7 +169,7 @@ var eras = {
     arcade: {
         frame: "plain", header: true, round: 0, upper: true,
         all: { del: "K.O.", head: "{name}", headR: "P1" },
-        nowplaying: { head: "NOW PLAYING", headR: "CREDIT 01" },
+        media: { head: "NOW PLAYING", headR: "CREDIT 01" },
         clock: { head: "STAGE", headR: "CREDIT 01", foot: "INSERT COIN" },
         workspaces: { head: "WORLD MAP" },
         system: { head: "HIGH SCORES · CPU", headR: "ROUND 1" },
@@ -188,7 +188,7 @@ var eras = {
     blueprint: {
         frame: "plain", header: true, round: 0, upper: true,
         all: { del: "VOID", head: "SHEET — {name}", headR: "REV A" },
-        nowplaying: { head: "SHEET 1 OF 1", headR: "NOW PLAYING · REV A", lyr: "NOTE 3 — LYRICS" },
+        media: { head: "SHEET 1 OF 1", headR: "NOW PLAYING · REV A", lyr: "NOTE 3 — LYRICS" },
         clock: { head: "SHEET 2 — CALENDAR" },
         workspaces: { head: "SHEET 3 — FLOOR PLANS" },
         system: { head: "SHEET 4 — LOAD SCHEDULE" },

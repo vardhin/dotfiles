@@ -118,6 +118,8 @@ Pane {
 
     function show(p: string): void {
         page = p;
+        if (Ui.pane === "media")
+            Ui.page = p;
         first = 0;
         confirm = "";
         Tv.watching = shown;
@@ -139,9 +141,18 @@ Pane {
         listPick = 0;
         first = 0;
     }
+    // Opened on a page (Ui.openPage: the media panel's TV ANIME LISTS, the
+    // launcher), or on the one it was left on.
     onOpened: {
         Tv.reload();
-        show(page);
+        show(pages.includes(Ui.page) ? Ui.page : page);
+    }
+    Connections {
+        target: Ui
+        function onPageChanged() {
+            if (Ui.pane === "media" && pane.pages.includes(Ui.page))
+                pane.show(Ui.page);
+        }
     }
     onShownChanged: {
         Tv.watching = shown;

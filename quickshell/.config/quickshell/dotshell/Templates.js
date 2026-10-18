@@ -70,17 +70,27 @@ function head(left, right, o) {
 
 var all = {};
 
-// ── Now playing ──────────────────────────────────────────────────────
-all.nowplaying = {
-    name: "nowplaying", title: "Now playing", feed: "media", wants: ["media"],
-    size: { w: 36, h: 12 }, big: { w: 48, h: 34 },
-    words: { idle: "NOTHING PLAYING", none: "NO PLAYER", lyr: "LYRICS", prev: "", play: "", pause: "", next: "", vis: "VIS", lyrw: "LYR" },
+// ── Media: now playing, the player and Dot TV ─────────────────────────
+// One panel for whatever plays: music, videos, Dot TV. The strip form is a
+// glyph that opens MEDIA (NOW, TV, ANIME, LISTS); play / pause and the title
+// join it while something plays. TV ANIME LISTS open those pages. Nothing
+// playing, it lists the Dot TV library (a click plays). Expanded: video or
+// art, lyrics, up next and the library with QUE / NEXT.
+all.media = {
+    name: "media", title: "Media", feed: "media", wants: ["media", "tv"],
+    size: { w: 36, h: 14 }, big: { w: 48, h: 46 },
+    words: {
+        idle: "NOTHING PLAYING", none: "NO PLAYER", lyr: "LYRICS", icon: "",
+        prev: "", play: "", pause: "", next: "", vis: "VIS", lyrw: "LYR",
+        tvw: "TV", anime: "ANIME", lists: "LISTS", lib: "LIBRARY", upnext: "UP NEXT", mix: "MIX", win: "WINDOW"
+    },
     compact: R([
         F("art", { src: "art", w: "square", when: "art" }),
         C([
-            L("{title=~idle|upper}", { scroll: "always" }),
-            L("{artist|upper}", { slot: 1 }),
-            F("progress", { value: "progress", h: 3 }),
+            L("{title=~idle|upper}", { scroll: "always", action: "pane media" }),
+            L("{artist|upper}", { slot: 1, when: "active" }),
+            L("{count} IN THE LIBRARY", { slot: "dim", when: "!active" }),
+            F("progress", { value: "progress", h: 3, when: "active" }),
             R([
                 L("{~prev}", { action: "media previous" }), GAP,
                 L("{~pause}", { action: "media toggle", when: "playing" }),
@@ -89,8 +99,16 @@ all.nowplaying = {
                 SPACE,
                 L("{~vis}", { slot: 2, action: "panel pop vis" }), GAP,
                 L("{~lyrw}", { slot: 2, action: "panel pop lyrics", when: "hasLyrics" })
+            ], { when: "active" }),
+            R([
+                L("{~tvw}", { slot: 2, action: "media page tv" }), GAP,
+                L("{~anime}", { slot: 2, action: "media page anime" }), GAP,
+                L("{~lists}", { slot: 2, action: "media page lists" }),
+                SPACE,
+                L("{~mix}", { slot: "{mixSlot}", action: "tv mix" })
             ]),
-            F("spectrum", { when: "playing" })
+            F("spectrum", { when: "playing" }),
+            LIST("shown", R([L("{title|upper}", { w: "fill", scroll: true, action: "tv play {id}" }), L("QUE", { slot: "dim", action: "tv queue {id}" })], { gap: 4 }), { max: 3, when: "!playing" })
         ], { pad: 2 })
     ], { gap: 3 }),
     expanded: C([
@@ -102,8 +120,8 @@ all.nowplaying = {
                 L("{artist|upper}", { slot: 1, scroll: true }),
                 L("{album|upper}", { slot: "dim", scroll: true }),
                 SPACE,
-                R([L("{pos|clock}", { slot: 1 }), SPACE, L("{len|clock}", { slot: 1 })]),
-                F("progress", { value: "progress", h: 3, action: "media seek" }),
+                R([L("{pos|clock}", { slot: 1 }), SPACE, L("{len|clock}", { slot: 1 })], { when: "active" }),
+                F("progress", { value: "progress", h: 3, action: "media seek", when: "active" }),
                 R([
                     L("{~prev}", { action: "media previous" }), GAP,
                     L("{~pause}", { action: "media toggle", when: "playing" }),
@@ -113,25 +131,50 @@ all.nowplaying = {
                 ])
             ], { pad: 2 })
         ], { gap: 3, h: 60 }),
-        F("spectrum", { h: 18 }),
-        F("notebar", { h: 14 }),
+        R([
+            L("{~tvw}", { slot: 2, action: "media page tv" }), GAP,
+            L("{~anime}", { slot: 2, action: "media page anime" }), GAP,
+            L("{~lists}", { slot: 2, action: "media page lists" }),
+            SPACE,
+            L("{~mix}", { slot: "{mixSlot}", action: "tv mix" }), GAP,
+            L("{~win}", { slot: 1, action: "tv window" })
+        ]),
+        F("spectrum", { h: 18, when: "playing" }),
+        F("notebar", { h: 14, when: "playing&&!tv" }),
         L("{~lyr}", { slot: 2, when: "hasLyrics" }),
         F("lyrics", { when: "hasLyrics" }),
-        L("VIDEO MATCH IS WRONG? MARK IT BAD", { slot: "dim", action: "video bad", when: "hasVideo" })
+        L("VIDEO MATCH IS WRONG? MARK IT BAD", { slot: "dim", action: "video bad", when: "hasVideo&&!tv" }),
+        L("{~upnext}", { slot: 2, when: "hasNext" }),
+        LIST("next", L("{title|upper}", { scroll: true, action: "tv play {id}" }), { max: 4, when: "hasNext" }),
+        RULE,
+        L("{~lib}", { slot: 2, action: "media page tv" }),
+        LIST("top", R([
+            L("{title|upper}", { w: "fill", scroll: true, action: "tv play {id}" }),
+            L("{duration}", { slot: "dim" }), GAP,
+            L("QUE", { slot: 1, action: "tv queue {id}" }), GAP,
+            L("NEXT", { slot: 1, action: "tv next {id}" })
+        ], { gap: 3 }), { max: 8 })
     ], { gap: 2 }),
+    // Always there: the glyph opens MEDIA even with nothing playing.
     strip: R([
-        L("{~pause}", { slot: 2, when: "playing", action: "media toggle" }),
-        L("{~play}", { slot: 2, when: "!playing", action: "media toggle" }),
-        L("{title|upper}", { slot: 2, scroll: "always", w: 112, action: "panel expand" })
-    ], { gap: 7, when: "active" }),
+        L("{~icon}", { slot: 2, when: "!active", action: "pane media" }),
+        L("{~pause}", { slot: 2, when: "active&&playing", action: "media toggle" }),
+        L("{~play}", { slot: 2, when: "active&&!playing", action: "media toggle", opacity: 0.5 }),
+        L("{title|upper}", { slot: 2, scroll: "always", w: 112, when: "active", action: "pane media" })
+    ], { gap: 7 }),
     rail: C([
-        L("{~prev}", { align: "center", action: "media previous" }),
-        L("{~pause}", { align: "center", slot: 2, action: "media toggle", when: "playing" }),
-        L("{~play}", { align: "center", slot: 2, action: "media toggle", when: "!playing" }),
-        L("{~next}", { align: "center", action: "media next" })
-    ], { gap: 2, when: "active" })
+        L("{~icon}", { align: "center", slot: 2, when: "!active", action: "pane media" }),
+        L("{~prev}", { align: "center", action: "media previous", when: "active" }),
+        L("{~pause}", { align: "center", slot: 2, action: "media toggle", when: "active&&playing" }),
+        L("{~play}", { align: "center", slot: 2, action: "media toggle", when: "active&&!playing" }),
+        L("{~next}", { align: "center", action: "media next", when: "active" })
+    ], { gap: 2 })
 };
-
+// The three panels it replaced (v4 folds them into one); spawning one of
+// these names makes a media panel.
+all.nowplaying = Object.assign({}, all.media, { alias: true });
+all.mpris = all.nowplaying;
+all.tv = all.nowplaying;
 // ── Clock ────────────────────────────────────────────────────────────
 all.clock = {
     name: "clock", title: "Clock", feed: "clock",
@@ -155,22 +198,22 @@ all.workspaces = {
     name: "workspaces", title: "Workspaces", feed: "workspaces",
     size: { w: 30, h: 8 }, big: { w: 40, h: 26 },
     compact: C([
-        LIST("list", L("{id}", { slot: "{slot}", action: "ws {id}", opacity: "{opacity}" }), { dir: "row", gap: 5, h: 13 }),
+        LIST("list", L("{label}", { slot: "{slot}", action: "ws {id}", opacity: "{opacity}" }), { dir: "row", gap: 5, h: 13 }),
         L("{title|upper}", { slot: "dim", scroll: true })
     ], { pad: 2 }),
     expanded: C([
         LIST("list", R([
-            L("{id}", { slot: "{slot}", w: 14, action: "ws {id}" }),
+            L("{label}", { slot: "{slot}", w: 14, action: "ws {id}" }),
             L("{titles|upper=EMPTY}", { slot: "{tslot}", scroll: true, w: "fill", action: "ws {id}" }),
             L("{windows}", { slot: "dim" })
         ], { gap: 4 }), { max: 10 }),
         L("+ NEW WORKSPACE", { slot: 2, action: "ws empty" })
     ], { pad: 2 }),
     strip: R([
-        LIST("list", L("{id}", { slot: "{slot}", action: "ws {id}", opacity: "{opacity}", underline: "focused" }), { dir: "row", gap: 3 }),
+        LIST("list", L("{label}", { slot: "{slot}", action: "ws {id}", opacity: "{opacity}", underline: "focused" }), { dir: "row", gap: 3 }),
         L("+", { slot: 2, action: "ws empty" })
     ], { gap: 3 }),
-    rail: LIST("list", L("{id}", { align: "center", slot: "{slot}", action: "ws {id}", opacity: "{opacity}" }), { max: 6 })
+    rail: LIST("list", L("{label}", { align: "center", slot: "{slot}", action: "ws {id}", opacity: "{opacity}" }), { max: 6 })
 };
 
 // ── System ───────────────────────────────────────────────────────────
@@ -448,76 +491,7 @@ all.dock = {
     rail: C([L("", { align: "center", slot: 2, action: "launcher" }), LIST("running", L("{glyph}", { align: "center", slot: "{slot}", action: "jump {cls}" }), { max: 8, h: "auto", gap: 2 })], { gap: 3 })
 };
 
-// ── Dot TV ───────────────────────────────────────────────────────────
-// What Dot TV plays, up next, and the library (most played first): a click
-// plays, QUE queues. Expanded shows the video as dots.
-all.tv = {
-    name: "tv", title: "Dot TV", feed: "tv", wants: ["media"],
-    size: { w: 34, h: 16 }, big: { w: 48, h: 40 },
-    words: { idle: "DOT TV", lib: "LIBRARY", next: "UP NEXT", mix: "MIX", win: "WINDOW", play: "", pause: "", skip: "" },
-    compact: C([
-        R([
-            F("art", { src: "thumb", w: 40, h: 23, when: "thumb" }),
-            C([
-                L("{title=~idle|upper}", { scroll: "always" }),
-                L("{channel|upper}", { slot: 1, when: "channel" }),
-                L("{count} IN THE LIBRARY", { slot: "dim", when: "!on" }),
-                F("progress", { value: "progress", h: 3, when: "on" }),
-                R([
-                    L("{~pause}", { action: "media toggle", when: "playing" }),
-                    L("{~play}", { action: "media toggle", when: "on&&!playing" }), GAP,
-                    L("{~skip}", { action: "tv skip", when: "on" }),
-                    SPACE,
-                    L("{~mix}", { slot: "{mixSlot}", action: "tv mix" }), GAP,
-                    L("{~lib}", { slot: 2, action: "tv library" })
-                ])
-            ], { pad: 1 })
-        ], { gap: 3 }),
-        LIST("shown", R([L("{title|upper}", { w: "fill", scroll: true, action: "tv play {id}" }), L("QUE", { slot: "dim", action: "tv queue {id}" })], { gap: 4 }), { max: 3 })
-    ], { pad: 2, gap: 2 }),
-    expanded: C([
-        F("video", { h: 60, when: "hasVideo" }),
-        R([
-            F("art", { src: "thumb", w: 54, h: 30, when: "thumb&&!hasVideo" }),
-            C([
-                L("{title=~idle|upper}", { scroll: true }),
-                L("{channel|upper}", { slot: 1, scroll: true }),
-                R([L("{pos|clock}", { slot: 1, when: "on" }), SPACE, L("{len|clock}", { slot: 1, when: "on" })]),
-                F("progress", { value: "progress", h: 3, action: "media seek", when: "on" }),
-                R([
-                    L("{~pause}", { action: "media toggle", when: "playing" }),
-                    L("{~play}", { action: "media toggle", when: "on&&!playing" }), GAP,
-                    L("{~skip}", { action: "tv skip", when: "on" }),
-                    SPACE,
-                    L("{~mix}", { slot: "{mixSlot}", action: "tv mix" }), GAP,
-                    L("{~win}", { slot: 1, action: "tv window" }), GAP,
-                    L("{~lib}", { slot: 2, action: "tv library" })
-                ])
-            ], { pad: 1 })
-        ], { gap: 3 }),
-        L("{~next}", { slot: 2, when: "hasNext" }),
-        LIST("next", L("{title|upper}", { scroll: true, action: "tv play {id}" }), { max: 4, when: "hasNext" }),
-        RULE,
-        LIST("top", R([
-            L("{title|upper}", { w: "fill", scroll: true, action: "tv play {id}" }),
-            L("{duration}", { slot: "dim" }), GAP,
-            L("QUE", { slot: 1, action: "tv queue {id}" }), GAP,
-            L("NEXT", { slot: 1, action: "tv next {id}" })
-        ], { gap: 3 }), { max: 10 })
-    ], { pad: 2, gap: 2 }),
-    strip: R([
-        L("{~pause}", { slot: 2, when: "playing", action: "media toggle" }),
-        L("{~play}", { slot: 2, when: "!playing", action: "media toggle" }),
-        L("{title|upper}", { slot: 2, scroll: "always", w: 112, action: "tv library" })
-    ], { gap: 7, when: "on" }),
-    rail: C([
-        L("{~pause}", { align: "center", slot: 2, action: "media toggle", when: "playing" }),
-        L("{~play}", { align: "center", slot: 2, action: "media toggle", when: "!playing" }),
-        L("{~skip}", { align: "center", action: "tv skip" })
-    ], { gap: 2, when: "on" })
-};
-
-// ── Popped boards (Now playing's VIS and LYR) ────────────────────────
+// ── Popped boards (Media's VIS and LYR) ────────────────────────
 all.vis = {
     name: "vis", title: "Spectrum", feed: "media", wants: ["media"], size: { w: 30, h: 10 }, big: { w: 40, h: 20 },
     compact: C([F("spectrum"), F("notebar", { h: 10 })], { pad: 1, gap: 1 }),
@@ -551,14 +525,6 @@ all.image = {
     strip: F("image", { src: "@source", w: 20 }),
     rail: F("image", { src: "@source", h: 13 })
 };
-all.mpris = {
-    name: "mpris", title: "Player", feed: "media", wants: ["media"], size: { w: 36, h: 12 },
-    compact: R([F("art", { src: "art", w: "square", dots: true, dither: true, when: "art" }), C([SPACE, L("{title=~none|upper}"), L("{artist|upper}", { slot: 1 }), SPACE], { pad: 2 })], { gap: 2 }),
-    words: { none: "NOTHING PLAYING" },
-    strip: L("{title|upper}", { scroll: true, w: 112 }),
-    rail: L("", { align: "center" })
-};
-all.media = Object.assign({}, all.nowplaying, { name: "media" });
 all.pixels = {
     name: "pixels", title: "Pixels", feed: "panel", size: { w: 30, h: 15 }, click: "none",
     compact: F("pixels"),
@@ -571,9 +537,9 @@ all.board = {
     compact: L("{@id|upper}: NO LAYOUT", { slot: "dim" })
 };
 
-// The 15-panel home set, in the order `dot home --reset` lays it out.
-var homeSet = ["nowplaying", "clock", "workspaces", "system", "battery", "messages", "capture", "caffeine", "tray", "downloads", "files", "clipboard", "todo", "screenshots", "dock", "tv"];
-var names = Object.keys(all);
+// The home set, in the order `dot home --reset` lays it out.
+var homeSet = ["media", "clock", "workspaces", "system", "battery", "messages", "capture", "caffeine", "tray", "downloads", "files", "clipboard", "todo", "screenshots", "dock"];
+var names = Object.keys(all).filter(n => !all[n].alias);
 
 function get(name) {
     return all[name] || null;

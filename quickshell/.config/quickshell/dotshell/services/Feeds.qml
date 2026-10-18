@@ -164,22 +164,36 @@ Singleton {
     }
 
     // ── media ───────────────────────────────────────────────────────
-    readonly property var mediaFeed: ({
+    // Music, videos and Dot TV in one: whatever plays on MPRIS, and Dot TV's
+    // up next and library (the tv feed's fields) for the media panel.
+    readonly property var mediaFeed: {
+        const tv = tvFeed;
+        const thumb = tv.on && tv.thumb ? tv.thumb : "";
+        return {
             active: Media.active,
             playing: Media.isPlaying,
-            title: Media.title,
-            artist: Media.artist,
+            title: tv.on && tv.title ? tv.title : Media.title,
+            artist: tv.on && tv.channel ? tv.channel : Media.artist,
             album: Media.album,
-            art: Media.art,
+            art: Media.art || thumb,
             pos: Media.position,
             len: Media.length,
             progress: Media.progress,
-            player: Media.name,
+            player: tv.on ? "DOT TV" : Media.name,
             hasLyrics: Lyrics.has,
             lyric: Lyrics.line,
             lyricNext: Lyrics.next,
-            hasVideo: Media.isVideo || VideoMatch.url !== ""
-        })
+            hasVideo: Media.isVideo || VideoMatch.url !== "",
+            tv: tv.on,
+            mix: tv.mix,
+            mixSlot: tv.mixSlot,
+            next: tv.next,
+            hasNext: tv.hasNext,
+            top: tv.top,
+            shown: tv.shown,
+            count: tv.count
+        };
+    }
 
     // ── tv ──────────────────────────────────────────────────────────
     // Dot TV: what plays (dottv's queue, polled while a panel shows it), up
@@ -223,13 +237,16 @@ Singleton {
     readonly property var wsFeed: {
         const live = Hyprland.workspaces.values.filter(w => w.id > 0);
         const focused = Hyprland.focusedWorkspace?.id ?? 0;
-        const count = Math.max(5, ...live.map(w => w.id));
+        const count = Math.max(5, Tokens.home, ...live.map(w => w.id));
         const list = [];
         for (let id = 1; id <= count; id++) {
             const w = live.find(x => x.id === id) ?? null;
             const wins = windows.filter(x => x.ws === id);
             list.push({
                 id: id,
+                // The home workspace (Tokens.home) shows a house, not its number.
+                label: id === Tokens.home ? "\uf015" : String(id),
+                home: id === Tokens.home,
                 windows: wins.length,
                 focused: id === focused,
                 urgent: w?.urgent ?? false,

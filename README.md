@@ -57,7 +57,7 @@ dotfiles/
 │   │                           in ~/.local/state/dotshell/tokens.json (IPC target: tokens)
 │   ├── Ui.qml                  which pane is open, on which screen
 │   ├── DotSurface.qml          low-res QML canvas → LED dots (shaders/dot.frag); optional shape cut
-│   ├── DeskPanel.qml, Shapes.js  one desktop panel (clock sign note image mpris pixels) and its outlines
+│   ├── DeskPanel.qml, Shapes.js  one desktop panel (clock sign note image media pixels) and its outlines
 │   ├── Pane.qml                a floating LED pane (layer-shell window + DotSurface)
 │   ├── PlainArt.qml, Spectrum.qml   cover art and thumbnails drawn sharp above the dots; cava VU bars
 │   ├── LedRing.qml             animated one-dot LED border for a DotSurface (driven by LedFx)
@@ -358,9 +358,12 @@ Hold a panel for 200 ms (or just drag it, from anywhere on it) to lift it, then 
 or the rail (the slots light up as you pass) or back on home. Strip and rail items pull out the same
 way; dropped below the strip they land on home, even from another workspace. A dock or undock can be
 undone for 3 s (`Ctrl Z`, or `dot undo`).
-The set: nowplaying clock workspaces system battery messages capture caffeine tray downloads files
-clipboard todo screenshots dock tv, plus the popped `vis` and `lyrics` boards. **Dot TV** shows what
-plays, up next and the library (click plays, QUE queues; MIX, WINDOW, LIBRARY). Expanded Now playing has
+The set: media clock workspaces system battery messages capture caffeine tray downloads files
+clipboard todo screenshots dock, plus the popped `vis` and `lyrics` boards. **Media** is one panel for
+music, videos and Dot TV: in the strip a glyph that opens MEDIA (play / pause and the title join it
+while something plays); on home the track, transport, TV ANIME LISTS (MEDIA on that page), MIX, and
+the Dot TV library when nothing plays (click plays, QUE queues). Expanded Media has up next and the
+library with QUE / NEXT, and
 synced lyrics from LRCLIB (cached in `~/.cache/dot/lyrics/`), a music video found with yt-dlp (mark
 a wrong one bad and the next is tried), and a note bar beside the spectrum.
 
@@ -448,7 +451,7 @@ pins another. The media keys go to that same player (`dotshell ipc call media to
 | **ANIME** page | anime through ani-cli, as shelves of covers: **SEARCH** (type, Enter), **FEATURED** (trending on AniList), **CATEGORIES** (pick one for a shelf of its most popular), **LIKED**, **WATCHLIST**, **DOWNLOADS**. A shelf folds on its header (`Ctrl X`); empty ones fold themselves and the open ones share the height. **AUDIO SUB DUB** by the field: the framed one is in use. The download button (or `Ctrl Q`) opens the queue: what downloads now with its bar, what waits (DROP), what failed (RETRY), what is saved. Enter on a cover opens the show: WATCHED / SAVED / PLAYER lines say where it stands, a bar runs while it downloads, and a failure says what happened with fixes to click (try dub, other match, retry). A click picks an episode, a double click (or Enter) plays it; under the legend, saved episodes are underlined, queued ones faintly, watched ones dim. `G` gets one, `A` all, from-where-you-left-off with **FROM EP n**, **KEEP NEXT 3 SAVED** prefetches, `S` (WRONG? NEXT) tries ani-cli's next match |
 | **LISTS** page | playlists, then the YouTube Music stations (♪, read-only): Enter plays, `Ctrl R` shuffles, `Ctrl T` sets the target list, `Ctrl O` makes a list from the typed name. **SYNC** (or `Ctrl Y`) fetches new songs and stations |
 | **SCREEN** page | the video's dot matrix, with a live preview: pitch (2–16 px), dot size, shape (era, round, square, bubble), color (era ramp, mono, 8 bit, 16 bit, full, raw), glow, dither. Saved in `~/.local/state/dotshell/tv.json` |
-| Panels | `media` (now-playing board, click to play/pause), `vis` (spectrum), `mpris` (title, art) |
+| Panels | `media` (now playing, Dot TV and the way into MEDIA; docked in the strip, drag it onto home), `vis` (spectrum), `lyrics` |
 | `Super Ctrl M` | the Dot TV window (mpv, same dot matrix as the pane) |
 
 **Dot TV** is the old AGS Media Center, rebuilt as a standalone app: mpv plays, `dottv` keeps the

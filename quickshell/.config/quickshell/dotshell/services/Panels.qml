@@ -104,16 +104,23 @@ Singleton {
     }
 
     // Phase 4 panels (kind, workspace) become templates on home; the first
-    // time, the 16-panel set is added: the old strip items docked where they
+    // time, the home set is added: the old strip items docked where they
     // were, System in the rail, the rest on home.
     function migrate(): void {
-        if (store.version >= 3)
+        if (store.version >= 4)
             return;
         // v3: Dot TV joins the set, on the free right half of home.
         if (store.version === 2) {
             if (!store.panels.some(p => p.template === "tv"))
                 store.panels = [...store.panels, Object.assign(base("tv"), { id: freeId("tv"), x: 82, y: 6 })];
             store.version = 3;
+        }
+        // v4: Now playing, Player and Dot TV become one media panel, docked
+        // in the strip where the now-playing word was (first on the right)
+        // unless one of them already sat in the strip.
+        if (store.version === 3) {
+            store.panels = foldMedia(store.panels);
+            store.version = 4;
             return;
         }
         const out = store.panels.map(p => {
@@ -128,10 +135,33 @@ Singleton {
             q.order = q.order ?? 0;
             return q;
         });
-        store.panels = [...out, ...seed(out)];
+        store.panels = foldMedia([...out, ...seed(out)]);
         if (!store.pinned.length)
             store.pinned = ["firefox", "com.mitchellh.ghostty", "org.gnome.Nautilus", "code"].filter(id => DesktopEntries.byId(id));
-        store.version = 3;
+        store.version = 4;
+    }
+
+    function foldMedia(list: var): var {
+        const old = ["nowplaying", "mpris", "tv", "media"];
+        const was = list.filter(p => old.includes(p.template) && !p.layout && !p.feed);
+        if (!was.length)
+            return list;
+        const keep = was.find(p => p.place === "strip") ?? null;
+        const rest = list.filter(p => !was.includes(p)).map(p => Object.assign({}, p));
+        const m = Object.assign(base("media"), { id: rest.some(p => p.id === "media") ? "media2" : "media" });
+        if (keep) {
+            Object.assign(m, { place: "strip", zone: keep.zone, order: keep.order });
+        } else {
+            Object.assign(m, { place: "strip", zone: "r", order: 0 });
+            for (const p of rest)
+                if (p.place === "strip" && p.zone === "r")
+                    p.order++;
+        }
+        // Where it lands when pulled onto home: where Now playing was.
+        const h = was.find(p => p.place === "home");
+        if (h)
+            Object.assign(m, { x: h.x, y: h.y, ws: h.ws ?? 0 });
+        return [...rest, m];
     }
 
     function seed(existing: var): var {
@@ -151,7 +181,7 @@ Singleton {
         return [
             mk("workspaces", { place: "strip", zone: "l", order: 0 }),
             mk("clock", { place: "strip", zone: "c", order: 0 }),
-            mk("nowplaying", { place: "strip", zone: "r", order: 0 }),
+            mk("media", { place: "strip", zone: "r", order: 0 }),
             mk("capture", { place: "strip", zone: "r", order: 1 }),
             mk("messages", { place: "strip", zone: "r", order: 2 }),
             mk("caffeine", { place: "strip", zone: "r", order: 3 }),
@@ -163,8 +193,7 @@ Singleton {
             mk("files", { place: "home", x: 8, y: 20 }),
             mk("clipboard", { place: "home", x: 8, y: 36 }),
             mk("todo", { place: "home", x: 42, y: 6 }),
-            mk("screenshots", { place: "home", x: 42, y: 25 }),
-            mk("tv", { place: "home", x: 82, y: 6 })
+            mk("screenshots", { place: "home", x: 42, y: 25 })
         ];
     }
 
@@ -364,7 +393,7 @@ Singleton {
         expanded = "";
     }
 
-    // Now playing's VIS and LYR boards: pop one out beside the panel it came
+    // Media's VIS and LYR boards: pop one out beside the panel it came
     // from; popping it again (or closing the board) folds it back in.
     function pop(fromId: string, template: string): void {
         const id = fromId + "-" + template;
@@ -378,10 +407,10 @@ Singleton {
         spawn(template, { id: id, place: "home", x: at.x, y: at.y, w: t.size.w, h: t.size.h, slot: from?.slot ?? 0 });
     }
 
-    // Lay the 15-panel set out again (keeps every other panel).
+    // Lay the home set out again (keeps every other panel).
     function reset(): var {
         const keep = store.panels.filter(p => !Templates.homeSet.includes(p.template));
-        commit([...keep, ...seed(keep)]);
+        commit(foldMedia([...keep, ...seed(keep)]));
         return { panels: store.panels.length };
     }
 
