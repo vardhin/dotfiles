@@ -35,7 +35,9 @@ Pane {
     readonly property int nameChars: Math.max(10, Math.floor(inner / Tokens.charDots) - gateChars - classChars - statusChars - 3)
 
     onOpened: {
-        input.text = "";
+        // A query handed over by the dock's search or `find`.
+        input.text = Apps.query;
+        Apps.query = "";
         refresh();
         input.forceActiveFocus();
     }
@@ -95,7 +97,9 @@ Pane {
         selected = 0;
     }
 
-    function launch(i: int): void {
+    // Already running = jump to its window; forceNew (Shift Enter) opens
+    // another one on an empty workspace (services/Apps.qml).
+    function launch(i: int, forceNew: bool): void {
         const e = results[i];
         if (!e)
             return;
@@ -103,7 +107,7 @@ Pane {
         counts[e.id] = (counts[e.id] ?? 0) + 1;
         usage.counts = counts;
         Ui.close();
-        e.execute();
+        Apps.launch(e.id, forceNew);
     }
 
     function pad(s: string, n: int): string {
@@ -216,7 +220,7 @@ Pane {
                     hoverEnabled: true
                     cursorShape: Qt.PointingHandCursor
                     onEntered: pane.selected = row.index
-                    onClicked: pane.launch(row.index)
+                    onClicked: pane.launch(row.index, false)
                 }
             }
         }
@@ -246,7 +250,7 @@ Pane {
                 x: prompt.width + Tokens.charDots
                 width: parent.width - x - hint.width - Tokens.charDots
                 onTextChanged: pane.query = text
-                onAccepted: pane.launch(pane.selected)
+                onAccepted: pane.launch(pane.selected, !!(input.acceptMods & Qt.ShiftModifier))
 
                 Keys.onPressed: event => {
                     const ctrl = event.modifiers & Qt.ControlModifier;
@@ -260,7 +264,7 @@ Pane {
                             pane.selected = (pane.selected + n - 1) % n;
                         event.accepted = true;
                     } else if (ctrl && event.key >= Qt.Key_1 && event.key <= Qt.Key_9) {
-                        pane.launch(event.key - Qt.Key_1);
+                        pane.launch(event.key - Qt.Key_1, !!(event.modifiers & Qt.ShiftModifier));
                         event.accepted = true;
                     }
                 }
@@ -268,7 +272,7 @@ Pane {
             DotText {
                 id: hint
                 anchors.right: parent.right
-                text: "ENTER BOARD   CTRL 1-8 GATE   ESC CLOSE"
+                text: "ENTER BOARD   SHIFT NEW   CTRL 1-8 GATE   ESC CLOSE"
                 color: Tokens.slot1
                 opacity: 0.5
             }

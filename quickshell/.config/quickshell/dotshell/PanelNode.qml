@@ -442,8 +442,10 @@ Item {
                 opacity: 0.5
             }
 
-            // Only whole rows: as many as fit the list's height.
-            readonly property int rowH: Math.max(1, col.children.length > 0 && col.children[0].height > 0 ? col.children[0].height : Tokens.lineDots)
+            // Only whole rows: as many as fit the list's height. rowH is the
+            // first row's height, latched when it changes rather than bound,
+            // since the rows themselves come from fit.
+            property int rowH: Tokens.lineDots
             readonly property int fit: height > 0 ? Math.max(1, Math.floor((height + gap) / (rowH + gap))) : items.length
             Column {
                 id: col
@@ -458,6 +460,10 @@ Item {
                         required property int index
                         width: col.width
                         height: item ? item.implicitHeight : 0
+                        onHeightChanged: {
+                            if (index === 0 && height > 0)
+                                ls.rowH = height;
+                        }
                         source: "PanelNode.qml"
                         onLoaded: {
                             item.node = Qt.binding(() => root.node.item);

@@ -150,6 +150,19 @@ function dotshell.flip(phase, addrs, look)
     end
 end
 
+-- ── Home ────────────────────────────────────────────────────────────
+-- The home workspace (the `home` token) holds the desk panels and no
+-- windows: one that opens there moves to the first empty workspace, and
+-- focus follows it. Floating windows (dialogs, pickers) stay put. hl.on
+-- subscriptions are dropped on every reload, so this registers once per load.
+hl.on("window.open", function(w)
+    local h = dotshell.state().home
+    if not h or w.floating or w.workspace.id ~= h then
+        return
+    end
+    hl.dispatch(hl.dsp.window.move({ workspace = "empty", window = "address:" .. w.address, follow = true }))
+end)
+
 -- ── dynamic-cursors ─────────────────────────────────────────────────
 -- Stretch with speed (a pixel cursor smeared like a fast LED), shake to find
 -- it, and nearest-neighbour scaling always, so a magnified cursor stays a

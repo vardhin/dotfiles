@@ -340,22 +340,44 @@ edited files keep a `*.dotshell-bak` copy.
 
 ### Desktop panels and the `dot` bus
 
-Panels are small LED boards on the desktop, behind windows. Each sits on one workspace and slides
-away with it. Drag one to move it; it snaps to the 12 px grid. They persist in
-`~/.local/state/dotshell/panels.json`. Scripts and agents drive them through
+A panel is a **template** (its layout, `Templates.js`) bound to a **feed** (live JSON,
+`services/Feeds.qml`), drawn in the era's skin (`Skins.js`). A panel lives in one of three places:
+
+| Place | What it looks like |
+|---|---|
+| **home** | the home workspace (`home` token, workspace 1): compact boards at grid positions; click one to expand it. No windows live there: Hyprland moves any window opened on home to the first empty workspace (`lua/dotshell.lua`), and home skips wallpaper parallax (`homeWall` can be a looping video) |
+| **strip** | docked in the top strip, in a zone: `l` left, `c` center, `r` before the settings words, `e` after them |
+| **rail** | docked in the side rail, between the launcher and the session buttons |
+
+Hold a panel for 200 ms to lift it, then drop it on the strip or the rail (the slots light up as
+you pass) or back on home. A dock or undock can be undone for 3 s (`Ctrl Z`, or `dot undo`).
+The set: nowplaying clock workspaces system battery messages capture caffeine tray downloads files
+clipboard todo screenshots dock, plus the popped `vis` and `lyrics` boards. Expanded Now playing has
+synced lyrics from LRCLIB (cached in `~/.cache/dot/lyrics/`), a music video found with yt-dlp (mark
+a wrong one bad and the next is tried), and a note bar beside the spectrum.
+
+The **dock** panel launches apps: already running = jump to its window; `Shift Enter` in the
+launcher opens a new window on an empty workspace.
+
+Panels persist in `~/.local/state/dotshell/panels.json`. Scripts and agents drive them through
 `$XDG_RUNTIME_DIR/dotshell.sock` (one JSON object per line), or the `dot` CLI:
 
 ```bash
+dot templates;  dot home;  dot home --reset      # list templates / home's panels; lay out the 15 again
+dot dock todo strip --zone r;  dot dock system rail;  dot dock todo home --at 52,18;  dot undo
+dot feed ci '{"state":"green","jobs":3}'         # push a feed (--merge, --drop); dot feeds lists them
+dot spawn board --id ci --feed ci --layout '{"col":[{"field":"big","text":"{state|upper}"}]}'
 dot spawn sign --id rain --shape strip --at 28,6 --size 40x6 --text "RAIN CITY"
-dot spawn note --shape circle --at 72,6 --size 30x26 --ws 2 --text "hello"
-dot spawn media --at 60,4 --size 48x14     # now playing: art, title, progress, spectrum
-dot spawn vis --shape strip --at 60,20 --size 48x8   # spectrum analyser
+dot action "ws 3"                                 # any panel action
 dot write rain "NEW TEXT";  dot move rain 30 8;  dot set rain --slot 2 --dot false
 dot pixels vis < frame.rgb     # raw RGB at the panel's dot size (dot list shows it)
 dot era;  dot era tokyo;  dot era next
-dot display --pitch 5 --depth 16 --wall dots --hue wallpaper
+dot display --pitch 5 --depth 16 --wall dots --hue wallpaper --home 1
 dot list;  dot rm rain
 ```
+
+Field types for a layout: `label` `big` `meter` `progress` `spark` `list` `art` `status` `marquee`.
+Positions and sizes are grid units (12 px).
 
 ### Media
 

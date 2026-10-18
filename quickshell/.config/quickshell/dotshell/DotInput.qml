@@ -10,6 +10,8 @@ FocusScope {
 
     property alias text: field.text
     property bool mask: false
+    // The modifiers held on the last Enter, for onAccepted (Shift Enter).
+    property int acceptMods: 0
     signal accepted
 
     readonly property real dpr: QsWindow.window?.devicePixelRatio ?? 1
@@ -37,6 +39,10 @@ FocusScope {
         passwordCharacter: "*"
         clip: true
         onAccepted: root.accepted()
+        Keys.onPressed: event => {
+            if (event.key === Qt.Key_Return || event.key === Qt.Key_Enter)
+                root.acceptMods = event.modifiers;
+        }
 
         // In the unscaled space of the field: divide dots by dpr.
         cursorDelegate: Rectangle {
