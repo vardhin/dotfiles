@@ -23,3 +23,16 @@ max_text = 1000000
 
 # Hours between full rescans; inotify catches changes in between.
 rescan_hours = 6
+
+# The heavy tier: MobileCLIP-S2 vectors of images and video frames, then
+# Florence-2 captions, objects and text of images (models from dotd-models).
+# It runs at idle CPU priority, only on AC and after 2 min idle, and pauses
+# while the CPU is hotter than max_temp (it resumes 8 °C below).
+[heavy]
+enabled = true
+threads = 4
+max_temp = 80
+idle = true
+ac = true
+# false: image vectors only, no captions (Florence-2 is ~4 s an image).
+captions = true

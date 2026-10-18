@@ -63,6 +63,9 @@ async fn client(d: Shared, events: mpsc::UnboundedSender<Event>, stream: UnixStr
                 dm.shell.ac = req["ac"].as_bool().unwrap_or(true);
                 dm.shell.temp = req["temp"].as_i64().unwrap_or(0);
                 dm.shell.seen = now_ms();
+                if let Some(ix) = &dm.index {
+                    ix.gate.set(dm.shell.idle, dm.shell.ac, dm.shell.temp);
+                }
             }
             if !greeted {
                 greeted = true;
@@ -75,6 +78,14 @@ async fn client(d: Shared, events: mpsc::UnboundedSender<Event>, stream: UnixStr
             obj.insert("id".into(), id.clone());
         }
         w.write_all(format!("{reply}\n").as_bytes()).await?;
+    }
+    // The shell went away: nobody can say you are idle, so you are not.
+    if greeted {
+        let mut dm = d.borrow_mut();
+        dm.shell.idle = false;
+        if let Some(ix) = &dm.index {
+            ix.gate.set(false, dm.shell.ac, dm.shell.temp);
+        }
     }
     Ok(())
 }

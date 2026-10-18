@@ -128,6 +128,8 @@ install_dotd() {
   command -v rustup >/dev/null && ! rustup default >/dev/null 2>&1 && rustup default stable
   cargo build --release --manifest-path "$DOTFILES/dotd/Cargo.toml" || { log "dotd did not build"; return 0; }
   install -Dm 755 "$DOTFILES/dotd/target/release/dotd" "$HOME/.local/bin/dotd"
+  # Its ONNX models (~1.5 GB, once): search by meaning and the heavy tier.
+  "$DOTFILES/dotd/.local/bin/dotd-models" || log "dotd models not fetched; rerun dotd-models"
   systemctl --user daemon-reload
   systemctl --user enable dotd.service
   systemctl --user restart dotd.service

@@ -9,6 +9,7 @@
 //   exec    = "pdf-text"                in that folder, or on PATH
 //   timeout = 30                        seconds
 //   max_size = 200000000                bytes; bigger files are skipped
+//   min_size = 0                        bytes; smaller files are skipped
 //
 // The program gets the file's path as its one argument, and in the
 // environment DOTD_HASH (the content hash), DOTD_MIME and DOTD_THUMBS (a
@@ -16,6 +17,11 @@
 //   { "text": "…", "title": "…", "tags": ["…"], "meta": { … } }
 // all optional; {} means nothing to say. A non-zero exit is a failure; it is
 // recorded, so the file is not tried again until the version changes.
+//
+// Three more are built in and run inside dotd on its own models (ml.rs):
+// e5 (cheap: text vectors of what the others found), and the heavy tier,
+// clip (image and video-frame vectors) and florence (captions, objects,
+// text), which heavy.rs runs only on AC, idle and a cool CPU.
 
 use crate::paths;
 use anyhow::{Context, Result, bail};
@@ -42,8 +48,12 @@ pub struct Extractor {
     pub timeout: u64,
     #[serde(default = "max_size")]
     pub max_size: u64,
+    #[serde(default)]
+    pub min_size: u64,
     #[serde(skip)]
     pub dir: PathBuf,
+    #[serde(skip)]
+    pub builtin: bool,
 }
 
 fn cheap() -> String {
@@ -61,6 +71,48 @@ fn max_size() -> u64 {
 
 pub const TIERS: [&str; 2] = ["cheap", "medium"];
 
+// Bump a version to re-run that one over the index.
+// e5 2: prose only, no code, logs or data.
+pub const E5_VERSION: i64 = 2;
+pub const CLIP_VERSION: i64 = 1;
+pub const FLORENCE_VERSION: i64 = 1;
+
+// Images the models can read (HEIC and AVIF through their thumbnail); below
+// 16 KB they are icons and UI bits, not pictures.
+const IMAGES: [&str; 9] =
+    ["image/jpeg", "image/png", "image/webp", "image/gif", "image/bmp", "image/tiff", "image/heic", "image/heif", "image/avif"];
+
+fn builtin(name: &str, tier: &str, version: i64, mimes: &[&str], min_size: u64, max_size: u64) -> Extractor {
+    Extractor {
+        name: name.into(),
+        mimes: mimes.iter().map(|m| m.to_string()).collect(),
+        exts: Vec::new(),
+        tier: tier.into(),
+        version,
+        exec: String::new(),
+        timeout: 0,
+        max_size,
+        min_size,
+        dir: PathBuf::new(),
+        builtin: true,
+    }
+}
+
+// e5 takes any file another extractor found text in; its query is its own.
+pub fn e5() -> Extractor {
+    builtin("e5", "cheap", E5_VERSION, &[], 0, u64::MAX)
+}
+
+pub fn clip() -> Extractor {
+    let mut m = IMAGES.to_vec();
+    m.push("video/*");
+    builtin("clip", "heavy", CLIP_VERSION, &m, 16_000, 100_000_000_000)
+}
+
+pub fn florence() -> Extractor {
+    builtin("florence", "heavy", FLORENCE_VERSION, &IMAGES, 16_000, 400_000_000)
+}
+
 pub fn load() -> Vec<Extractor> {
     let dir = paths::config_dir().join("extractors");
     let mut out: Vec<Extractor> = Vec::new();
@@ -70,6 +122,10 @@ pub fn load() -> Vec<Extractor> {
     for f in files {
         match std::fs::read_to_string(&f).map_err(anyhow::Error::from).and_then(|t| Ok(toml::from_str::<Extractor>(&t)?)) {
             Ok(mut x) => {
+                if ["e5", "clip", "florence"].contains(&x.name.as_str()) {
+                    eprintln!("dotd: {}: {} is built in", f.display(), x.name);
+                    continue;
+                }
                 if !TIERS.contains(&x.tier.as_str()) {
                     eprintln!("dotd: {}: tier must be cheap or medium (heavy runs inside dotd)", f.display());
                     continue;
@@ -80,6 +136,9 @@ pub fn load() -> Vec<Extractor> {
             Err(e) => eprintln!("dotd: {}: {e:#}", f.display()),
         }
     }
+    // Last in its tier, so on the same file the plugins go first and e5
+    // embeds what they found.
+    out.push(e5());
     out
 }
 

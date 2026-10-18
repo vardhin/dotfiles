@@ -7,10 +7,16 @@ edition = "2024"
 anyhow = "1.0.104"
 blake3 = "1.8.7"
 futures-util = "0.3.34"
+image = { version = "0.25.10", default-features = false, features = ["bmp", "gif", "jpeg", "png", "tiff", "webp"] }
 inotify = { version = "0.11.5", features = ["stream"] }
+libc = "0.2.191"
 mime_guess = "2.0.5"
+ndarray = "0.17"
+ort = { version = "=2.0.0-rc.14", default-features = false, features = ["std", "ndarray", "download-binaries", "copy-dylibs", "tls-native", "api-31"] }
 rusqlite = { version = "0.40.2", features = ["bundled"] }
 serde = { version = "1.0.229", features = ["derive"] }
 serde_json = "1.0.154"
+sqlite-vec = { version = "0.1.9", default-features = false }
+tokenizers = { version = "0.23.2", default-features = false, features = ["onig"] }
 tokio = { version = "1.53.3", features = ["rt", "macros", "net", "io-util", "sync", "time", "process", "fs", "signal"] }
 toml = "1.1.8"

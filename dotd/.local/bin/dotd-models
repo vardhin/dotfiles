@@ -1,0 +1,45 @@
+#!/usr/bin/env bash
+# Fetch the ONNX models dotd runs in-process into ~/.local/share/dotd/models
+# (about 1.5 GB). Files already there are kept; rerun to fill in what is
+# missing. dotd works without them: search is then full text only.
+#
+#   e5/        multilingual-e5-small, int8      text embeddings (cheap tier)
+#   clip/      MobileCLIP-S2                    image and query embeddings
+#   florence/  Florence-2-base-ft               captions, objects, OCR
+#
+#   dotd-models          fetch what is missing
+#   dotd-models --int8   also the int8 Florence-2 parts (for dotd bench)
+set -euo pipefail
+
+DIR="${XDG_DATA_HOME:-$HOME/.local/share}/dotd/models"
+HF=https://huggingface.co
+
+get() { # repo file dest
+  local out="$DIR/$3"
+  [[ -s $out ]] && return 0
+  mkdir -p "$(dirname "$out")"
+  printf ':: %s\n' "$3"
+  curl -fL --retry 3 -C - -o "$out.part" "$HF/$1/resolve/main/$2"
+  mv "$out.part" "$out"
+}
+
+get Xenova/multilingual-e5-small onnx/model_int8.onnx e5/model.onnx
+get Xenova/multilingual-e5-small tokenizer.json e5/tokenizer.json
+
+get Xenova/mobileclip_s2 onnx/vision_model.onnx clip/vision.onnx
+get Xenova/mobileclip_s2 onnx/text_model.onnx clip/text.onnx
+get Xenova/mobileclip_s2 tokenizer.json clip/tokenizer.json
+
+F=onnx-community/Florence-2-base-ft
+get $F onnx/vision_encoder.onnx florence/vision_encoder.onnx
+get $F onnx/embed_tokens.onnx florence/embed_tokens.onnx
+get $F onnx/encoder_model.onnx florence/encoder_model.onnx
+get $F onnx/decoder_model_merged.onnx florence/decoder_model_merged.onnx
+get $F tokenizer.json florence/tokenizer.json
+
+if [[ ${1:-} == --int8 ]]; then
+  for m in vision_encoder embed_tokens encoder_model decoder_model_merged; do
+    get $F onnx/${m}_int8.onnx florence/${m}_int8.onnx
+  done
+fi
+echo ":: models in $DIR"

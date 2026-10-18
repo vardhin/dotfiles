@@ -10,11 +10,14 @@
 //   dotd query TEXT                     search the index
 //   dotd rescan                         walk the indexed folders again
 
+mod bench;
 mod daemon;
 mod downloads;
 mod event;
 mod extract;
+mod heavy;
 mod index;
+mod ml;
 mod notify;
 mod paths;
 mod rules;
@@ -34,6 +37,13 @@ use tokio::sync::mpsc;
 
 fn main() {
     let args: Vec<String> = std::env::args().skip(1).collect();
+    if args.first().map(String::as_str) == Some("bench") {
+        if let Err(e) = bench::run(&args[1..]) {
+            eprintln!("dotd: {e:#}");
+            std::process::exit(1);
+        }
+        return;
+    }
     let rt = tokio::runtime::Builder::new_current_thread().enable_all().build().unwrap();
     let local = tokio::task::LocalSet::new();
     let r = local.block_on(&rt, async {

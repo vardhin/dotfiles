@@ -410,6 +410,15 @@ Bumping `version` re-runs only that one. Work goes newest file first; the cheap 
 office, EXIF, audio tags, archive listings) runs before the medium one (OCR of screenshots and
 scanned PDFs, video subtitles, thumbnails).
 
+**Meaning.** dotd runs three ONNX models itself (CPU, `dotd-models` fetches them, ~1.5 GB, into
+`~/.local/share/dotd/models`). e5 (multilingual-e5-small) turns the prose of documents, OCR and
+captions into vectors right away. The heavy tier runs only on AC, after 2 min idle, at idle CPU
+priority with 4 threads, and pauses above `max_temp` (`[heavy]` in `index.toml`): MobileCLIP-S2
+vectors of every image and five frames of every video first (~0.15 s an image on the 5700U), then
+Florence-2 captions, objects and text (~4.5 s an image). Vectors live in index.db (sqlite-vec), so a
+query is matched by words and by meaning and the two are fused by rank: `i red bike at night`
+finds the photo with no words in it, and shows its caption.
+
 The launcher asks the index over `dotd.sock`: `{"cmd":"query","q":…,"mime":"image/","dir":["~/Music"]}`
 (no words: the newest files that fit) and `{"cmd":"downloads"}` (sorted downloads, newest first).
 Results rank by text match, then a file name holding every word, then how new the file is.
@@ -417,6 +426,8 @@ Results rank by text match, then a file name holding every word, then how new th
 ```bash
 dotd query phd research      # name, folder and text; prefixes match ("phd res")
 dotd rescan                  # walk again after editing index.toml
+dotd-models                  # fetch the models (once; install.sh --dotd does it)
+dotd bench IMAGE...          # time the models on images; --near TEXT shows the closest vectors
 dotd status                  # rules, moves, feeds, index counts, what the shell last said
 dotd undo                    # put the last sorted download back (or: dotd undo 7)
 dotd event git dirty '{"repo":"dotfiles","files":3}'   # any script can send an event

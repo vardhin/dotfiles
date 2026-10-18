@@ -221,8 +221,9 @@ Pane {
             name: h.name,
             cls: k,
             status: ago(h.mtime),
-            // A snippet only when it shows the matched words.
-            preview: h.snippet && h.snippet.indexOf("[") >= 0 ? snip(h.snippet) : tilde(h.dir),
+            // A snippet only when it shows the matched words; an image found
+            // by what it shows says what Florence-2 saw in it.
+            preview: h.snippet && h.snippet.indexOf("[") >= 0 ? snip(h.snippet) : h.caption ? snip(h.caption) : tilde(h.dir),
             acts: acts
         };
     }
