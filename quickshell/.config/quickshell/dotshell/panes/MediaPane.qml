@@ -3,6 +3,7 @@ import Quickshell.Io
 import Quickshell.Wayland
 import qs
 import qs.services
+import "../Hardware.js" as Hardware
 
 // MEDIA (Super M, or the strip's now-playing word). Five pages, Tab switches.
 //
@@ -30,9 +31,31 @@ Pane {
     id: pane
 
     name: "media"
+    // One device: with a media panel on home, MEDIA opens out of it (Pane
+    // `from`), wherever it sits, as the same hardware (the era's faceplate
+    // and keys); with none, it hangs from the top right as before.
+    readonly property var home: Panels.mediaHome()
+    from: home && screen ? Panels.rectOf(home, screen.width, screen.height) : null
+    // Only VFD has its device built so far; the other eras keep the plain pane.
+    hardware: Tokens.era === "vfd" ? Hardware.get("vfd") : null
+    readonly property bool vfd: !!hardware
     anchors {
         top: true
-        right: true
+        left: grows
+        right: !grows
+    }
+    margins {
+        left: growX
+        top: growY
+    }
+    keys: Loader {
+        active: !!pane.hardware
+        width: pane.surface.width
+        height: pane.hardware?.keys.h ?? 0
+        sourceComponent: DeviceKeys {
+            hw: pane.hardware
+            row: true
+        }
     }
 
     readonly property int full: 46 * Tokens.charDots
@@ -42,7 +65,8 @@ Pane {
     cols: inner + 8
     // Always the full height under the strip, so no strip of desktop shows
     // below it; what the content does not fill stays as unlit dots.
-    rows: Math.max(body.height + 8, maxRows)
+    // Grown out of its panel: as tall as the page.
+    rows: grows ? body.height + 8 : Math.max(body.height + 8, maxRows)
 
     // Dot rows free under the strip at this pitch.
     readonly property int avail: maxRows - 2
@@ -56,13 +80,34 @@ Pane {
             return L * 9 + 20 + 30;     // tabs, 4 info, transport, 3 up next, spectrum
         if (page === "tv")
             return L * 7 + 30;          // tabs, query, 3 rows at least, mode, 2 hints
-        return L * 9 + 30;              // tabs, 6 settings, 2 hints
+        return L * 12 + 30;             // tabs, 9 settings, 2 hints
     }
     readonly property int screenH: Math.max(0, Math.min(Math.round(inner * 9 / 16), avail - reserve))
     readonly property int screenW: Math.min(inner, Math.round(screenH * 16 / 9))
     readonly property bool tvShown: (page === "screen" || Media.isVideo && (page === "now" || page === "tv")) && screenH >= 18
     readonly property int slots: Math.max(3, Math.min(10, Math.floor((avail - 5 * Tokens.lineDots - 30 - (tvShown ? screenH + 3 : 0)) / Tokens.lineDots)))
     property int screenRow: 0
+    // Rows the NOW page has under the tabs and the video, above the rule
+    // and the two hint lines (body spacing 3, padding 4 + 4).
+    readonly property int nowRoom: maxRows - 8 - (Tokens.lineDots + 3) - (tvShown ? screenH + 3 : 0) - (1 + 3) - 2 * (Tokens.lineDots + 3)
+    // SCREEN's rows: how the video is drawn (Tv.screen), then how the note
+    // bar hears the music (Notes.settings).
+    readonly property var screenRows: Tv.screenOptions.map(o => Object.assign({ src: "tv" }, o)).concat(Notes.options.map(o => Object.assign({ src: "notes" }, o)))
+    function valueOf(row: var): var {
+        return row.src === "notes" ? Notes.settings[row.key] : Tv.screen[row.key];
+    }
+    function setRow(row: var, v: var): void {
+        if (row.src === "notes")
+            Notes.set(row.key, v);
+        else
+            Tv.setScreen(row.key, v);
+    }
+    function nudgeRow(row: var, dir: int): void {
+        if (row.src === "notes")
+            Notes.nudge(row.key, dir);
+        else
+            Tv.nudgeScreen(row.key, dir);
+    }
 
     property string page: "now"
     readonly property var pages: ["now", "tv", "anime", "lists", "screen"]
@@ -122,6 +167,7 @@ Pane {
             Ui.page = p;
         first = 0;
         confirm = "";
+        nowBox.scroll = 0;
         Tv.watching = shown;
         if (p === "tv")
             tvInput.forceActiveFocus();
@@ -229,15 +275,15 @@ Pane {
             if (!animePage.key(event))
                 return;
         } else if (page === "screen") {
-            const n = Tv.screenOptions.length;
+            const n = screenRows.length;
             if (k === Qt.Key_Down || k === Qt.Key_J)
                 screenRow = (screenRow + 1) % n;
             else if (k === Qt.Key_Up || k === Qt.Key_K)
                 screenRow = (screenRow + n - 1) % n;
             else if (k === Qt.Key_Right || k === Qt.Key_L || k === Qt.Key_Return || k === Qt.Key_Enter || k === Qt.Key_Space)
-                Tv.nudgeScreen(Tv.screenOptions[screenRow].key, 1);
+                nudgeRow(screenRows[screenRow], 1);
             else if (k === Qt.Key_Left || k === Qt.Key_H)
-                Tv.nudgeScreen(Tv.screenOptions[screenRow].key, -1);
+                nudgeRow(screenRows[screenRow], -1);
             else
                 return;
         } else if (page === "now") {
@@ -352,7 +398,54 @@ Pane {
                     }
                 }
             }
+            // Where the media panel lives: the top strip, the side rail or
+            // the desktop, one click each (the lit one is where it is).
+            Row {
+                id: places
+                readonly property var panel: Panels.media()
+                anchors.right: parent.right
+                anchors.rightMargin: player.visible ? player.width + 6 : 0
+                y: 3
+                spacing: 3
+                visible: !!panel && pane.page === "now"
+                Repeater {
+                    model: ["strip", "rail", "home"]
+                    Item {
+                        id: spot
+                        required property string modelData
+                        readonly property bool here: places.panel?.place === modelData
+                        readonly property color ink: here ? Tokens.slot0 : hit.containsMouse ? Tokens.slot1 : Tokens.slot2
+                        width: 11
+                        height: 7
+                        // A tiny screen: its frame, and the part the panel
+                        // would be in lit.
+                        Rectangle {
+                            anchors.fill: parent
+                            color: "transparent"
+                            border.width: 1
+                            border.color: spot.ink
+                            opacity: spot.here ? 1 : 0.6
+                        }
+                        Rectangle {
+                            x: spot.modelData === "rail" ? 8 : spot.modelData === "home" ? 3 : 0
+                            y: spot.modelData === "home" ? 2 : 0
+                            width: spot.modelData === "rail" ? 3 : spot.modelData === "home" ? 5 : 11
+                            height: spot.modelData === "strip" ? 2 : spot.modelData === "home" ? 3 : 7
+                            color: spot.ink
+                        }
+                        MouseArea {
+                            id: hit
+                            anchors.fill: parent
+                            anchors.margins: -2
+                            hoverEnabled: true
+                            cursorShape: Qt.PointingHandCursor
+                            onClicked: Panels.send(places.panel.id, spot.modelData)
+                        }
+                    }
+                }
+            }
             DotButton {
+                id: player
                 anchors.right: parent.right
                 visible: pane.page === "now" && Media.players.length > 0
                 text: Media.name.slice(0, pane.wide ? 16 : 6) + (Media.players.length > 1 ? " " + (Media.players.indexOf(Media.player) + 1) + "/" + Media.players.length : "")
@@ -407,157 +500,226 @@ Pane {
         }
 
         // ── NOW ─────────────────────────────────────────────────────
-        Column {
+        // Taller than what is left under the video: it scrolls (the wheel,
+        // a line a notch), so up next and the lyrics are always in reach.
+        Item {
+            id: nowBox
             visible: pane.page === "now"
             width: pane.inner
-            spacing: 3
+            height: Math.min(nowCol.height, Math.max(Tokens.lineDots * 4, pane.nowRoom))
+            clip: true
+            readonly property int maxScroll: Math.max(0, nowCol.height - height)
+            property real scroll: 0
+            onMaxScrollChanged: scroll = Math.min(scroll, maxScroll)
 
-            Item {
-                id: now
-                readonly property int art: Media.isVideo ? 0 : Tokens.lineDots * 4
+            // Under the page, so the lyrics sheet takes the wheel first.
+            MouseArea {
+                anchors.fill: parent
+                acceptedButtons: Qt.NoButton
+                onWheel: wheel => {
+                    const notches = wheel.angleDelta.y / 120;
+                    nowBox.scroll = Math.max(0, Math.min(nowBox.maxScroll, nowBox.scroll - notches * Tokens.lineDots));
+                    wheel.accepted = nowBox.maxScroll > 0;
+                }
+            }
+
+            Column {
+                id: nowCol
+                y: -Math.round(nowBox.scroll)
                 width: pane.inner
-                height: Media.isVideo ? Tokens.lineDots * 4 : art
+                spacing: 3
 
-                // Unlit until the art loads; a frame marks where it goes.
-                Frame {
-                    width: now.art
-                    height: now.art
-                    visible: now.art > 0 && !artPic.ready
-                    border.color: Tokens.slot1
-                    opacity: 0.5
-                }
-                PlainArt {
-                    id: artPic
-                    visible: now.art > 0
-                    width: now.art
-                    height: now.art
-                    source: Media.art
-                }
 
-                Column {
-                    x: now.art > 0 ? now.art + 6 : 0
-                    width: pane.inner - x
-
-                    Scroller {
-                        width: parent.width
-                        height: Tokens.lineDots
-                        text: (Media.title || (Media.active ? "NOTHING PLAYING" : "NO PLAYER")).toUpperCase()
-                    }
-                    DotText {
-                        width: parent.width
-                        height: Tokens.lineDots
-                        elide: Text.ElideRight
-                        text: Media.artist.toUpperCase()
-                        color: Tokens.slot1
-                    }
-                    DotText {
-                        width: parent.width
-                        height: Tokens.lineDots
-                        elide: Text.ElideRight
-                        text: Media.album.toUpperCase()
-                        color: Tokens.slot1
-                        opacity: 0.5
-                    }
-
-                    // Seek bar: click or drag along it.
                     Item {
-                        width: parent.width
-                        height: Tokens.lineDots
+                        id: now
+                        readonly property int art: Media.isVideo ? 0 : Tokens.lineDots * 4
+                        width: pane.inner
+                        height: Media.isVideo ? Tokens.lineDots * 4 : art
 
-                        Rectangle {
-                            y: 5
-                            width: parent.width
-                            height: 2
-                            color: Tokens.slot1
+                        // Unlit until the art loads; a frame marks where it goes.
+                        Frame {
+                            width: now.art
+                            height: now.art
+                            visible: now.art > 0 && !artPic.ready
+                            border.color: Tokens.slot1
                             opacity: 0.5
                         }
-                        Rectangle {
-                            y: 5
-                            width: Math.round(parent.width * Media.progress)
-                            height: 2
-                            color: Tokens.slot0
+                        PlainArt {
+                            id: artPic
+                            visible: now.art > 0
+                            width: now.art
+                            height: now.art
+                            source: Media.art
                         }
-                        MouseArea {
-                            anchors.fill: parent
-                            enabled: Media.player?.canSeek ?? false
-                            cursorShape: Qt.PointingHandCursor
-                            onPressed: mouse => Media.seekTo(mouse.x / width)
-                            onPositionChanged: mouse => {
-                                if (pressed)
-                                    Media.seekTo(mouse.x / width);
+
+                        // The era's own readout: the mini panel's display, here at
+                        // the top of the device it grew into.
+                        VfdReadout {
+                            visible: pane.vfd
+                            full: true
+                            x: now.art > 0 ? now.art + 6 : 0
+                            width: pane.inner - x
+                            height: now.height
+                        }
+
+                        Column {
+                            visible: !pane.vfd
+                            x: now.art > 0 ? now.art + 6 : 0
+                            width: pane.inner - x
+
+                            Scroller {
+                                width: parent.width
+                                height: Tokens.lineDots
+                                text: (Media.title || (Media.active ? "NOTHING PLAYING" : "NO PLAYER")).toUpperCase()
+                            }
+                            DotText {
+                                width: parent.width
+                                height: Tokens.lineDots
+                                elide: Text.ElideRight
+                                text: Media.artist.toUpperCase()
+                                color: Tokens.slot1
+                            }
+                            DotText {
+                                width: parent.width
+                                height: Tokens.lineDots
+                                elide: Text.ElideRight
+                                text: Media.album.toUpperCase()
+                                color: Tokens.slot1
+                                opacity: 0.5
+                            }
+
+                            // Seek bar: click or drag along it.
+                            Item {
+                                width: parent.width
+                                height: Tokens.lineDots
+
+                                Rectangle {
+                                    y: 5
+                                    width: parent.width
+                                    height: 2
+                                    color: Tokens.slot1
+                                    opacity: 0.5
+                                }
+                                Rectangle {
+                                    y: 5
+                                    width: Math.round(parent.width * Media.progress)
+                                    height: 2
+                                    color: Tokens.slot0
+                                }
+                                MouseArea {
+                                    anchors.fill: parent
+                                    enabled: Media.player?.canSeek ?? false
+                                    cursorShape: Qt.PointingHandCursor
+                                    onPressed: mouse => Media.seekTo(mouse.x / width)
+                                    onPositionChanged: mouse => {
+                                        if (pressed)
+                                            Media.seekTo(mouse.x / width);
+                                    }
+                                }
                             }
                         }
                     }
-                }
-            }
 
-            // Transport and time.
-            Item {
-                width: pane.inner
-                height: Tokens.lineDots
+                    // The music, two ways (duolightbars' two bars): the spectrum,
+                    // and the notes on a keyboard.
+                    Spectrum {
+                        width: pane.inner
+                        height: 24
+                        bars: pane.wide ? 48 : 24
+                        visible: pane.shown && pane.page === "now"
+                    }
+                    NoteBar {
+                        width: pane.inner
+                        height: 22
+                        labels: true
+                        visible: pane.shown && pane.page === "now"
+                    }
 
-                Row {
-                    spacing: 3
-                    DotButton {
-                        text: ""
-                        enabled: Media.player?.canGoPrevious ?? false
-                        onClicked: Media.previous()
+                    // Unsynced lyrics: the whole sheet, under the music (synced ones
+                    // sing in the readout, under the title).
+                    LyricsView {
+                        width: pane.inner
+                        height: Tokens.lineDots * 5
+                        visible: pane.page === "now" && (Lyrics.has && !Lyrics.synced || Lyrics.status === "looking" || !pane.vfd && Lyrics.has)
                     }
-                    DotButton {
-                        text: Media.isPlaying ? " PAUSE" : " PLAY"
-                        color: Tokens.slot2
-                        enabled: Media.player?.canTogglePlaying ?? false
-                        onClicked: Media.toggle()
-                    }
-                    DotButton {
-                        text: ""
-                        enabled: Media.player?.canGoNext ?? false
-                        onClicked: Media.next()
-                    }
+
+                    // Transport and time (with a readout: the keys are on the
+                    // faceplate, the time in the readout; MIX and SCREEN stay).
                     Item {
-                        width: 4
-                        height: 1
+                        visible: !pane.vfd || Media.isTv || Media.isVideo
+                        width: pane.inner
+                        height: Tokens.lineDots
+
+                        Row {
+                            spacing: 3
+                            DotButton {
+                                visible: !pane.vfd
+                                text: ""
+                                enabled: Media.player?.canGoPrevious ?? false
+                                onClicked: Media.previous()
+                            }
+                            DotButton {
+                                visible: !pane.vfd
+                                text: Media.isPlaying ? " PAUSE" : " PLAY"
+                                color: Tokens.slot2
+                                enabled: Media.player?.canTogglePlaying ?? false
+                                onClicked: Media.toggle()
+                            }
+                            DotButton {
+                                visible: !pane.vfd
+                                text: ""
+                                enabled: Media.player?.canGoNext ?? false
+                                onClicked: Media.next()
+                            }
+                            Item {
+                                visible: !pane.vfd
+                                width: 4
+                                height: 1
+                            }
+                            DotButton {
+                                visible: Media.isTv
+                                text: "MIX"
+                                active: Tv.status.mix
+                                onClicked: Tv.mix(!Tv.status.mix)
+                            }
+                            DotButton {
+                                visible: Media.isVideo
+                                text: "SCREEN"
+                                onClicked: pane.show("screen")
+                            }
+                        }
+                        DotText {
+                            anchors.right: parent.right
+                            visible: Media.length > 0 && !pane.vfd
+                            text: Media.clock(Media.position) + " / " + Media.clock(Media.length)
+                            color: Tokens.slot1
+                        }
                     }
-                    DotButton {
-                        visible: Media.isTv
-                        text: "MIX"
-                        active: Tv.status.mix
-                        onClicked: Tv.mix(!Tv.status.mix)
+
+                    // Dot TV's queue.
+                    Repeater {
+                        model: Media.isTv ? Tv.status.queue.slice(0, 10) : []
+
+                        DotText {
+                            required property var modelData
+                            required property int index
+                            width: pane.inner
+                            height: Tokens.lineDots
+                            elide: Text.ElideRight
+                            text: (index === 0 ? "NEXT  " : "      ") + modelData.title.toUpperCase()
+                            color: index === 0 ? Tokens.slot0 : Tokens.slot1
+                        }
                     }
-                    DotButton {
-                        visible: Media.isVideo
-                        text: "SCREEN"
-                        onClicked: pane.show("screen")
-                    }
-                }
-                DotText {
-                    anchors.right: parent.right
-                    visible: Media.length > 0
-                    text: Media.clock(Media.position) + " / " + Media.clock(Media.length)
-                    color: Tokens.slot1
-                }
             }
 
-            Spectrum {
-                width: pane.inner
-                height: 20
-                bars: pane.wide ? 32 : 16
-                visible: pane.shown && pane.page === "now"
-            }
-
-            // Dot TV's queue.
-            Repeater {
-                model: Media.isTv ? Tv.status.queue.slice(0, 3) : []
-
-                DotText {
-                    required property var modelData
-                    required property int index
-                    width: pane.inner
-                    height: Tokens.lineDots
-                    elide: Text.ElideRight
-                    text: (index === 0 ? "NEXT  " : "      ") + modelData.title.toUpperCase()
-                    color: index === 0 ? Tokens.slot0 : Tokens.slot1
-                }
+            // More below / above: a dot at the edge.
+            Rectangle {
+                visible: nowBox.scroll < nowBox.maxScroll
+                anchors.bottom: parent.bottom
+                anchors.right: parent.right
+                width: 3
+                height: 1
+                color: Tokens.slot2
             }
         }
 
@@ -712,7 +874,7 @@ Pane {
 
         // ── SCREEN settings ─────────────────────────────────────────
         Repeater {
-            model: pane.page === "screen" ? Tv.screenOptions : []
+            model: pane.page === "screen" ? pane.screenRows : []
 
             Line {
                 id: setting
@@ -727,20 +889,20 @@ Pane {
                     DotButton {
                         required property var modelData
                         text: modelData[1]
-                        active: Tv.screen[setting.modelData.key] === modelData[0]
+                        active: pane.valueOf(setting.modelData) === modelData[0]
                         onClicked: {
                             pane.screenRow = setting.index;
-                            Tv.setScreen(setting.modelData.key, modelData[0]);
+                            pane.setRow(setting.modelData, modelData[0]);
                         }
                     }
                 }
                 DotButton {
                     visible: !pane.wide
                     active: true
-                    text: "<" + (setting.modelData.options.find(o => o[0] === Tv.screen[setting.modelData.key])?.[1] ?? "?") + ">"
+                    text: "<" + (setting.modelData.options.find(o => o[0] === pane.valueOf(setting.modelData))?.[1] ?? "?") + ">"
                     onClicked: {
                         pane.screenRow = setting.index;
-                        Tv.nudgeScreen(setting.modelData.key, 1);
+                        pane.nudgeRow(setting.modelData, 1);
                     }
                 }
             }

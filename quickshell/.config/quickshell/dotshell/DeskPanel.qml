@@ -47,6 +47,9 @@ Item {
     readonly property bool raw: panel.dot === false
     readonly property bool photo: panel.template === "image"
     readonly property bool rect: panel.shape === "rect" || panel.shape === ""
+    // A face of its own (the design canvas's hardware for this era) instead
+    // of the generic board: only the VFD media panel, compact, so far.
+    readonly property bool faced: panel.template === "media" && !expanded && !raw && rect && Tokens.era === "vfd"
 
     // Frame insets in dots: the ring, and the title band when the era has one.
     readonly property bool header: skin.header === true && rows >= 30 && !["sign", "image", "pixels", "dock"].includes(panel.template)
@@ -71,6 +74,7 @@ Item {
     }
 
     // Actions from the layout: panel verbs here, the rest to Actions.qml.
+    readonly property QtObject actions: sink
     QtObject {
         id: sink
         function run(a: string): void {
@@ -117,7 +121,10 @@ Item {
     // Over a dock slot the board shrinks toward the cursor and fades: the
     // slot shows its strip or rail form as a live ghost instead.
     scale: overDock ? 0.42 : lifted ? 0.97 : 1
-    opacity: overDock ? 0.3 : 1
+    // MEDIA open out of this panel (Pane `from`): the full device stands in
+    // its place until it has shrunk back in.
+    readonly property bool grownOut: panel.template === "media" && Ui.grown === "media" && Panels.mediaHome()?.id === panel.id
+    opacity: overDock ? 0.3 : grownOut ? 0 : 1
     rotation: lifted && !overDock ? -1.5 : 0
     transformOrigin: Item.TopLeft
     Behavior on scale {
@@ -246,7 +253,7 @@ Item {
         cols: root.cols
         rows: root.rows
         flat: root.raw
-        visible: !(root.raw && root.photo)
+        visible: !(root.raw && root.photo) && !root.faced
         shape: root.rect && root.skin.round > 0 && !root.raw ? Shapes.rounded(root.cols, root.rows, root.skin.round) : Shapes.path(root.panel.shape, root.cols, root.rows)
 
         // ── Frame ──
@@ -420,6 +427,17 @@ Item {
             sink: sink
             tube: root.tube
             clip: true
+        }
+    }
+
+    Loader {
+        anchors.fill: parent
+        active: root.faced
+        sourceComponent: MediaVfd {
+            ctx: root.ctx
+            sink: root.actions
+            panel: root.panel
+            words: root.words
         }
     }
 

@@ -107,7 +107,14 @@ Singleton {
     // time, the home set is added: the old strip items docked where they
     // were, System in the rail, the rest on home.
     function migrate(): void {
-        if (store.version >= 4)
+        // v5: the lyrics and the spectrum are in the media display itself, not
+        // boards popped out beside it: the popped boards go.
+        if (store.version === 4) {
+            store.panels = store.panels.filter(p => !(p.template === "vis" && p.id.endsWith("-vis") || p.template === "lyrics" && p.id.endsWith("-lyrics")));
+            store.version = 5;
+            return;
+        }
+        if (store.version >= 5)
             return;
         // v3: Dot TV joins the set, on the free right half of home.
         if (store.version === 2) {
@@ -220,6 +227,31 @@ Singleton {
 
     function find(id: string): var {
         return store.panels.find(p => p.id === id) ?? null;
+    }
+
+    // The media panel, wherever it is.
+    function media(): var {
+        return store.panels.find(p => p.template === "media") ?? null;
+    }
+    // Put a panel in the strip, the rail or back on home where it last sat:
+    // the one-click way (MEDIA's header), no drag needed.
+    function send(id: string, where: string): var {
+        const p = find(id);
+        if (!p)
+            return { error: "no panel " + id };
+        if (where === "home")
+            return place(id, "home", "", 0, p.x ?? 4, p.y ?? 6, p.ws ?? 0);
+        return place(id, where, where === "strip" ? "r" : "", 0, 0, 0, 0);
+    }
+    // The media panel on home, the one MEDIA (Super M) grows out of.
+    function mediaHome(): var {
+        return store.panels.find(p => p.template === "media" && p.place === "home") ?? null;
+    }
+    // Where a home panel sits on a screen of sw x sh px (as DeskPanel places
+    // it: kept on screen), in screen px.
+    function rectOf(p: var, sw: int, sh: int): rect {
+        const w = p.w * unit, h = p.h * unit;
+        return Qt.rect(Math.max(0, Math.min(p.x * unit, sw - w)), Math.max(0, Math.min(p.y * unit, sh - h)), w, h);
     }
 
     function freeId(name: string): string {

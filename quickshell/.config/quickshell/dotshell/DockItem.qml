@@ -139,12 +139,10 @@ Item {
         Panels.drag = { id: panel.id, from: place, target: place, zone: panel.zone, order: panel.order, x: start.x, y: start.y };
     }
     function press(p: point): void {
-        console.warn("DBGDRAG press", panel.id, p.x, p.y);
         start = p;
         hold.restart();
     }
     function move(p: point): void {
-        console.warn("DBGDRAG move", panel.id, p.x, p.y, lifted);
         if (!lifted && Math.abs(p.x - start.x) + Math.abs(p.y - start.y) > 6)
             lift();
         if (!lifted)
@@ -161,7 +159,6 @@ Item {
         Panels.drag = Object.assign({ id: panel.id, from: place, x: p.x, y: p.y }, aim);
     }
     function release(): bool {
-        console.warn("DBGDRAG release", panel.id, lifted, JSON.stringify(Panels.drag));
         hold.stop();
         if (!lifted)
             return false;
@@ -183,8 +180,14 @@ Item {
         return true;
     }
 
-    // Open the whole panel beside the item.
+    // Open the whole panel beside the item; a template with a click of its
+    // own (media: MEDIA, the one full player) opens that instead.
     function peek(): void {
+        const own = template?.click ?? "";
+        if (own && own !== "expand" && own !== "none") {
+            Actions.run(own);
+            return;
+        }
         const c = mapToItem(null, width / 2, height / 2);
         const open = Ui.pane === "peek" && Panels.peek?.id === panel.id;
         Panels.peek = { id: panel.id, place: place, x: originX + c.x, y: c.y };

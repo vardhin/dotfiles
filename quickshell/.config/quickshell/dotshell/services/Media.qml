@@ -68,8 +68,8 @@ Singleton {
     }
     readonly property string name: (player?.identity ?? "").toUpperCase()
 
-    readonly property real length: player && player.lengthSupported ? player.length : 0
-    readonly property real position: player && player.positionSupported ? player.position : 0
+    readonly property real length: player && player.lengthSupported ? player.length ?? 0 : 0
+    readonly property real position: player && player.positionSupported ? player.position ?? 0 : 0
     readonly property real progress: length > 0 ? Math.max(0, Math.min(1, position / length)) : 0
 
     // MprisPlayer.position is not pushed: ask for it while it moves.
@@ -185,10 +185,16 @@ noise_reduction = 70
     // ── Note bar (a second cava) ────────────────────────────────────
     // One band per semitone, MIDI 48..83 (C3..B5, 131..988 Hz): cava spaces
     // its bars logarithmically between the cutoffs, which is a semitone a
-    // bar at 36 bars. Each column rises in about 30 ms (two frames) and falls
-    // over `persistenceMs`, the duolightbars mapping. Same wants as `bars`.
+    // bar at 36 bars. Peaks become notes (below); each rises in about 30 ms
+    // (two frames) and falls over `persistenceMs`, the duolightbars mapping
+    // (~/Documents/git/duolightbars, frontend/src/lib/lighting/mapper.ts).
+    // Same wants as `bars`.
     readonly property int noteCount: 36
-    property int persistenceMs: 420
+    property int persistenceMs: 160
+    // A band this loud (0..1) can be a note; at most this many sound at once
+    // (the note settings, MEDIA's SCREEN page).
+    readonly property real noteThreshold: Notes.settings.floor / 100
+    readonly property int polyphony: Notes.settings.polyphony
     property var notes: Array(noteCount).fill(0)
     property var noteWants: ({})
     readonly property bool notesWanted: Object.values(noteWants).some(v => v)
@@ -244,12 +250,32 @@ monstercat = 0
                 const now = Date.now();
                 const dt = noteCava.last ? Math.min(100, now - noteCava.last) : 16;
                 noteCava.last = now;
-                // Attack: about 30 ms to the new level; decay over persistenceMs.
+                // Notes, not a spectrum (duolightbars' semantic bar): a
+                // semitone sounds when its band is a local peak, above the
+                // threshold and within reach of the loudest; only the
+                // `polyphony` strongest light, the rest stay dark. Attack:
+                // about 30 ms to the new level; decay over persistenceMs.
+                const n = root.noteCount, x = new Array(n);
+                let top = 0;
+                for (let i = 0; i < n; i++) {
+                    x[i] = Math.min(1, (parseInt(v[i]) || 0) / 100);
+                    top = Math.max(top, x[i]);
+                }
+                const on = [];
+                for (let i = 0; i < n; i++) {
+                    const a = x[i - 1] ?? 0, b = x[i + 1] ?? 0;
+                    if (x[i] >= root.noteThreshold && x[i] >= a && x[i] >= b && x[i] >= top * 0.45)
+                        on.push(i);
+                }
+                on.sort((p, q) => x[q] - x[p]);
+                const target = new Array(n).fill(0);
+                for (const i of on.slice(0, root.polyphony))
+                    target[i] = Math.min(1, x[i] / Math.max(0.3, top) * 1.1);
                 const up = Math.min(1, dt / 30), down = Math.exp(-dt / Math.max(30, root.persistenceMs / 3));
-                const old = root.notes, out = new Array(root.noteCount);
-                for (let i = 0; i < root.noteCount; i++) {
-                    const x = Math.min(1, (parseInt(v[i]) || 0) / 100), o = old[i] ?? 0;
-                    out[i] = x > o ? o + (x - o) * up : Math.max(x, o * down);
+                const old = root.notes, out = new Array(n);
+                for (let i = 0; i < n; i++) {
+                    const t = target[i], o = old[i] ?? 0;
+                    out[i] = t > o ? o + (t - o) * up : Math.max(t, o * down);
                 }
                 root.notes = out;
             }

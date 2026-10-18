@@ -19,6 +19,9 @@ Singleton {
     // Which page a pane with pages opens on ("" = its own default), e.g.
     // the era switcher's "walls"; set by openPage / togglePage.
     property string page: ""
+    // The pane out over its panel (Pane.qml `from`): open, or still
+    // shrinking back into it. The panel stays hidden until it is "".
+    property string grown: ""
     property ShellScreen screen: focusedScreen()
 
     // Top strips register themselves so a pane's click-outside grab lets

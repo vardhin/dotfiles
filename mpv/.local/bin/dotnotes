@@ -1,0 +1,49 @@
+#!/usr/bin/env bash
+# dotnotes AUDIO OUT.json — the notes in a song, for Dot Shell's note bar.
+#
+# Spotify's Basic Pitch (ICASSP 2022, ONNX, CPU), run the way duolightbars
+# runs it offline (~/Documents/git/duolightbars, backend/src/backend/services/
+# inference.py): the whole file, official resampling and windows. Thresholds
+# are kept low so the shell gets every candidate note and filters them live
+# (its sensitivity and polyphony settings, MEDIA's SCREEN page).
+#
+# Writes {"v":1,"notes":[[start_s, end_s, midi, amplitude], ...]} sorted by
+# start, atomically. Needs duolightbars' backend environment (uv sync --project
+# backend); DOTNOTES_PYTHON / DOTNOTES_BACKEND point elsewhere.
+set -euo pipefail
+
+audio=${1:?usage: dotnotes AUDIO OUT.json}
+out=${2:?usage: dotnotes AUDIO OUT.json}
+backend=${DOTNOTES_BACKEND:-$HOME/Documents/git/duolightbars/backend}
+python=${DOTNOTES_PYTHON:-$backend/.venv/bin/python}
+
+[ -x "$python" ] || { echo "dotnotes: no Basic Pitch environment at $python" >&2; exit 2; }
+mkdir -p "$(dirname "$out")"
+
+PYTHONPATH="$backend/src${PYTHONPATH:+:$PYTHONPATH}" exec nice -n 10 "$python" - "$audio" "$out" 2>/dev/null <<'PY'
+import json, os, sys, warnings
+warnings.filterwarnings("ignore")
+import logging
+logging.disable(logging.WARNING)
+
+from basic_pitch.inference import predict
+from backend.services.inference import load_model
+
+audio, out = sys.argv[1], sys.argv[2]
+_, _, events = predict(
+    audio,
+    load_model(threads=2),
+    onset_threshold=0.3,
+    frame_threshold=0.2,
+    minimum_note_length=90,
+)
+notes = sorted(
+    [[round(float(s), 3), round(float(e), 3), int(p), round(float(a), 3)] for s, e, p, a, *_ in events],
+    key=lambda n: (n[0], n[2]),
+)
+tmp = out + ".tmp"
+with open(tmp, "w") as f:
+    json.dump({"v": 1, "notes": notes}, f, separators=(",", ":"))
+os.replace(tmp, out)
+print(len(notes))
+PY

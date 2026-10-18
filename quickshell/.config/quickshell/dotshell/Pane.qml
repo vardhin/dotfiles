@@ -3,6 +3,7 @@ import Quickshell
 import Quickshell.Hyprland
 import Quickshell.Wayland
 import qs.services
+import "Hardware.js" as Hardware
 
 // A floating LED pane: one layer-shell window holding one DotSurface.
 // Children are authored in dots (1 px = 1 dot), like any DotSurface.
@@ -13,6 +14,12 @@ import qs.services
 //       anchors { top: true; right: true } // no anchors = centered on screen
 //       DotText { text: "HELLO" }
 //   }
+//
+// With `hardware` (Hardware.js, the era's device) the dots sit in a display
+// window on a faceplate, with `keys` in a row under it. With `from` (a rect
+// in screen px, the panel it belongs to) it opens over that rect and grows
+// out of it, and shrinks back into it on close; the owner places the window
+// at `growX`, `growY` (margins, anchored top left).
 //
 // Escape closes it. Clicking outside closes it unless `grab` is false.
 // Keyboard: on demand. The focus grab hands the pane the keyboard; Exclusive
@@ -35,19 +42,34 @@ PanelWindow {
     // Above the dots, in screen px rather than dots (video, crisp images).
     property alias overlay: overlayLayer.data
 
+    property var hardware: null
+    // The key row under the display window (with `hardware`).
+    property alias keys: keyRow.data
+    property var from: null
+    readonly property bool grows: !!from && from.width > 0
+    readonly property int bezel: hardware ? hardware.bezel.l : 0
+    readonly property int keysH: hardware && keyRow.children.length > 0 ? hardware.keys.h + hardware.keys.gap : 0
+    // Where the window goes when it grows: from's corner, kept on screen
+    // (margins under the strip, left of the side bar).
+    readonly property int growX: grows ? Math.max(0, Math.min(from.x, (screen?.width ?? 1920) - sideW - implicitWidth)) : 0
+    readonly property int growY: grows ? Math.max(0, Math.min(from.y - stripH, (screen?.height ?? 1080) - stripH - implicitHeight)) : 0
+    // 0 = folded into `from`, 1 = open.
+    property real grown: 0
+
     // Fires every time the pane appears; focus a TextInput here.
     signal opened
     // Keys the focused item did not take (Escape is handled already).
     signal keyPressed(var event)
 
     screen: Ui.screen
-    visible: shown
+    // Kept up while it shrinks back into its panel.
+    visible: shown || (grows && grown > 0.001)
     color: "transparent"
     // Sit below the strip's exclusive zone without reserving space of our own.
     exclusionMode: ExclusionMode.Normal
     exclusiveZone: 0
-    implicitWidth: surface.implicitWidth
-    implicitHeight: surface.implicitHeight
+    implicitWidth: surface.implicitWidth + bezel * 2
+    implicitHeight: surface.implicitHeight + bezel * 2 + keysH
 
     WlrLayershell.namespace: "dotshell-" + name
     WlrLayershell.layer: WlrLayer.Overlay
@@ -57,46 +79,124 @@ PanelWindow {
     // The side bar's columns are taken too when it reserves space (side on;
     // SideBar.qml's Tokens.railDots cols): the compositor already narrows the window.
     readonly property int sideW: Tokens.side === "on" ? Tokens.railDots * Tokens.pitch : 0
-    readonly property int maxCols: screen ? Math.floor((screen.width - sideW) / Tokens.pitch) : cols
+    readonly property int maxCols: screen ? Math.floor((screen.width - sideW - bezel * 2) / Tokens.pitch) : cols
     // The strip's rows are taken (the pane sits under it): its real height,
     // which TopStrip rounds to whole device px.
     readonly property int stripH: !Tokens.top ? 0 : Ui.strips.find(w => w.screen === screen)?.height ?? 11 * Tokens.pitch
-    readonly property int maxRows: screen ? Math.floor((screen.height - stripH) / Tokens.pitch) : rows
+    readonly property int maxRows: screen ? Math.floor((screen.height - stripH - bezel * 2 - keysH) / Tokens.pitch) : rows
 
-    DotSurface {
-        id: surface
-        cols: Math.min(pane.cols, pane.maxCols)
-        rows: Math.min(pane.rows, pane.maxRows)
-        focus: true
-        // Frosted: LEDs on blurred glass (Hyprland blurs dotshell-* panes).
-        glassAlpha: Tokens.frosted ? (Tokens.current.light ? 0.7 : 0.55) : 1
+    // What shows: all of it, or while growing the part inside a rect moving
+    // from `from` out to the whole window, the faceplate drawn at that rect.
+    readonly property rect origin: grows ? Qt.rect(from.x - growX, from.y - stripH - growY, from.width, from.height) : Qt.rect(0, 0, 0, 0)
+    Item {
+        id: reveal
+        readonly property real t: pane.grows ? pane.grown : 1
+        x: pane.origin.x * (1 - t)
+        y: pane.origin.y * (1 - t)
+        width: pane.origin.width + (pane.implicitWidth - pane.origin.width) * t
+        height: pane.origin.height + (pane.implicitHeight - pane.origin.height) * t
+        clip: pane.grows && t < 1
 
-        // LED border: the outermost ring of dots, at the dim level, animated
-        // by LedFx.
-        LedRing {
-            z: -1
-            visible: Tokens.borders
-            width: surface.cols
-            height: surface.rows
-            color: Tokens.slot1
-            gain: LedFx.on ? 0.8 : 0.6
-            offset: 0.25
+        Loader {
+            anchors.fill: parent
+            active: !!pane.hardware
+            sourceComponent: Faceplate {
+                hw: pane.hardware
+                win: Qt.rect(pane.bezel, pane.bezel, surface.width, surface.height)
+            }
         }
 
-        Keys.onPressed: event => {
-            if (event.key === Qt.Key_Escape) {
-                if (pane.managed)
-                    Ui.close();
-                event.accepted = true;
-            } else {
-                pane.keyPressed(event);
+        Item {
+            x: -reveal.x
+            y: -reveal.y
+            width: pane.implicitWidth
+            height: pane.implicitHeight
+            opacity: pane.grows ? Math.min(1, reveal.t * 1.6) : 1
+
+            DotSurface {
+                id: surface
+                x: pane.bezel
+                y: pane.bezel
+                cols: Math.min(pane.cols, pane.maxCols)
+                rows: Math.min(pane.rows, pane.maxRows)
+                focus: true
+                // Frosted: LEDs on blurred glass (Hyprland blurs dotshell-* panes).
+                // With hardware: smoked glass, opaque.
+                glassAlpha: Tokens.frosted && !pane.hardware ? (Tokens.current.light ? 0.7 : 0.55) : 1
+
+                // LED border: the outermost ring of dots, at the dim level, animated
+                // by LedFx.
+                LedRing {
+                    z: -1
+                    visible: Tokens.borders && !pane.hardware
+                    width: surface.cols
+                    height: surface.rows
+                    color: Tokens.slot1
+                    gain: LedFx.on ? 0.8 : 0.6
+                    offset: 0.25
+                }
+
+                Keys.onPressed: event => {
+                    if (event.key === Qt.Key_Escape) {
+                        if (pane.managed)
+                            Ui.close();
+                        event.accepted = true;
+                    } else {
+                        pane.keyPressed(event);
+                    }
+                }
+            }
+
+            Item {
+                id: overlayLayer
+                x: surface.x
+                y: surface.y
+                width: surface.width
+                height: surface.height
+            }
+            Loader {
+                x: surface.x
+                y: surface.y
+                width: surface.width
+                height: surface.height
+                active: !!pane.hardware
+                sourceComponent: WindowGlass {
+                    hw: pane.hardware
+                }
+            }
+            Item {
+                id: keyRow
+                x: pane.bezel
+                y: pane.bezel + surface.height + (pane.hardware?.keys.gap ?? 0)
+                width: surface.width
+                height: pane.hardware?.keys.h ?? 0
             }
         }
     }
 
-    Item {
-        id: overlayLayer
-        anchors.fill: surface
+    NumberAnimation {
+        id: growAnim
+        target: pane
+        property: "grown"
+        duration: 150
+        easing.type: Easing.OutCubic
+    }
+    onShownChanged: {
+        if (!grows) {
+            grown = shown ? 1 : 0;
+            return;
+        }
+        growAnim.to = shown ? 1 : 0;
+        growAnim.duration = shown ? 150 : 120;
+        // Opened again while still shrinking: the window never went away.
+        if (shown && grown > 0.001) {
+            focusGrab.active = grab && managed;
+            surface.forceActiveFocus();
+            opened();
+        }
+        growAnim.restart();
+        if (!shown)
+            focusGrab.active = false;
     }
 
     HyprlandFocusGrab {
@@ -109,6 +209,10 @@ PanelWindow {
     }
 
     onVisibleChanged: {
+        if (grows)
+            Ui.grown = visible ? name : Ui.grown === name ? "" : Ui.grown;
+        else if (!visible && Ui.grown === name)
+            Ui.grown = "";
         if (visible) {
             focusGrab.active = grab && managed;
             surface.forceActiveFocus();

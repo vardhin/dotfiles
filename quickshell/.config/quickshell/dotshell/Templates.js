@@ -79,6 +79,9 @@ var all = {};
 all.media = {
     name: "media", title: "Media", feed: "media", wants: ["media", "tv"],
     size: { w: 36, h: 14 }, big: { w: 48, h: 46 },
+    // A click opens MEDIA (Super M), the one full player, rather than a
+    // second, smaller one grown out of the panel.
+    click: "pane media",
     words: {
         idle: "NOTHING PLAYING", none: "NO PLAYER", lyr: "LYRICS", icon: "",
         prev: "", play: "", pause: "", next: "", vis: "VIS", lyrw: "LYR",
@@ -96,9 +99,6 @@ all.media = {
                 L("{~pause}", { action: "media toggle", when: "playing" }),
                 L("{~play}", { action: "media toggle", when: "!playing" }), GAP,
                 L("{~next}", { action: "media next" }),
-                SPACE,
-                L("{~vis}", { slot: 2, action: "panel pop vis" }), GAP,
-                L("{~lyrw}", { slot: 2, action: "panel pop lyrics", when: "hasLyrics" })
             ], { when: "active" }),
             R([
                 L("{~tvw}", { slot: 2, action: "media page tv" }), GAP,
