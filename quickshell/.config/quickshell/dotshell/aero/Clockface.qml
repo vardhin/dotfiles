@@ -15,11 +15,11 @@ Item {
     Rectangle {
         anchors.fill: parent
         radius: width / 2
-        color: "white"
+        color: Ink.c("white", "#1f3d5f")
         layer.enabled: true
         layer.effect: MultiEffect {
             shadowEnabled: true
-            shadowColor: Qt.rgba(11 / 255, 63 / 255, 128 / 255, 0.4)
+            shadowColor: Ink.shade(0.4)
             shadowBlur: 0.35
             blurMax: 12
             shadowVerticalOffset: 3
@@ -39,7 +39,7 @@ Item {
         gradient: Gradient {
             GradientStop {
                 position: 0
-                color: "white"
+                color: Ink.c("white", "#1f3d5f")
             }
             GradientStop {
                 position: 0.62
@@ -109,11 +109,11 @@ Item {
         gradient: Gradient {
             GradientStop {
                 position: 0
-                color: Qt.rgba(1, 1, 1, 0.9)
+                color: Ink.gloss(0.9)
             }
             GradientStop {
                 position: 1
-                color: Qt.rgba(1, 1, 1, 0)
+                color: Ink.gloss(0)
             }
         }
     }

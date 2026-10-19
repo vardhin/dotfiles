@@ -22,7 +22,7 @@ Item {
         anchors.fill: parent
         radius: sky.radius
         border.width: 1
-        border.color: "white"
+        border.color: Ink.c("white", Qt.rgba(1, 1, 1, 0.16))
         gradient: Gradient {
             GradientStop {
                 position: 0
@@ -65,7 +65,7 @@ Item {
             }
             GradientStop {
                 position: 1
-                color: Qt.rgba(98 / 255, 195 / 255, 238 / 255, 0.4)
+                color: Ink.c(Qt.rgba(98 / 255, 195 / 255, 238 / 255, 0.4), Qt.rgba(60 / 255, 140 / 255, 210 / 255, 0.35))
             }
         }
     }
@@ -84,11 +84,11 @@ Item {
         gradient: Gradient {
             GradientStop {
                 position: 0
-                color: Qt.rgba(1, 1, 1, 0.8)
+                color: Ink.gloss(0.8)
             }
             GradientStop {
                 position: 1
-                color: Qt.rgba(1, 1, 1, 0)
+                color: Ink.gloss(0)
             }
         }
     }

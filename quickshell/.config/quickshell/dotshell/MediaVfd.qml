@@ -18,7 +18,7 @@ Item {
     required property var words
 
     // The device (Hardware.js): faceplate, display window, keys.
-    readonly property var hw: Hardware.get("vfd")
+    readonly property var hw: Hardware.get("vfd", Tokens.flipped)
     readonly property var at: Hardware.layout(hw, width, height)
 
     // Clicks and drags from a key: a hold or a drag still lifts the panel.

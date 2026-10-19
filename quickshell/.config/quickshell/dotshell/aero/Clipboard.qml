@@ -71,11 +71,11 @@ T.Face {
         gradient: Gradient {
             GradientStop {
                 position: 0
-                color: "white"
+                color: Ink.c("white", "#1f3d5f")
             }
             GradientStop {
                 position: 1
-                color: "#eef8fd"
+                color: Ink.c("#eef8fd", "#12263d")
             }
         }
         layer.enabled: true
@@ -112,7 +112,7 @@ T.Face {
         layer.enabled: true
         layer.effect: MultiEffect {
             shadowEnabled: true
-            shadowColor: Qt.rgba(11 / 255, 63 / 255, 128 / 255, 0.4)
+            shadowColor: Ink.shade(0.4)
             shadowBlur: 0.2
             blurMax: 8
             shadowVerticalOffset: 2
@@ -140,7 +140,7 @@ T.Face {
             }
             GradientStop {
                 position: 1
-                color: "#b8e2f7"
+                color: Ink.c("#b8e2f7", "#1d4466")
             }
         }
     }

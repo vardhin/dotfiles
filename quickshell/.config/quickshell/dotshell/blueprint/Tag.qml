@@ -18,7 +18,7 @@ Item {
 
     Rectangle {
         anchors.fill: parent
-        color: hit.containsMouse ? Qt.rgba(1, 1, 1, 0.1) : "transparent"
+        color: hit.containsMouse ? Ink.c(Qt.rgba(1, 1, 1, 0.1), Qt.rgba(28 / 255, 47 / 255, 110 / 255, 0.1)) : "transparent"
         border.width: 1
         border.color: tag.on ? Ink.ink : Ink.line
     }

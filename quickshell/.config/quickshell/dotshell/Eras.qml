@@ -3,7 +3,7 @@ pragma Singleton
 import QtQuick
 import Quickshell
 
-// Era presets: moods, not palette clones. The first four come from the Dot
+// Era presets: moods, not palette clones. The first three come from the Dot
 // Shell prototype; Phase 5 adds 90s Nights, Frutiger Aero and Game Boy; Phase 9
 // Nixie, Split-Flap, Night Vision, Vaporwave, Arcade and Blueprint. Each era
 // also has a scene (panes/Scenes.js), played while you are away.
@@ -14,7 +14,9 @@ import Quickshell
 //   ramp    4 levels, dark -> bright; images are mapped onto it in "era" depth
 //   shape   "round" | "square" | "bubble"
 //   glow    0 .. 1 halo around lit dots
-//   light   light glass with dark ink (exports pick light app themes)
+//   light   light glass with dark ink (exports pick light app themes): the
+//           era's own tone. Every era also has the other tone, designed in
+//           Palettes.js (the `tone` token)
 //   mono    one hue only; the wallpaper tint (Tokens.tint) rotates the ANSI
 //           colors too, so the terminal stays mono
 //   ansi    terminal colors 0-7 (black red green yellow blue magenta cyan
@@ -23,19 +25,6 @@ import Quickshell
 // Order here is the order of the era switcher and of `cycleEra`.
 Singleton {
     readonly property var all: ({
-        phosphor: {
-            name: "Phosphor",
-            blurb: "AMBER CRT",
-            slots: ["#ffb347", "#ffd68c", "#e68c28"],
-            unlit: "#2a2015",
-            glass: "#0c0906",
-            ramp: ["#2e200d", "#6b4b1e", "#b88133", "#ffb347"],
-            glow: 0.55,
-            shape: "round",
-            light: false,
-            mono: true,
-            ansi: ["#1a130b", "#c96a2a", "#d9a441", "#ffcf70", "#a8742c", "#e08a3c", "#f2b75c", "#ffd68c"]
-        },
         tokyo: {
             name: "Tokyo Night",
             blurb: "NEON ALLEY",
@@ -104,15 +93,17 @@ Singleton {
         gameboy: {
             name: "Game Boy",
             blurb: "DMG-01 LCD",
-            slots: ["#0f380f", "#306230", "#0f380f"],
-            unlit: "#8bac0f",
-            glass: "#9bbc0f",
-            ramp: ["#0f380f", "#306230", "#8bac0f", "#9bbc0f"],
+            // The BGB emulator's greens: the DMG's four shades, minty
+            // rather than pea soup.
+            slots: ["#081820", "#346856", "#081820"],
+            unlit: "#cbe8bb",
+            glass: "#e0f8d0",
+            ramp: ["#081820", "#346856", "#88c070", "#e0f8d0"],
             glow: 0,
             shape: "square",
             light: true,
             mono: true,
-            ansi: ["#0f380f", "#306230", "#306230", "#306230", "#0f380f", "#306230", "#306230", "#8bac0f"]
+            ansi: ["#081820", "#346856", "#346856", "#346856", "#081820", "#346856", "#346856", "#cbe8bb"]
         },
         nixie: {
             name: "Nixie",
@@ -197,6 +188,6 @@ Singleton {
     readonly property var ids: Object.keys(all)
 
     function get(id: string): var {
-        return all[id] ?? all.phosphor;
+        return all[id] ?? all.tokyo;
     }
 }

@@ -78,7 +78,7 @@ Item {
             gradient: Gradient {
                 GradientStop {
                     position: 0
-                    color: Qt.rgba(0, 0, 0, 0.8)
+                    color: Tokens.current.light ? Qt.rgba(0.1, 0.13, 0.13, 0.16) : Qt.rgba(0, 0, 0, 0.8)
                 }
                 GradientStop {
                     position: Math.min(0.5, 16 / Math.max(1, frame.win.height))
@@ -91,7 +91,7 @@ Item {
             radius: 4
             color: "transparent"
             border.width: 1
-            border.color: "black"
+            border.color: Tokens.current.light ? "#7f8f89" : "black"
         }
     }
 }

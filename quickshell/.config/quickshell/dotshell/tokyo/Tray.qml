@@ -249,7 +249,7 @@ Face {
                             visible: !entry.modelData.isSeparator && hit.containsMouse
                             anchors.fill: parent
                             radius: height / 2
-                            color: Qt.rgba(0.18, 0.89, 0.9, 0.16)
+                            color: Ink.c(Qt.rgba(0.18, 0.89, 0.9, 0.16), Qt.rgba(0, 113 / 255, 151 / 255, 0.12))
                         }
                         Hit {
                             id: hit

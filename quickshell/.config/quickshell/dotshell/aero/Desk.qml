@@ -29,7 +29,7 @@ Item {
         anchors.fill: parent
         anchors.margins: -3
         radius: desk.radius + 3
-        color: "white"
+        color: Ink.c("white", "#6cc8f2")
     }
     Rectangle {
         id: tile
@@ -70,11 +70,11 @@ Item {
                 gradient: Gradient {
                     GradientStop {
                         position: 0
-                        color: Qt.rgba(1, 1, 1, 0.95)
+                        color: Ink.c(Qt.rgba(1, 1, 1, 0.95), Qt.rgba(40 / 255, 80 / 255, 125 / 255, 0.9))
                     }
                     GradientStop {
                         position: 1
-                        color: Qt.rgba(205 / 255, 240 / 255, 1, 0.8)
+                        color: Ink.c(Qt.rgba(205 / 255, 240 / 255, 1, 0.8), Qt.rgba(20 / 255, 45 / 255, 75 / 255, 0.85))
                     }
                 }
             }
@@ -89,11 +89,11 @@ Item {
         gradient: Gradient {
             GradientStop {
                 position: 0
-                color: Qt.rgba(1, 1, 1, 0.5)
+                color: Ink.gloss(0.5)
             }
             GradientStop {
                 position: 1
-                color: Qt.rgba(1, 1, 1, 0)
+                color: Ink.gloss(0)
             }
         }
     }

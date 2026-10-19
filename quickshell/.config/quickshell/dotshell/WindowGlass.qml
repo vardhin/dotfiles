@@ -13,6 +13,7 @@ Item {
     required property var hw
     readonly property var w: hw.window
     readonly property string outline: Hardware.windowPath(hw, width, height, 1)
+    readonly property bool light: Tokens.current.light
 
     Rectangle {
         visible: root.w.shade > 0
@@ -22,7 +23,8 @@ Item {
         gradient: Gradient {
             GradientStop {
                 position: 0
-                color: Qt.rgba(0, 0, 0, root.w.shade)
+                // Smoked glass by night; on light glass only a faint tint.
+                color: Tokens.current.light ? Qt.rgba(0.1, 0.13, 0.13, root.w.shade * 0.2) : Qt.rgba(0, 0, 0, root.w.shade)
             }
             GradientStop {
                 position: 1
@@ -35,12 +37,14 @@ Item {
     Canvas {
         anchors.fill: parent
         visible: root.w.scan
+        readonly property bool tone: root.light
+        onToneChanged: requestPaint()
         onHeightChanged: requestPaint()
         onWidthChanged: requestPaint()
         onPaint: {
             const c = getContext("2d");
             c.reset();
-            c.fillStyle = Qt.rgba(0, 0, 0, 0.32);
+            c.fillStyle = Qt.rgba(0, 0, 0, root.light ? 0.07 : 0.32);
             for (let y = 0; y < height; y += 3)
                 c.fillRect(0, y, width, 1);
         }
@@ -64,7 +68,7 @@ Item {
                 }
                 GradientStop {
                     position: 1
-                    color: Qt.rgba(0, 0, 0, 0.75)
+                    color: Qt.rgba(0, 0, 0, Tokens.current.light ? 0.22 : 0.75)
                 }
             }
             PathSvg {
@@ -84,7 +88,7 @@ Item {
         gradient: Gradient {
             GradientStop {
                 position: 0
-                color: Qt.rgba(1, 1, 1, 0.3)
+                color: Qt.rgba(1, 1, 1, Tokens.current.light ? 0.3 : 0.06)
             }
             GradientStop {
                 position: 1

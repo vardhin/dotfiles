@@ -76,7 +76,7 @@ T.Face {
                 height: 5
                 font: "3x5"
                 text: task.prio
-                color: "#c8323c"
+                color: Ink.c("#c8323c", "#ff5a64")
             }
             MatrixText {
                 width: implicitWidth

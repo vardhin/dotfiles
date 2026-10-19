@@ -68,7 +68,7 @@ T.Face {
             anchors.fill: parent
             visible: !(root.active && !!root.ctx.art)
             path: `M 0 ${art.height} L ${art.width} 0 M 0 0 L ${art.width} ${art.height}`
-            color: Qt.rgba(232 / 255, 241 / 255, 1, 0.6)
+            color: Ink.c(Qt.rgba(232 / 255, 241 / 255, 1, 0.6), Qt.rgba(28 / 255, 47 / 255, 110 / 255, 0.55))
         }
         Loader {
             anchors.fill: parent
@@ -171,7 +171,7 @@ T.Face {
         Rectangle {
             anchors.fill: parent
             radius: width / 2
-            color: hit.containsMouse ? Qt.rgba(1, 1, 1, 0.08) : "transparent"
+            color: hit.containsMouse ? Ink.c(Qt.rgba(1, 1, 1, 0.08), Qt.rgba(28 / 255, 47 / 255, 110 / 255, 0.08)) : "transparent"
             border.width: k.heavy ? 1.5 : 1
             border.color: k.heavy ? Ink.white : Ink.ink
         }

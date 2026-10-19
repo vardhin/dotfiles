@@ -23,11 +23,11 @@ Item {
             orientation: edge.vertical ? Gradient.Horizontal : Gradient.Vertical
             GradientStop {
                 position: 0
-                color: edge.vertical ? Qt.rgba(1, 0.235, 0.675, 0.3) : "transparent"
+                color: edge.vertical ? Ink.c(Qt.rgba(1, 0.235, 0.675, 0.3), Qt.rgba(201 / 255, 44 / 255, 127 / 255, 0.18)) : "transparent"
             }
             GradientStop {
                 position: 1
-                color: edge.vertical ? "transparent" : Qt.rgba(1, 0.235, 0.675, 0.3)
+                color: edge.vertical ? "transparent" : Ink.c(Qt.rgba(1, 0.235, 0.675, 0.3), Qt.rgba(201 / 255, 44 / 255, 127 / 255, 0.18))
             }
         }
     }
@@ -36,7 +36,7 @@ Item {
         anchors.fill: parent
         layer.enabled: edge.visible
         layer.effect: MultiEffect {
-            shadowEnabled: true
+            shadowEnabled: Ink.neon
             shadowColor: Ink.pink
             shadowBlur: 0.6
             blurMax: 16

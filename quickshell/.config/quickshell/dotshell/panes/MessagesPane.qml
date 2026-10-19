@@ -19,7 +19,7 @@ Pane {
     icon: "✉"
     caption: "ARRIVALS · ALL MESSAGES"
     captionStatus: Notifs.dnd ? "HELD" : "LIVE"
-    readonly property var look: NotifLook.get(Tokens.era)
+    readonly property var look: NotifLook.get(Tokens.era, Tokens.flipped)
     // The log grouped by app, newest app first: [{ app, items }].
     readonly property var groups: {
         if (!look)

@@ -51,7 +51,7 @@ T.Face {
                     anchors.right: parent.right
                     anchors.verticalCenter: parent.verticalCenter
                     text: root.recording ? "● " + (root.ctx.elapsed ?? "") : "Ready"
-                    color: root.recording ? "#c8323c" : Ink.blue
+                    color: root.recording ? Ink.c("#c8323c", "#ff5a64") : Ink.blue
                     opacity: root.recording ? (root.ctx.blink ?? 1) : 1
                     font.family: Ink.family
                     font.pixelSize: 13

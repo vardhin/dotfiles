@@ -120,10 +120,10 @@ T.Face {
                         height: 10
                         radius: 5
                         readonly property bool on: root.live > 0 && !root.dnd
-                        color: on ? Ink.red : "#5a2a22"
+                        color: on ? Ink.red : Ink.c("#5a2a22", "#d9b8ae")
                         layer.enabled: on
                         layer.effect: MultiEffect {
-                            shadowEnabled: true
+                            shadowEnabled: Ink.neon
                             shadowColor: Ink.red
                             shadowBlur: 0.6
                             blurMax: 14

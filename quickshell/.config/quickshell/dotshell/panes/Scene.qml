@@ -7,9 +7,9 @@ import qs.services
 import "Scenes.js" as Scenes
 
 // The era's scene: the whole screen becomes the era's own dot board and
-// plays its signature piece (panes/Scenes.js): a terminal typing in
-// Phosphor, rain over the city in Tokyo Night, green rain in Matrix, Life on
-// the Game Boy, a split-flap board, a radar, invaders...
+// plays its signature piece (panes/Scenes.js): rain over the city in Tokyo
+// Night, green rain in Matrix, Life on the Game Boy, a split-flap board, a
+// radar, invaders...
 //
 // Plays after three minutes idle (the `scene` token), before the screen dims
 // at five; any key or a real mouse move ends it. Super Shift S plays it now.

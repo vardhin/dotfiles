@@ -43,7 +43,7 @@ Pane {
     from: home && screen ? Panels.rectOf(home, screen.width, screen.height) : null
     // The eras whose device is built (VFD, Tokyo); the others keep the plain
     // pane. Full size, the device stands square (Hardware.big).
-    hardware: Tokens.era === "vfd" ? Hardware.get("vfd") : Tokens.era === "tokyo" ? Hardware.big(Hardware.get("tokyo")) : null
+    hardware: Tokens.era === "vfd" ? Hardware.get("vfd", Tokens.flipped) : Tokens.era === "tokyo" ? Hardware.big(Hardware.get("tokyo", Tokens.flipped)) : null
     // On a device: its readout instead of the plain lines, its keys on the
     // faceplate instead of the buttons.
     readonly property bool hasDevice: !!hardware
@@ -572,7 +572,7 @@ Pane {
 
                         MediaReadout {
                             visible: pane.hasDevice && Tokens.era !== "vfd"
-                            hw: pane.hardware ?? Hardware.get("vfd")
+                            hw: pane.hardware ?? Hardware.get("vfd", Tokens.flipped)
                             full: true
                             x: now.art > 0 ? now.art + 6 : 0
                             width: pane.inner - x

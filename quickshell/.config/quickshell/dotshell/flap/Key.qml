@@ -59,7 +59,7 @@ Item {
             visible: hit.containsMouse
             anchors.fill: parent
             radius: 2
-            color: Qt.rgba(1, 1, 1, 0.06)
+            color: Ink.c(Qt.rgba(1, 1, 1, 0.06), Qt.rgba(0, 0, 0, 0.05))
         }
         Print {
             visible: key.glyph === ""

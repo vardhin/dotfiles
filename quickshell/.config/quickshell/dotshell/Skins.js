@@ -21,25 +21,6 @@
 // Words: `all` applies to every panel; then per template. Missing words fall
 // back to the template's own defaults (Templates.js, `words`).
 var eras = {
-    phosphor: {
-        frame: "double", header: true, round: 0, upper: false,
-        all: { del: "rm", ok: "OK", head: "┤ {name} ├", headR: "TTY1" },
-        media: { head: "┤ mpv · now playing ├", lyr: "┤ lyrics · lrclib ├", prev: "[|<", play: "[>]", pause: "[||]", next: "[>|]" },
-        clock: { head: "┤ cal ├", foot: "~ $ _" },
-        workspaces: { head: "┤ workspaces ├" },
-        system: { head: "┤ top ├", foot: "F9 KILL · ENTER FOCUS" },
-        battery: { head: "┤ upower -i bat0 ├" },
-        messages: { head: "┤ mutt · inbox ├", title: "INBOX" },
-        capture: { head: "┤ capture ├", headR: "grim" },
-        caffeine: { head: "┤ systemd-inhibit ├", icon: "c[_]" },
-        tray: { head: "┤ tray ├" },
-        downloads: { head: "┤ dotd · downloads ├", headR: "sort.toml" },
-        files: { head: "┤ files ├", find: "~ $ dot find" },
-        clipboard: { head: "┤ cliphist list ├", headR: "enter paste", icon: "clip>" },
-        todo: { head: "┤ ~/todo.txt ├", headR: "vim", on: "x", off: "-", add: ":a" },
-        screenshots: { head: "┤ ~/pictures/shots ├", headR: "feh" },
-        dock: { title: "$ ps --gui" }
-    },
     tokyo: {
         frame: "ring", header: false, round: 5, upper: true,
         all: { del: "DELETE" },
@@ -207,7 +188,7 @@ var eras = {
 };
 
 function get(era) {
-    return eras[era] || eras.phosphor;
+    return eras[era] || eras.tokyo;
 }
 
 // Every word a template's layout may ask for, for one era: the template's

@@ -38,7 +38,7 @@ Item {
         visible: ring.value > 0.005
         layer.enabled: visible
         layer.effect: MultiEffect {
-            shadowEnabled: true
+            shadowEnabled: Ink.neon
             shadowColor: ring.tint
             shadowBlur: 0.35
             blurMax: 12

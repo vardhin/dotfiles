@@ -170,8 +170,9 @@ media center), hyprlock, hypridle, polkit-gnome, awww and hyprsunset.
 | Border FX | the LED rings animate: a random one of comet, twins, flow, breathe, marquee, sparkle, scanner or wipe, new on every window or workspace switch (bright on the focused window, dim on the rest). While music plays they react to it instead (cava): spectrum around the ring, bass pulse, a rider whose speed follows the loudness, treble fizz, corner VU meters, all flashing on beats. `ledfx` token: `auto`, `random` (never music), `music`, `off` (still rings); `dotshell ipc call ledfx next` / `mode comet` |
 
 ```bash
-dotshell ipc call tokens set era tokyo     # phosphor tokyo nineties matrix vfd aero gameboy
+dotshell ipc call tokens set era tokyo     # tokyo nineties matrix vfd aero gameboy
                                            # nixie flap nightvision vapor arcade blueprint
+dotshell ipc call tokens set tone light    # dark | light: any era in either tone
 dotshell ipc call tokens set pitch 5       # 3 | 5 | 8 | 12 px per dot
 dotshell ipc call tokens set dotSize 70    # 40–100 % of pitch
 dotshell ipc call tokens set depth 16      # era | 8 | 16 | 24
@@ -234,7 +235,6 @@ empties it (`clip forget "text"` drops one entry); `dotshell ipc call capture re
 
 | Era | Id | Look |
 |---|---|---|
-| Phosphor | `phosphor` | amber CRT, mono |
 | Tokyo Night | `tokyo` | magenta and cyan neon, violet ramp, glow |
 | 90s Nights | `nineties` | hot pink, electric blue and yellow tubes, heavy glow |
 | Matrix | `matrix` | green mono, square dots |
@@ -248,8 +248,12 @@ empties it (`clip forget "text"` drops one entry); `dotshell ipc call capture re
 | Arcade | `arcade` | RGB332 cabinet primaries, square dots |
 | Blueprint | `blueprint` | white lines on drafting blue |
 
-`Super T` (or the brush on the side rail) shows every era as a card in its own colors. **ERAS** page: arrows or j/k move, Enter
-applies, 1–9 pick directly. Tab goes to **DISPLAY**: pitch, dot size, depth, wall, hue, cascade, screen, windows, win shade,
+Every era comes in a **dark** and a **light** tone (the `tone` token): its own palette is one of them (Frutiger Aero and Game Boy
+are light, the rest dark), the other is the same palette with its lightness turned over in OKLab (`Tone.js`), so every panel,
+device and notification keeps its style and only the coloring changes.
+
+`Super T` (or the brush on the side rail) shows every era as a card in its own colors. **ERAS** page: two sections, **DARK** and
+**LIGHT** (Left/Right or h/l switch them); Up/Down or j/k move, Enter applies the era in that tone, 1–9 pick directly. Tab goes to **DISPLAY**: pitch, dot size, depth, wall, hue, cascade, screen, windows, win shade,
 workspaces, borders, bars, idle scene, sounds, pane glass;
 Up/Down pick a row, Left/Right change it. Tab again: **WALLS** (`Super W`, or the picture on the side rail):
 every image under `~/wallpaper` and `~/wallpapers` as a thumbnail in dots, the WALL mode on top; arrows
@@ -291,7 +295,7 @@ The era on screen is also exported to the apps around the shell, on every change
 ### Scenes, sounds and the switchboard
 
 **Scenes.** After three minutes idle (before the dim at five; not while a video plays) the whole screen becomes the era's dot board
-and plays its piece (`panes/Scenes.js`, drawn at one pixel per dot): a terminal typing (Phosphor), rain
+and plays its piece (`panes/Scenes.js`, drawn at one pixel per dot): rain
 over the skyline (Tokyo), the sun setting on the neon grid (90s), glyph rain (Matrix), a car-stereo
 clock and spectrum (VFD), bubbles (Aero), Life (Game Boy), the time in tubes (Nixie), a departure
 board (Flap), a radar (Night Vision), a turning pyramid (Vapor), invaders (Arcade), a spirograph being

@@ -3,6 +3,7 @@ pragma Singleton
 import QtQuick
 import Quickshell
 import Quickshell.Io
+import "Palettes.js" as Palettes
 
 // The one tokens file: era, display config, wallpaper, night warmth.
 // Lives outside the repo so runtime changes never dirty the dotfiles:
@@ -14,6 +15,9 @@ import Quickshell.Io
 //
 // Tokens:
 //   era        an id from Eras.qml
+//   tone       dark | light: every era in either; its own palette is one of
+//              them, the other is designed for it (Palettes.js). Unset: the
+//              era's own tone
 //   pitch      3 | 5 | 8 | 12 px per dot (panels keep their size)
 //   dotSize    40 .. 100, dot diameter in % of pitch
 //   depth      era | 8 | 16 | 24 (era ramp, RGB332, RGB565, true color)
@@ -67,7 +71,28 @@ Singleton {
     id: root
 
     // ── Persisted tokens ────────────────────────────────────────────
-    readonly property string era: Eras.all[store.era] ? store.era : "phosphor"
+    readonly property string era: Eras.all[store.era] ? store.era : "tokyo"
+    readonly property var tones: ["dark", "light"]
+    readonly property string tone: tones.includes(store.tone) ? store.tone : nativeTone(era)
+    // The era is drawn in its other tone: its Ink and device tables flip too.
+    readonly property bool flipped: tone !== nativeTone(era)
+    function nativeTone(id: string): string {
+        return Eras.get(id).light ? "light" : "dark";
+    }
+    // Neon halos: off when a dark era is drawn light (a halo on pale glass
+    // reads as a smudge).
+    readonly property bool neon: !(flipped && tone === "light")
+    // An era color as the current tone wants it: as authored in the era's
+    // own tone, its counterpart from Palettes.js `map` in the other (alpha
+    // kept). For shared QML; era panels pair their colors in Ink.c(own, other).
+    function ink(c: var): color {
+        const q = typeof c === "string" ? Qt.color(c) : c;
+        if (!flipped)
+            return q;
+        const h = Palettes.color(era, Qt.rgba(q.r, q.g, q.b, 1).toString());
+        const r = Qt.color(h);
+        return Qt.rgba(r.r, r.g, r.b, q.a);
+    }
     readonly property int pitch: [3, 5, 8, 12].includes(store.pitch) ? store.pitch : 3
     readonly property real dotSize: Math.max(40, Math.min(100, store.dotSize)) / 100
     readonly property string depth: ["era", "8", "16", "24"].includes(store.depth) ? store.depth : "era"
@@ -102,13 +127,13 @@ Singleton {
 
     readonly property var walls: ["dots", "image", "off"]
     readonly property var screens: ["glass", "led", "board", "off"]
-    readonly property var keys: ["era", "pitch", "dotSize", "depth", "wall", "wallpaper", "hue", "cascade", "night", "screen", "winfx", "wsfx", "borders", "ledfx", "top", "title", "side", "winshade", "scene", "sounds", "frosted", "home", "homeWall"]
+    readonly property var keys: ["era", "tone", "pitch", "dotSize", "depth", "wall", "wallpaper", "hue", "cascade", "night", "screen", "winfx", "wsfx", "borders", "ledfx", "top", "title", "side", "winshade", "scene", "sounds", "frosted", "home", "homeWall"]
 
     // ── What is on screen ───────────────────────────────────────────
     // `current` is the era as displayed: its colors after the wallpaper hue,
     // set by the cascade (below) rather than bound, so the old era stays on
     // screen until the wave passes. `previous` is what the wave flips away from.
-    property var current: Eras.get("phosphor")
+    property var current: Eras.get("tokyo")
     property var previous: current
     // 0 -> 1 while a cascade runs; 1 when idle.
     property real flip: 1
@@ -144,26 +169,34 @@ Singleton {
         return Qt.hsla((q.hslHue + dh + 2) % 1, q.hslSaturation, q.hslLightness, 1).toString();
     }
 
-    // An era as it should look: hues moved onto the wallpaper's when hue = wallpaper.
-    function effective(id: string, hueMode: string, wh: real): var {
-        const base = Eras.get(id);
-        const e = Object.assign({ id: id }, base);
-        if (hueMode !== "wallpaper" || wh < 0)
-            return e;
+    // An era as it should look: in `toneId` (its own palette, or its
+    // counterpart from Palettes.js), then with hues moved onto the
+    // wallpaper's when hue = wallpaper.
+    function effective(id: string, hueMode: string, wh: real, toneId: string): var {
+        const own = Eras.get(id);
+        const base = Object.assign({ id: id, tone: nativeTone(id) }, own);
+        const alt = Palettes.get(id);
+        if (toneId && toneId !== base.tone && alt) {
+            for (const k of ["slots", "unlit", "glass", "ramp", "glow", "ansi", "blurb"])
+                base[k] = alt[k];
+            base.light = toneId === "light";
+            base.tone = toneId;
+        }
+        const e = Object.assign({}, base);
         const h0 = Qt.color(base.slots[0]).hslHue;
-        if (h0 < 0)
-            return e;
-        const dh = wh - h0;
-        e.slots = base.slots.map(c => rotate(c, dh));
-        e.ramp = base.ramp.map(c => rotate(c, dh));
-        e.unlit = rotate(base.unlit, dh);
-        e.glass = rotate(base.glass, dh);
-        if (base.mono)
-            e.ansi = base.ansi.map(c => rotate(c, dh));
+        if (hueMode === "wallpaper" && wh >= 0 && h0 >= 0) {
+            const dh = wh - h0;
+            e.slots = base.slots.map(c => rotate(c, dh));
+            e.ramp = base.ramp.map(c => rotate(c, dh));
+            e.unlit = rotate(base.unlit, dh);
+            e.glass = rotate(base.glass, dh);
+            if (base.mono)
+                e.ansi = base.ansi.map(c => rotate(c, dh));
+        }
         return e;
     }
 
-    readonly property var target: effective(era, hue, wallHue)
+    readonly property var target: effective(era, hue, wallHue, tone)
     // No cascade while the shell starts (tokens file, matugen arriving).
     property bool live: false
     Timer {
@@ -287,7 +320,8 @@ Singleton {
 
         JsonAdapter {
             id: store
-            property string era: "phosphor"
+            property string era: "tokyo"
+            property string tone: ""
             property int pitch: 3
             property int dotSize: 80
             property string depth: "era"
@@ -323,6 +357,11 @@ Singleton {
             if (!Eras.all[value])
                 return "unknown era; one of: " + Eras.ids.join(", ");
             store.era = value;
+            break;
+        case "tone":
+            if (!tones.includes(value))
+                return "tone is one of: " + tones.join(", ");
+            store.tone = value;
             break;
         case "pitch":
             if (![3, 5, 8, 12].includes(parseInt(value)))
@@ -423,6 +462,7 @@ Singleton {
     function snapshot(): var {
         return {
             era: era,
+            tone: tone,
             pitch: pitch,
             dotSize: Math.round(dotSize * 100),
             depth: depth,
@@ -454,6 +494,11 @@ Singleton {
         return store.era;
     }
 
+    function toggleTone(): string {
+        store.tone = tone === "dark" ? "light" : "dark";
+        return store.tone;
+    }
+
     function toggleNight(): void {
         store.night = !store.night;
     }
@@ -481,6 +526,9 @@ Singleton {
         }
         function cycleEra(): string {
             return root.cycleEra(1);
+        }
+        function toggleTone(): string {
+            return root.toggleTone();
         }
     }
 

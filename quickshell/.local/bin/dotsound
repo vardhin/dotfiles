@@ -3,7 +3,7 @@
 
 Every era has a voice (a waveform, a pitch, an envelope, how much noise,
 how mechanical) and the same eight events are played in it, so a pane
-opening sounds like a relay in Phosphor, a glass chime in Frutiger Aero and
+opening sounds like a flap clacking on the board, a glass chime in Frutiger Aero and
 a square-wave blip on the Game Boy:
 
     open close toast alert flip ws shutter rec winopen winclose
@@ -32,7 +32,6 @@ RATE = 22050
 #   echo    0 .. 1 one echo at 180 ms (radar, glass)
 #   step    semitones between motif notes
 VOICES = {
-    "phosphor":    dict(wave="square", base=880, decay=0.08, noise=0.25, click=0.6, detune=0, echo=0.0, step=5),
     "tokyo":       dict(wave="fm", base=1046, decay=0.35, noise=0.05, click=0.0, detune=8, echo=0.25, step=7),
     "nineties":    dict(wave="saw", base=523, decay=0.18, noise=0.0, click=0.0, detune=14, echo=0.2, step=4),
     "matrix":      dict(wave="pulse", base=1318, decay=0.06, noise=0.1, click=0.2, detune=0, echo=0.0, step=-3),
@@ -46,7 +45,7 @@ VOICES = {
     "arcade":      dict(wave="square", base=988, decay=0.1, noise=0.0, click=0.0, detune=0, echo=0.0, step=12),
     "blueprint":   dict(wave="tri", base=660, decay=0.05, noise=0.6, click=0.4, detune=0, echo=0.0, step=5),
 }
-DEFAULT = "phosphor"
+DEFAULT = "tokyo"
 
 
 def osc(w, ph):

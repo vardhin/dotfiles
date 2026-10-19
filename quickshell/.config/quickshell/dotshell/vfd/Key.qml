@@ -73,7 +73,7 @@ Rectangle {
         color: key.led
         layer.enabled: key.ledGlow && visible
         layer.effect: MultiEffect {
-            shadowEnabled: true
+            shadowEnabled: Ink.neon
             shadowColor: key.led
             shadowBlur: 0.5
             blurMax: 12

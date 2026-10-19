@@ -1,4 +1,5 @@
 .pragma library
+.import "Palettes.js" as Palettes
 
 // The physical device a panel is built as, per era, in screen px: the
 // faceplate around the dots, the display window they sit in, and the keys
@@ -71,28 +72,6 @@
 //              alt is the bar's second color (its knob, rule or outline)
 //     stripe   lit bar cells alternate bar and alt
 var eras = {
-    phosphor: {
-        plate: {
-            color: "#0c0906",
-            strokes: [
-                { inset: 6, width: 1, color: "#e68c28", glow: "#e68c28" },
-                { inset: 9, width: 1, color: "#e68c28", glow: "#e68c28" }
-            ],
-            legend: { text: "┤ mpv · now playing ├", right: "TTY1", x: 22, color: "#e68c28" }
-        },
-        bezel: { l: 16, t: 18, r: 16, b: 14 },
-        window: { radius: 0, scan: true },
-        keys: {
-            at: "bottom", h: 16, gap: 12, align: "start",
-            style: { shape: "none", ink: "#ffb347", glow: "#e68c28", size: 15 },
-            items: [
-                { act: "prev", label: "[|<]" },
-                { act: "toggle", label: ["[>]", "[||]"], style: { ink: "#ffd68c" } },
-                { act: "next", label: "[>|]" }
-            ]
-        },
-        readout: { art: "square", legends: "none", prefix: "> ", cursor: true, bar: "text", time: "bar", ink: [1, 0, 0, 0, 2] }
-    },
     tokyo: {
         plate: {
             shape: "pill", color: "#08071a",
@@ -197,7 +176,7 @@ var eras = {
         plate: { radius: [10, 10, 40, 10], color: "#c9c5c0", under: "#a19c96" },
         bezel: { l: 26, t: 22, r: 22, b: 30 },
         window: {
-            radius: 0, edge: "#306230", edgeW: 2,
+            radius: 0, edge: "#346856", edgeW: 2,
             frame: { pad: 12, padB: 20, color: "#55565f", radius: [8, 8, 24, 8], mark: "DOT MATRIX · STEREO", markColor: "#c9c5c0" }
         },
         keys: {
@@ -333,10 +312,16 @@ var eras = {
 };
 
 // One era's device with every field filled in (null: the era has none).
-function get(era) {
+// `flipped`: the era in its other tone (Tokens.flipped), Palettes.js's colors.
+function get(era, flipped) {
     const e = eras[era];
     if (!e)
         return null;
+    const out = build(era, e);
+    return flipped ? Palettes.table(era, out, "hw") : out;
+}
+
+function build(era, e) {
     const plate = Object.assign({
         shape: "rect", slant: 0, radius: 0, color: "#000000", fill: null, inner: null, under: "", edge: "",
         strokes: [], brackets: null, bevel: null, grid: null, rivets: null, gloss: false, shadow: null, legend: null

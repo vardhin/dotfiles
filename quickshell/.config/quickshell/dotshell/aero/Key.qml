@@ -28,7 +28,7 @@ Item {
         gradient: Gradient {
             GradientStop {
                 position: 0
-                color: key.look === "red" ? "#ffb3b3" : key.look === "green" ? "#b9f0a8" : "white"
+                color: key.look === "red" ? "#ffb3b3" : key.look === "green" ? "#b9f0a8" : Ink.c("white", "#2a4a70")
             }
             GradientStop {
                 position: key.bubble ? 0.7 : 1
@@ -38,7 +38,7 @@ Item {
         layer.enabled: true
         layer.effect: MultiEffect {
             shadowEnabled: true
-            shadowColor: key.look === "red" ? Qt.rgba(200 / 255, 50 / 255, 60 / 255, 0.5) : key.look === "green" ? Qt.rgba(35 / 255, 150 / 255, 60 / 255, 0.5) : Qt.rgba(11 / 255, 63 / 255, 128 / 255, key.look === "lit" ? 0.4 : 0.25)
+            shadowColor: key.look === "red" ? Qt.rgba(200 / 255, 50 / 255, 60 / 255, 0.5) : key.look === "green" ? Qt.rgba(35 / 255, 150 / 255, 60 / 255, 0.5) : Ink.shade(key.look === "lit" ? 0.4 : 0.25)
             shadowBlur: 0.2
             blurMax: 8
             shadowVerticalOffset: 1
@@ -48,7 +48,7 @@ Item {
     Rectangle {
         anchors.fill: parent
         radius: key.radius
-        color: key.look === "ghost" ? Qt.rgba(1, 1, 1, 0.25) : "transparent"
+        color: key.look === "ghost" ? Ink.c(Qt.rgba(1, 1, 1, 0.25), Qt.rgba(1, 1, 1, 0.08)) : "transparent"
         visible: key.look === "lit" || key.look === "ghost"
         border.width: 1
         border.color: key.look === "lit" ? Ink.sky : Ink.pale
@@ -64,11 +64,11 @@ Item {
         gradient: Gradient {
             GradientStop {
                 position: 0
-                color: Qt.rgba(1, 1, 1, 0.5)
+                color: Ink.gloss(0.5)
             }
             GradientStop {
                 position: 1
-                color: Qt.rgba(1, 1, 1, 0)
+                color: Ink.gloss(0)
             }
         }
     }

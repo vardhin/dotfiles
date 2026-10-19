@@ -143,7 +143,7 @@ T.Face {
                     height: b.cellH * b.p + 1
                     color: "transparent"
                     border.width: 1
-                    border.color: Qt.rgba(169 / 255, 205 / 255, 250 / 255, 0.3)
+                    border.color: Ink.c(Qt.rgba(169 / 255, 205 / 255, 250 / 255, 0.3), Qt.rgba(58 / 255, 95 / 255, 176 / 255, 0.3))
                 }
             }
             Rectangle {

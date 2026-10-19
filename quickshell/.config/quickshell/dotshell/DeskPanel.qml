@@ -468,7 +468,6 @@ Item {
     // One skin per era (the design canvas's sk.<era>), as they are done.
     readonly property var devices: ({
             vfd: vfdDevice,
-            phosphor: phosphorDevice,
             tokyo: tokyoDevice,
             aero: aeroDevice,
             blueprint: blueprintDevice,
@@ -505,15 +504,6 @@ Item {
     Component {
         id: vfdDevice
         MediaDevice {
-            ctx: root.ctx
-            sink: root.actions
-            panel: root.panel
-            words: root.words
-        }
-    }
-    Component {
-        id: phosphorDevice
-        MediaPhosphor {
             ctx: root.ctx
             sink: root.actions
             panel: root.panel

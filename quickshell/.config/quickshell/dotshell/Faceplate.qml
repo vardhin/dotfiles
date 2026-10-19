@@ -130,7 +130,8 @@ Item {
         gradient: Gradient {
             GradientStop {
                 position: 0
-                color: Qt.rgba(1, 1, 1, 0.9)
+                // A white sheen by day, a faint one on dark glass.
+                color: Qt.rgba(1, 1, 1, Tokens.current.light ? 0.9 : 0.12)
             }
             GradientStop {
                 position: 1
@@ -409,7 +410,7 @@ Item {
                     Text {
                         anchors.centerIn: parent
                         text: parent.modelData
-                        color: "#130a24"
+                        color: Tokens.ink("#130a24")
                         font.family: Tokens.font
                         font.pixelSize: 11
                     }

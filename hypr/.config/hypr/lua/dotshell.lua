@@ -17,7 +17,7 @@ local stateFile = (os.getenv("XDG_STATE_HOME") or (home .. "/.local/state")) .. 
 -- shaders/ next to hyprland.lua, wherever the config lives.
 local shaderDir = (debug.getinfo(1, "S").source:match("^@(.*)/lua/[^/]*$") or (home .. "/.config/hypr")) .. "/shaders/"
 
--- Defaults until Dot Shell has written its state once (phosphor amber).
+-- Defaults until Dot Shell has written its state once (an amber glow).
 local defaults = {
     winshade = "off",       -- off | dim (unfocused windows as dots) | all (+ glass on the focused one)
     pitch = 5,

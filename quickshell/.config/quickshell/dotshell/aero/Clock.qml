@@ -144,7 +144,7 @@ T.Face {
                 gradient: Gradient {
                     GradientStop {
                         position: 0
-                        color: "#b9f0a8"
+                        color: Ink.c("#b9f0a8", "#1f5a2c")
                     }
                     GradientStop {
                         position: 0.7

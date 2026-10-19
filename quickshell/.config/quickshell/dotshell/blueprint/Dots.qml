@@ -55,7 +55,7 @@ Item {
         layer.enabled: dots.glow
         layer.effect: MultiEffect {
             shadowEnabled: true
-            shadowColor: Qt.rgba(232 / 255, 241 / 255, 1, 0.3)
+            shadowColor: Ink.c(Qt.rgba(232 / 255, 241 / 255, 1, 0.3), Qt.rgba(28 / 255, 47 / 255, 110 / 255, 0.12))
             shadowBlur: 0.2
             blurMax: 6
             shadowHorizontalOffset: 0

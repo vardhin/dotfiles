@@ -90,7 +90,7 @@ Item {
             gradient: Gradient {
                 GradientStop {
                     position: 0
-                    color: Qt.rgba(0, 0, 0, unit.shade)
+                    color: Ink.c(Qt.rgba(0, 0, 0, unit.shade), Qt.rgba(40 / 255, 60 / 255, 55 / 255, unit.shade * 0.22))
                 }
                 GradientStop {
                     position: Math.min(0.5, 16 / Math.max(1, win.height))
@@ -104,7 +104,7 @@ Item {
             radius: unit.winRadius
             color: "transparent"
             border.width: 1
-            border.color: "black"
+            border.color: Ink.c("black", "#7f8f89")
         }
         Item {
             id: overlay

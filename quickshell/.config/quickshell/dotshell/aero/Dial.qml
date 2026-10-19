@@ -22,7 +22,7 @@ Item {
         layer.enabled: true
         layer.effect: MultiEffect {
             shadowEnabled: true
-            shadowColor: Qt.rgba(11 / 255, 63 / 255, 128 / 255, 0.5)
+            shadowColor: Ink.shade(0.5)
             shadowBlur: 0.35
             blurMax: 12
             shadowVerticalOffset: 3
@@ -116,11 +116,11 @@ Item {
         gradient: Gradient {
             GradientStop {
                 position: 0
-                color: Qt.rgba(1, 1, 1, 0.55)
+                color: Ink.gloss(0.55)
             }
             GradientStop {
                 position: 1
-                color: Qt.rgba(1, 1, 1, 0)
+                color: Ink.gloss(0)
             }
         }
     }

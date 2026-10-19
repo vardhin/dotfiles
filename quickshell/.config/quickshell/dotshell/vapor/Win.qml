@@ -32,8 +32,8 @@ Item {
     Bevel {
         anchors.fill: parent
         line: 2
-        dark: win.dim ? "#3a3740" : Ink.shade
-        outer: win.dim ? "#5a5664" : Ink.mid
+        dark: win.dim ? Ink.c("#3a3740", "#a29fab") : Ink.shade
+        outer: win.dim ? Ink.c("#5a5664", "#c3c0ca") : Ink.mid
     }
 
     // ── The title bar ───────────────────────────────────────────────

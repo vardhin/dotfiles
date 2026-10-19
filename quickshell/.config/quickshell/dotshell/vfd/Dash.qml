@@ -40,7 +40,7 @@ Item {
         y: dash.vertical ? 0 : parent.height - 1
         width: dash.vertical ? 1 : parent.width
         height: dash.vertical ? parent.height : 1
-        color: "black"
+        color: Ink.c("black", "#7f8f89")
         visible: !dash.vertical
     }
     // The window's glass, a hair past the dots.

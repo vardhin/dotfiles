@@ -68,49 +68,7 @@ function pad(n) {
 }
 
 // ── Scenes ──────────────────────────────────────────────────────────
-const LINES = [
-    "READY.", "10 PRINT \"HELLO WORLD\"", "20 GOTO 10", "RUN", "LOAD \"*\",8,1", "SEARCHING FOR *",
-    "LOADING", "MEM CHECK 640K OK", "> CONNECT 9600", "CARRIER LOST", "C:\\> DIR /W", "DOTSHELL.EXE",
-    "PING 10.0.0.1 ... 3 MS", "BOOT SECTOR OK", "PHOSPHOR WARM", "SCANLINE 262", "> _"
-];
-
 const scenes = {
-    // Amber CRT: a terminal typing to itself.
-    phosphor: {
-        make(st) {
-            st.lines = [];
-            st.cur = "";
-            st.target = LINES[0];
-            st.i = 0;
-            st.acc = 0;
-        },
-        draw(st, ctx, dt, p) {
-            const lh = 13, x0 = 4;
-            st.acc += dt;
-            while (st.acc > 0.06) {
-                st.acc -= 0.06;
-                if (st.cur.length < st.target.length) {
-                    st.cur += st.target[st.cur.length];
-                } else if (st.r() < 0.06) {
-                    st.lines.push(st.cur);
-                    st.cur = "";
-                    st.i = (st.i + 1) % LINES.length;
-                    st.target = LINES[st.i];
-                }
-            }
-            const max = Math.max(1, Math.floor((st.h - 8) / lh) - 1);
-            while (st.lines.length > max)
-                st.lines.shift();
-            st.lines.forEach((l, i) => text(ctx, l, x0, 4 + i * lh, 11, rgba(p.s0, i === st.lines.length - 1 ? 1 : 0.6)));
-            const y = 4 + st.lines.length * lh;
-            text(ctx, st.cur, x0, y, 11, rgba(p.s1, 1));
-            if (Math.floor(st.t * 2) % 2 === 0) {
-                ctx.fillStyle = rgba(p.s0, 1);
-                ctx.fillRect(x0 + st.cur.length * 7, y + 1, 6, 10);
-            }
-        }
-    },
-
     // Tokyo Night: a skyline in the rain under a flickering neon sign.
     tokyo: {
         make(st) {
@@ -501,7 +459,7 @@ const scenes = {
 };
 
 const names = {
-    phosphor: "TERMINAL", tokyo: "RAIN CITY", nineties: "SUNSET GRID", matrix: "DIGITAL RAIN",
+    tokyo: "RAIN CITY", nineties: "SUNSET GRID", matrix: "DIGITAL RAIN",
     vfd: "CAR STEREO", aero: "BUBBLES", gameboy: "LIFE", nixie: "NIXIE CLOCK", flap: "DEPARTURES",
     nightvision: "RADAR", vapor: "VAPOR", arcade: "INVADERS", blueprint: "DRAFTING"
 };
@@ -515,7 +473,7 @@ function title(id) {
 }
 
 function make(id, w, h) {
-    const sc = scenes[id] ? id : "phosphor";
+    const sc = scenes[id] ? id : "tokyo";
     const st = { id: sc, w: Math.max(1, Math.floor(w)), h: Math.max(1, Math.floor(h)), t: 0, r: rng(0x9e3779b9 ^ (w * 31 + h)) };
     scenes[sc].make(st);
     return st;

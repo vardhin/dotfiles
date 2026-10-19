@@ -24,12 +24,12 @@ T.Face {
     readonly property int railW: Tokens.railDots
 
     // The tiles' halves, a step above the housing so they read as dots.
-    readonly property color tileUp: "#2e2e2e"
-    readonly property color tileLow: "#242424"
+    readonly property color tileUp: Ink.c("#2e2e2e", "#f7f4ec")
+    readonly property color tileLow: Ink.c("#242424", "#ebe6da")
     // A picked tile: deep amber halves under a yellow letter (dark ink on
     // yellow dots would vanish into the gaps between them).
-    readonly property color litUp: "#5c4b00"
-    readonly property color litLow: "#4a3c00"
+    readonly property color litUp: Ink.c("#5c4b00", "#f3dc8a")
+    readonly property color litLow: Ink.c("#4a3c00", "#e8cc6a")
 
     implicitWidth: rail ? railW : (form.item?.implicitWidth ?? 0)
     implicitHeight: rail ? (form.item?.implicitHeight ?? 0) : 11

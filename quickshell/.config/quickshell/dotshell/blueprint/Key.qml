@@ -19,7 +19,7 @@ Item {
         dashed: !key.on
         line: key.on ? 1.5 : 1
         color: key.on ? Ink.white : Ink.line
-        fill: hit.containsMouse && !key.on ? Qt.rgba(1, 1, 1, 0.06) : "transparent"
+        fill: hit.containsMouse && !key.on ? Ink.c(Qt.rgba(1, 1, 1, 0.06), Qt.rgba(28 / 255, 47 / 255, 110 / 255, 0.06)) : "transparent"
     }
     Pen {
         anchors.fill: parent

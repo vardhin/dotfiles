@@ -1,4 +1,5 @@
 .pragma library
+.import "Palettes.js" as Palettes
 
 // How a notification looks in the eras whose panels are finished, from the
 // design canvas's Messages boards (dot-shell-panels.html): the card's fill
@@ -57,8 +58,10 @@ const looks = {
     }
 };
 
-function get(era) {
-    return looks[era] ?? null;
+// `flipped`: the era in its other tone (Tokens.flipped).
+function get(era, flipped) {
+    const l = looks[era] ?? null;
+    return l && flipped ? Palettes.table(era, l, "nl") : l;
 }
 
 // The aero marble's colour for an app, steady across reloads.

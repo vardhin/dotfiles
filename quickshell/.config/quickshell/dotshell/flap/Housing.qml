@@ -34,12 +34,12 @@ Item {
             width: 6
             height: 6
             radius: 3
-            color: "#3a3a3a"
+            color: Ink.c("#3a3a3a", "#b5ae9e")
             Rectangle {
                 x: 1
                 width: 4
                 height: 1
-                color: "#555555"
+                color: Ink.c("#555555", "#9c9585")
             }
         }
     }

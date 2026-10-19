@@ -9,7 +9,7 @@ Item {
     id: card
 
     property real radius: 12
-    property color from: "white"
+    property color from: Ink.c("white", "#1f3d5f")
     property color to: Ink.plate1
     property bool ring: false
     property color ringColor: Ink.sky
@@ -31,7 +31,7 @@ Item {
         layer.enabled: card.lift > 0
         layer.effect: MultiEffect {
             shadowEnabled: true
-            shadowColor: Qt.rgba(11 / 255, 63 / 255, 128 / 255, 0.3)
+            shadowColor: Ink.shade(0.3)
             shadowBlur: 0.2
             blurMax: 8
             shadowVerticalOffset: card.lift

@@ -112,7 +112,7 @@ T.Face {
                         Rectangle {
                             anchors.fill: parent
                             visible: !!room.modelData.focused
-                            color: Qt.rgba(232 / 255, 241 / 255, 1, 0.1)
+                            color: Ink.c(Qt.rgba(232 / 255, 241 / 255, 1, 0.1), Qt.rgba(28 / 255, 47 / 255, 110 / 255, 0.08))
                         }
                         Rectangle {
                             visible: room.index < c.shown.length - 1
@@ -189,7 +189,7 @@ T.Face {
                     height: u.boxH * u.p
                     Rectangle {
                         anchors.fill: parent
-                        color: tile.modelData.focused ? Qt.rgba(232 / 255, 241 / 255, 1, 0.08) : "transparent"
+                        color: tile.modelData.focused ? Ink.c(Qt.rgba(232 / 255, 241 / 255, 1, 0.08), Qt.rgba(28 / 255, 47 / 255, 110 / 255, 0.06)) : "transparent"
                         border.width: tile.modelData.focused ? 2 : 1.5
                         border.color: tile.modelData.focused ? Ink.white : Ink.line
                     }

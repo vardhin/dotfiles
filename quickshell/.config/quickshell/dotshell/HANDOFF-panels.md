@@ -5,7 +5,7 @@ Written 2026-10-18, rewritten 2026-10-19 for the next Claude Code chat. When the
 ## START HERE: perfect the next era
 
 **Done eras:** Tokyo Night (`tokyo/`), VFD (`vfd/`), Frutiger Aero (`aero/`), Blueprint (`blueprint/`), Vaporwave (`vapor/`), Split-Flap (`flap/`, built 2026-10-19, waiting on the user's screenshot).
-**Next era: Game Boy (`gameboy`)**, its design column header is `GAME BOY`. After that, in `Eras.qml` order: nixie, nightvision, arcade, then the ones before tokyo that are not done (phosphor, nineties, matrix). If the user names a different era, do that one.
+**Next era: Game Boy (`gameboy`)**, its design column header is `GAME BOY`. After that, in `Eras.qml` order: nixie, nightvision, arcade, then the ones not done yet (nineties, matrix). If the user names a different era, do that one.
 
 "Perfect the era" means **everything below, in one go**, not one panel then stop. The user was angry when only System was done for aero ("you only did cpu panel, every other panel is slop"). Do all the panels, then ask for a screenshot.
 
@@ -13,7 +13,7 @@ Written 2026-10-18, rewritten 2026-10-19 for the next Claude Code chat. When the
 
 - Source: `~/dotfiles/dot-shell-panels.html` (the canvas exported as static HTML). Each board has one column per era; that column is the spec.
 - Cut the era's column out of every board and render it (tools in `~/dotfiles/dot-shell-tools/`, output into your scratchpad):
-  - `python3 -I ~/dotfiles/dot-shell-tools/extract.py ~/dotfiles/dot-shell-panels.html <scratch>/<era> "GAME BOY"` (the third argument is the start of the era's column header: `GAME BOY`, `NIXIE`, `SPLIT-FLAP`, `NIGHT VISION`, `VAPORWAVE`, `ARCADE`, `BLUEPRINT`, `PHOSPHOR`, `90S NIGHTS`, `MATRIX`; quote it).
+  - `python3 -I ~/dotfiles/dot-shell-tools/extract.py ~/dotfiles/dot-shell-panels.html <scratch>/<era> "GAME BOY"` (the third argument is the start of the era's column header: `GAME BOY`, `NIXIE`, `SPLIT-FLAP`, `NIGHT VISION`, `VAPORWAVE`, `ARCADE`, `BLUEPRINT`, `90S NIGHTS`, `MATRIX`; quote it).
   - Files are `<board>-<n>.html`: `-0` is compact + strip + rail, `-2` is expanded, `now-3` the expanded media, `now-4` popped, `dnd-1` the Drag & dock board.
   - `~/dotfiles/dot-shell-tools/render.sh <scratch>/<era>` screenshots them all to `<scratch>/<era>/png/` (headless Firefox, 2x, trimmed). Look at every PNG with Read.
 - Read the HTML too (strip `<style>`, collapse SVG) to see which parts are dots (`.dm` / `.pn` classes) and which are crisp, and to get exact colours, radii, gradients and font sizes. Fonts the design uses are not installed: fetch the OFL face into `fonts/` (e.g. `curl -L https://github.com/google/fonts/raw/main/ofl/<name>/<File>.ttf`) with its `OFL.txt`, load with `FontLoader` in the era's `Ink`.
@@ -90,7 +90,7 @@ The design canvas is https://claude.ai/artifact/SwsyBjuo92uGFwUFajiHG8 (a Design
   - `NP-States` shows one era with all its states.
 - Other panels follow the same pattern: `Clock.dc.html` + `CK-Eras` + `CK-Expanded`, `System.dc.html` + `SY-*`, and so on.
 - In `NowPlaying.dc.html`, each era has its own hand-drawn compact skin (the `sk.<era>` blocks). Expanded, strip and rail are driven by a per-era token table, `tokens(k)` in its script. That table is the best spec for colors, fonts, borders and key styles.
-- The 13 eras are phosphor, tokyo, nineties, matrix, vfd, aero, gameboy, nixie, flap, nightvision, vapor, arcade and blueprint. They match `Eras.qml`.
+- The 12 eras are tokyo, nineties, matrix, vfd, aero, gameboy, nixie, flap, nightvision, vapor, arcade and blueprint. They match `Eras.qml`. Each has a dark and a light tone (the `tone` token): era panels write their colors as authored for the era's own tone, as pairs `Ink.c(own, other)` (every Ink color and every literal, the other tone's value authored by hand, never computed); Hardware.js and NotifLook.js tables go through the era's `map` and patches in Palettes.js, which also holds each era's other-tone palette. Glows go through `Tokens.neon` (off when a dark era is drawn light); aero's gloss and shadows through `Ink.gloss(a)` / `Ink.shade(a)`.
 - Only the parts drawn with the `dm`/`pn` classes are LED dots. Plates, bezels, keys, tubes and title bars are physical hardware drawn crisply around the dots. That is the direction the user approved with VFD: a dot display window inside a real device.
 - The design's web fonts (VT323, Tilt Neon, Audiowide, Doto, ...) are **not installed**. Hardware text uses `Tokens.font` (DepartureMono).
 
@@ -142,7 +142,7 @@ Switch them **one era at a time**, each in a working state, and get the user's s
    - Generalize `VfdReadout.qml` into `MediaReadout.qml`, driven by `hw.readout`. Keep `VfdReadout.qml` working until the switch.
    - Add art (square/round, real album art as dots via an `Image` in the canvas, with a placeholder when there's none).
    - Add the bar styles: segments, blocks, lives, line + knob, chevrons, text `[####----]`, box, tube, dim (dimension line), flap.
-   - Add: a fixed legend word (`//SIGNAL.LOCKED`, `TGT ACQ · CH 02`), the `> ` prefix with a blinking cursor (phosphor), flap tiles with a seam behind the title cells, falling code rain (matrix), a reticle over round art (nightvision), and `time: none` for nixie.
+   - Add: a fixed legend word (`//SIGNAL.LOCKED`, `TGT ACQ · CH 02`), the `> ` prefix with a blinking cursor, flap tiles with a seam behind the title cells, falling code rain (matrix), a reticle over round art (nightvision), and `time: none` for nixie.
    - Compare each era against its `sk.<era>` block in `NowPlaying.dc.html`.
 2. **Window shapes.**
    - Pill and skew windows must cut the dots: set the window `DotSurface`'s `shape` to `Hardware.windowPath(hw, cols, rows, Tokens.pitch)`.

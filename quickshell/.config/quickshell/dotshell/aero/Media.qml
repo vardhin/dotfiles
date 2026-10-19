@@ -89,7 +89,7 @@ T.Face {
         radius: artMask.radius
         color: "transparent"
         border.width: 1
-        border.color: Qt.rgba(1, 1, 1, 0.8)
+        border.color: Ink.c(Qt.rgba(1, 1, 1, 0.8), Qt.rgba(1, 1, 1, 0.16))
     }
     Rectangle {
         x: art.x + 6
@@ -103,11 +103,11 @@ T.Face {
         gradient: Gradient {
             GradientStop {
                 position: 0
-                color: Qt.rgba(1, 1, 1, 0.45)
+                color: Ink.gloss(0.45)
             }
             GradientStop {
                 position: 1
-                color: Qt.rgba(1, 1, 1, 0)
+                color: Ink.gloss(0)
             }
         }
     }
@@ -160,7 +160,7 @@ T.Face {
             anchors.fill: parent
             radius: height / 2
             border.width: 1
-            border.color: "white"
+            border.color: Ink.c("white", Qt.rgba(1, 1, 1, 0.16))
             gradient: Gradient {
                 GradientStop {
                     position: 0
@@ -168,7 +168,7 @@ T.Face {
                 }
                 GradientStop {
                     position: 1
-                    color: "white"
+                    color: Ink.c("white", "#1f3d5f")
                 }
             }
         }

@@ -16,7 +16,7 @@ Item {
         gradient: Gradient {
             GradientStop {
                 position: 0
-                color: Qt.rgba(0, 0, 0, smoke.shade)
+                color: Ink.c(Qt.rgba(0, 0, 0, smoke.shade), Qt.rgba(40 / 255, 60 / 255, 55 / 255, smoke.shade * 0.22))
             }
             GradientStop {
                 position: Math.min(0.5, 10 / Math.max(1, smoke.height))
@@ -30,6 +30,6 @@ Item {
         radius: 4
         color: "transparent"
         border.width: 1
-        border.color: "black"
+        border.color: Ink.c("black", "#7f8f89")
     }
 }

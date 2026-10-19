@@ -23,7 +23,7 @@ Text {
 
     layer.enabled: halo && visible && size >= 18
     layer.effect: MultiEffect {
-        shadowEnabled: true
+        shadowEnabled: Ink.neon
         shadowColor: neon.color
         shadowBlur: 0.7
         blurMax: 6

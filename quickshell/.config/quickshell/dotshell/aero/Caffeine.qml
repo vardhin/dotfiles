@@ -73,7 +73,7 @@ T.Face {
                         orientation: Gradient.Horizontal
                         GradientStop {
                             position: 0
-                            color: "white"
+                            color: Ink.c("white", "#1f3d5f")
                         }
                         GradientStop {
                             position: 0.5
@@ -120,7 +120,7 @@ T.Face {
                     width: 4 * c.s
                     height: 14 * c.s
                     radius: width / 2
-                    color: Qt.rgba(1, 1, 1, 0.95)
+                    color: Ink.c(Qt.rgba(1, 1, 1, 0.95), Qt.rgba(1, 1, 1, 0.5))
                     SequentialAnimation on y {
                         running: root.on
                         loops: Animation.Infinite
@@ -168,7 +168,7 @@ T.Face {
                         gradient: Gradient {
                             GradientStop {
                                 position: 0
-                                color: root.on ? "#b9f0a8" : Ink.ice
+                                color: root.on ? Ink.c("#b9f0a8", "#1f5a2c") : Ink.ice
                             }
                             GradientStop {
                                 position: 1
@@ -184,7 +184,7 @@ T.Face {
                             gradient: Gradient {
                                 GradientStop {
                                     position: 0
-                                    color: "white"
+                                    color: Ink.c("white", "#1f3d5f")
                                 }
                                 GradientStop {
                                     position: 1
@@ -192,7 +192,7 @@ T.Face {
                                 }
                             }
                             border.width: 1
-                            border.color: Qt.rgba(11 / 255, 63 / 255, 128 / 255, 0.2)
+                            border.color: Ink.c(Qt.rgba(11 / 255, 63 / 255, 128 / 255, 0.2), Qt.rgba(220 / 255, 238 / 255, 1, 0.16))
                             Behavior on x {
                                 NumberAnimation {
                                     duration: 160

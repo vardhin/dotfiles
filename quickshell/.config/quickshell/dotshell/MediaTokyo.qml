@@ -26,7 +26,7 @@ Item {
     required property var panel
     required property var words
 
-    readonly property var hw: Hardware.get("tokyo")
+    readonly property var hw: Hardware.get("tokyo", Tokens.flipped)
     readonly property bool active: !!ctx.active
     readonly property bool playing: !!ctx.playing
     readonly property real progress: active ? (ctx.progress ?? 0) : 0
@@ -82,14 +82,14 @@ Item {
 
                 Canvas {
                     anchors.fill: parent
-                    readonly property string sig: [width, Tokens.slot0].join()
+                    readonly property string sig: [width, Tokens.slot0, Tokens.flipped].join()
                     onSigChanged: requestPaint()
                     onPaint: {
                         const c = getContext("2d");
                         c.reset();
                         const r = width / 2;
                         for (let k = Math.floor(r); k > 0; k--) {
-                            c.fillStyle = k % 2 ? "#3c146e" : "#211c46";
+                            c.fillStyle = String(Tokens.ink(k % 2 ? "#3c146e" : "#211c46"));
                             c.beginPath();
                             c.arc(r, r, k, 0, Math.PI * 2);
                             c.fill();
@@ -107,9 +107,9 @@ Item {
                     height: width
                     round: true
                     src: root.active ? (root.ctx.art ?? "") : ""
-                    stripe: "#3c146e"
+                    stripe: Tokens.ink("#3c146e")
                     sun: Tokens.slot1
-                    ground: "#08071a"
+                    ground: Tokens.ink("#08071a")
                 }
 
                 // The matched video, in the record's place, cut round.
@@ -213,7 +213,7 @@ Item {
             color: Tokens.slot1
             layer.enabled: true
             layer.effect: MultiEffect {
-                shadowEnabled: true
+                shadowEnabled: Tokens.neon
                 shadowColor: Tokens.slot1
                 shadowBlur: 0.4
                 shadowHorizontalOffset: 0
@@ -229,7 +229,7 @@ Item {
             color: "#ffffff"
             layer.enabled: true
             layer.effect: MultiEffect {
-                shadowEnabled: true
+                shadowEnabled: Tokens.neon
                 shadowColor: Tokens.slot1
                 shadowBlur: 0.5
                 shadowHorizontalOffset: 0

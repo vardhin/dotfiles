@@ -92,7 +92,7 @@ T.Face {
                         }
                         GradientStop {
                             position: 1
-                            color: "white"
+                            color: Ink.c("white", "#1f3d5f")
                         }
                     }
                     Rectangle {

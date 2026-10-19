@@ -6,9 +6,12 @@ import qs
 // Era switcher, display settings and wallpapers (Super T, or the side bar's
 // palette and picture buttons). Three pages, Tab cycles them.
 //
-// ERAS: every era is a card drawn in its own colors: its glass, its three
-// tubes and its ramp. Arrows (or hjkl) move, Enter applies, 1-9 apply
-// directly; the screen then flips over to the new era (the `cascade` token).
+// ERAS: two sections, DARK and LIGHT: every era in either tone (the `tone`
+// token; an era's other tone is designed in Palettes.js). Each
+// era is a card drawn in its colors for that tone: its glass, its three tubes
+// and its ramp. Left/Right (or h/l) switch the section, Up/Down move, Enter
+// applies era and tone, 1-9 apply directly; the screen then flips over to the
+// new era (the `cascade` token).
 // DISPLAY: dot pitch, dot size, color depth, wallpaper mode, hue source and
 // the cascade, the screen shader, window effects, LED borders and the bars
 // (top strip, window title, side bar). Up/Down pick a row, Left/Right change it.
@@ -41,6 +44,7 @@ Pane {
     readonly property string page: ["eras", "display", "walls"].includes(Ui.page) ? Ui.page : "eras"
     readonly property var pages: ["eras", "display", "walls"]
     property int cursor: 0      // era card
+    property string section: "dark"     // DARK or LIGHT eras
     property int row: 0         // display setting
 
     // Dot rows free under the strip at this pitch.
@@ -48,8 +52,8 @@ Pane {
     readonly property int step: Tokens.lineDots + 3
 
     readonly property int n: Eras.ids.length
-    // Tabs, hint line, rule and padding; one card is 15 dots + 2 gap.
-    readonly property int fixedRows: step * 2 + 12
+    // Tabs, tone tabs, hint line, rule and padding; one card is 15 dots + 2 gap.
+    readonly property int fixedRows: step * 3 + 12
     readonly property int shownCards: Math.max(1, Math.min(n, Math.floor((avail - fixedRows) / 17)))
     property int firstCard: 0
     onCursorChanged: {
@@ -106,9 +110,11 @@ Pane {
     function apply(i: int): void {
         cursor = i;
         Tokens.set("era", Eras.ids[i]);
+        Tokens.set("tone", section);
     }
 
     onOpened: {
+        section = Tokens.tone;
         cursor = Math.max(0, Eras.ids.indexOf(Tokens.era));
         walls.scan();
     }
@@ -140,6 +146,8 @@ Pane {
                 cursor = (cursor + 1) % n;
             else if (k === Qt.Key_Up || k === Qt.Key_K)
                 cursor = (cursor + n - 1) % n;
+            else if (k === Qt.Key_Left || k === Qt.Key_H || k === Qt.Key_Right || k === Qt.Key_L)
+                section = section === "dark" ? "light" : "dark";
             else if (k === Qt.Key_Return || k === Qt.Key_Enter || k === Qt.Key_Space)
                 apply(cursor);
             else if (k >= Qt.Key_1 && k <= Qt.Key_9 && k - Qt.Key_1 < n)
@@ -218,9 +226,10 @@ Pane {
         id: card
         required property string eraId
         property int at: 0
-        // As it would look applied: with the wallpaper hue when hue = wallpaper.
-        readonly property var era: Tokens.effective(eraId, Tokens.hue, Tokens.wallHue)
-        readonly property bool applied: Tokens.era === eraId
+        // As it would look applied in this section's tone: with the
+        // wallpaper hue when hue = wallpaper.
+        readonly property var era: Tokens.effective(eraId, Tokens.hue, Tokens.wallHue, pane.section)
+        readonly property bool applied: Tokens.era === eraId && Tokens.tone === pane.section
         readonly property bool focused: pane.cursor === at
         readonly property bool wide: pane.wide
 
@@ -355,6 +364,19 @@ Pane {
         }
 
         // ── ERAS ────────────────────────────────────────────────────
+        Line {
+            visible: pane.page === "eras"
+            label: "TONE"
+            Repeater {
+                model: [["dark", "DARK"], ["light", "LIGHT"]]
+                DotButton {
+                    required property var modelData
+                    text: modelData[1]
+                    active: pane.section === modelData[0]
+                    onClicked: pane.section = modelData[0]
+                }
+            }
+        }
         Column {
             visible: pane.page === "eras"
             spacing: 2
@@ -485,7 +507,7 @@ Pane {
             width: pane.inner
             height: Tokens.lineDots
             elide: Text.ElideRight
-            text: !pane.wide ? "TAB PAGE  ENTER" : pane.page === "eras" ? "TAB DISPLAY  ENTER APPLY  1-" + Math.min(9, pane.n) + " PICK" : pane.page === "walls" ? "TAB ERAS  ARROWS MOVE  ENTER SET  R RANDOM" : "TAB WALLS  LEFT RIGHT CHANGE" + (pane.shownRows < pane.settings.length ? "  UP DOWN MORE" : "")
+            text: !pane.wide ? "TAB PAGE  ENTER" : pane.page === "eras" ? "TAB DISPLAY  <> TONE  ENTER  1-" + Math.min(9, pane.n) + " PICK" : pane.page === "walls" ? "TAB ERAS  ARROWS MOVE  ENTER SET  R RANDOM" : "TAB WALLS  LEFT RIGHT CHANGE" + (pane.shownRows < pane.settings.length ? "  UP DOWN MORE" : "")
             color: Tokens.slot1
         }
     }

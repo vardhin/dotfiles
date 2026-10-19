@@ -20,7 +20,7 @@ Rectangle {
 
     layer.enabled: glow > 0 && visible
     layer.effect: MultiEffect {
-        shadowEnabled: true
+        shadowEnabled: Ink.neon
         shadowColor: tube.tint
         shadowBlur: 0.55 * tube.glow
         blurMax: 20

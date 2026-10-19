@@ -18,7 +18,7 @@ T.Face {
     readonly property bool low: ctx.level === "bad"
     readonly property bool eco: Power.profile === 0
     readonly property color ink: low ? Ink.red : charging ? Ink.amber : Ink.cyan
-    readonly property color off: low ? "#3a1a12" : Ink.ghost
+    readonly property color off: low ? Ink.c("#3a1a12", "#dcc0b6") : Ink.ghost
     readonly property string remain: {
         const t = String(ctx.time ?? "");
         return !t ? String(ctx.stateWord ?? "") : charging ? t + " TO FULL" : t + " LEFT";

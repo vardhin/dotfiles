@@ -55,11 +55,11 @@ T.Face {
                         anchors.fill: parent
                         radius: 16 * c.s
                         border.width: 2
-                        border.color: "white"
+                        border.color: Ink.c("white", Qt.rgba(1, 1, 1, 0.16))
                         gradient: Gradient {
                             GradientStop {
                                 position: 0
-                                color: "white"
+                                color: Ink.c("white", "#1f3d5f")
                             }
                             GradientStop {
                                 position: 1
@@ -90,14 +90,14 @@ T.Face {
                             }
                             GradientStop {
                                 position: 1
-                                color: root.low ? "#c8323c" : Ink.green
+                                color: root.low ? Ink.c("#c8323c", "#ff5a64") : Ink.green
                             }
                         }
                         Rectangle {
                             width: parent.width
                             height: 3 * c.s
                             radius: parent.radius
-                            color: Qt.rgba(1, 1, 1, 0.6)
+                            color: Ink.gloss(0.6)
                         }
                     }
                     // Its shine.
@@ -113,11 +113,11 @@ T.Face {
                         gradient: Gradient {
                             GradientStop {
                                 position: 0
-                                color: Qt.rgba(1, 1, 1, 0.7)
+                                color: Ink.gloss(0.7)
                             }
                             GradientStop {
                                 position: 1
-                                color: Qt.rgba(1, 1, 1, 0)
+                                color: Ink.gloss(0)
                             }
                         }
                     }
@@ -165,7 +165,7 @@ T.Face {
                     spacing: 1
                     Text {
                         text: (root.ctx.pct ?? 0) + "%"
-                        color: root.low ? "#c8323c" : Ink.navy
+                        color: root.low ? Ink.c("#c8323c", "#ff5a64") : Ink.navy
                         font.family: Ink.family
                         font.pixelSize: Math.round(34 * Math.max(0.85, c.s))
                     }
@@ -237,7 +237,7 @@ T.Face {
                         Rectangle {
                             width: 4
                             height: 1
-                            color: "#c8323c"
+                            color: Ink.c("#c8323c", "#ff5a64")
                             opacity: 0.7
                         }
                     }
@@ -265,7 +265,7 @@ T.Face {
                     y: 3
                     text: (root.ctx.pct ?? 0) + "%"
                     size: b.bigPx
-                    color: root.low ? "#c8323c" : Ink.navy
+                    color: root.low ? Ink.c("#c8323c", "#ff5a64") : Ink.navy
                 }
                 Column {
                     anchors.right: parent.right
@@ -307,7 +307,7 @@ T.Face {
                         const h = Math.floor(height), s = shown;
                         for (let i = 0; i < s.length; i++) {
                             const up = i > 0 && s[i] > s[i - 1] + 0.001;
-                            c.fillStyle = String(up ? Ink.blue : s[i] <= 0.15 ? "#c8323c" : Ink.green);
+                            c.fillStyle = String(up ? Ink.blue : s[i] <= 0.15 ? Ink.c("#c8323c", "#ff5a64") : Ink.green);
                             const lit = Math.max(1, Math.round(Math.max(0, Math.min(1, s[i])) * h));
                             c.fillRect(i * 3, h - lit, 2, lit);
                         }

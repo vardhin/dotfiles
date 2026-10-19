@@ -114,6 +114,7 @@ Singleton {
         case "eras":
             return {
                 era: Tokens.era,
+                tone: Tokens.tone,
                 eras: Eras.ids.map(id => ({ id: id, name: Eras.all[id].name, blurb: Eras.all[id].blurb ?? "", light: !!Eras.all[id].light }))
             };
         case "display":

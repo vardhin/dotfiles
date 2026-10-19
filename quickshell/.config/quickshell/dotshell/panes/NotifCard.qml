@@ -15,7 +15,7 @@ Item {
     required property Notification notif
     // Ruled in the accent: the newest, still on screen.
     property bool live: true
-    readonly property var look: NotifLook.get(Tokens.era)
+    readonly property var look: NotifLook.get(Tokens.era, Tokens.flipped)
     readonly property bool critical: notif?.urgency === NotificationUrgency.Critical
     readonly property var defaultAction: (notif?.actions ?? []).find(a => a.identifier === "default") ?? null
     readonly property var buttons: (notif?.actions ?? []).filter(a => a.identifier !== "default")
