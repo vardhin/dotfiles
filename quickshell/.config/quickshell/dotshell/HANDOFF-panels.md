@@ -4,8 +4,8 @@ Written 2026-10-18, rewritten 2026-10-19 for the next Claude Code chat. When the
 
 ## START HERE: perfect the next era
 
-**Done eras:** Tokyo Night (`tokyo/`), VFD (`vfd/`), Frutiger Aero (`aero/`).
-**Next era: Game Boy (`gameboy`)**, its design column header is `GAME BOY`. After that, in `Eras.qml` order: nixie, flap, nightvision, vapor, arcade, blueprint, then the ones before tokyo that are not done (phosphor, nineties, matrix). If the user names a different era, do that one.
+**Done eras:** Tokyo Night (`tokyo/`), VFD (`vfd/`), Frutiger Aero (`aero/`), Blueprint (`blueprint/`, built 2026-10-19, waiting on the user's screenshot).
+**Next era: Game Boy (`gameboy`)**, its design column header is `GAME BOY`. After that, in `Eras.qml` order: nixie, flap, nightvision, vapor, arcade, then the ones before tokyo that are not done (phosphor, nineties, matrix). If the user names a different era, do that one.
 
 "Perfect the era" means **everything below, in one go**, not one panel then stop. The user was angry when only System was done for aero ("you only did cpu panel, every other panel is slop"). Do all the panels, then ask for a screenshot.
 
@@ -228,3 +228,14 @@ No per-item casings in the strip or rail (tried, the user rejected them: keep do
 ## Notifications (2026-10-19)
 
 `NotifLook.js` is each finished era's notification look from the Messages boards (card fill/rule, accent for the live one, app/words/body/time inks, keys, heading). `NotifCard.qml` (toasts and live cards), `NotifKey.qml` (era keys; plain eras get a DotButton) and `MessagesPane.qml` (log grouped by app on ruled cards in those eras) read it; other eras keep the plain layout. `Pane.eraFrame` frames a pane per era: aero sky glass (same as `skyGlass`), Tokyo a neon sign (pink tube, cyan inner tube, rounded dot glass), VFD a gunmetal unit with a smoked sunken window (`PaneFrame.qml`). On for the toasts and the message centre.
+
+## Blueprint: every panel (2026-10-19)
+
+Done out of order (the user asked for blueprint after aero). In the BLUEPRINT boards the **compact** panels are almost all crisp (Share Tech Mono words, drawn figures and title-block tables on gridded paper); only the strip/rail and the **expanded** sheets use dots. Like aero there is no unlit grid: lit dots straight on the paper.
+
+- `blueprint/` is `qs.blueprint`. Kit: `Ink` (paper `#0b3a75`, grid, rule `#a9cdfa`, ink `#e8f1ff`, white, done `#3d72b8`, warn; Share Tech Mono from `fonts/`, OFL), `Paper` (the sheet: fill, 12 px grid, rim), `Dots` (lit-only dots via `bubble.frag`, faint white glow), `Pen` (crisp word), `Say` (big Share Tech Mono in dots), `Stroke` (SVG path, solid/dashed, via Shape), `Box`, `Key` (dashed, or solid white when `on`), `Tag` (boxed word: OPEN, Paste), `Table` (label | value title block; `cells` for a component value), `Sheet` (expanded "SHEET n — TITLE … REV A" heading), `Hatch` (45° section hatching), `Bars` (hollow dot columns from a history), `Dial` (FIG. 3 clock drawing).
+- Faces, compact and expanded: System (FIG. 4 load chart / SHEET 4), Clock (FIG. 3 / SHEET 2 calendar), Battery (FIG. 5 cell section / SHEET 5 discharge), Caffeine (FIG. 7 switch S1, animated blade / SHEET 8), Capture (FIG. 6 frustum + MODE/T/DO block / SHEET 7), Messages (numbered NOTES / SHEET 6 by app; DND greys the sheet), Todo (punch list), Clipboard (CLIPPINGS — NOTES, N-1…), Workspaces (PLAN — LEVEL 1 rooms / SHEET 3 floor plans; reuses `qs.aero` `Geo`). Media compact: `blueprint/Media.qml` (FIG. 1: framed cover, seek line, round keys, lyric in dots, TITLE/BY/SHOW block; SHOW boxes what exists: video, vis, lyrics). Not done: Tray, Downloads, Files, Screenshots, Dock.
+- `DeskPanel.qml`: `blueprintFace`/`blueprintFaces`, `devices.blueprint`.
+- Panes: `Pane.frame` is "blueprint" for `skyGlass`/`eraFrame` panes in that era (MEDIA, message centre, toasts): `Bp.Paper` behind a `bare` DotSurface. `NotifLook.js` has `blueprint`.
+- Design boards with no backend were swapped for real data: no DELAY/AFTER (capture), PAUSE/MARK, Pin, events (calendar footer shows week + UTC), SHT/REV numbers are fixed words.
+- Offscreen: `dot-shell-tools/harness/mk.sh a<face>.qml` makes `b<face>.qml` (blueprint, Tokens slots set) and renders it to the scratchpad path in the script.

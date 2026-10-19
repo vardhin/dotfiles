@@ -6,6 +6,7 @@ import qs.services
 import qs.tokyo as Tokyo
 import qs.vfd as Vfd
 import qs.aero as Aero
+import qs.blueprint as Bp
 import "Shapes.js" as Shapes
 import "Skins.js" as Skins
 import "Templates.js" as Templates
@@ -61,9 +62,11 @@ Item {
     readonly property Component vfdFace: Tokens.era === "vfd" && !raw && rect && !panel.layout && !panel.feed ? (vfdFaces[panel.template] ?? null) : null
     // Frutiger Aero draws each template on its own sky glass (aero/).
     readonly property Component aeroFace: Tokens.era === "aero" && !raw && rect && !panel.layout && !panel.feed ? (aeroFaces[panel.template] ?? null) : null
+    // Blueprint draws each template as a sheet of drafting paper (blueprint/).
+    readonly property Component blueprintFace: Tokens.era === "blueprint" && !raw && rect && !panel.layout && !panel.feed ? (blueprintFaces[panel.template] ?? null) : null
     // Notes: no board at all, just its words (NotesPanel.qml).
     readonly property bool notes: panel.template === "notes"
-    readonly property bool faced: mediaFaced || tokyoFace !== null || vfdFace !== null || aeroFace !== null || notes
+    readonly property bool faced: mediaFaced || tokyoFace !== null || vfdFace !== null || aeroFace !== null || blueprintFace !== null || notes
     // Any other board in Tokyo Night still gets the sign's neon tube.
     readonly property bool tokyoRim: Tokens.era === "tokyo" && !faced && rect && !raw
 
@@ -461,8 +464,18 @@ Item {
             vfd: vfdDevice,
             phosphor: phosphorDevice,
             tokyo: tokyoDevice,
-            aero: aeroDevice
+            aero: aeroDevice,
+            blueprint: blueprintDevice
         })
+    Component {
+        id: blueprintDevice
+        Bp.Media {
+            ctx: root.ctx
+            sink: root.actions
+            panel: root.panel
+            words: root.words
+        }
+    }
     Component {
         id: vfdDevice
         MediaDevice {
@@ -889,6 +902,113 @@ Item {
     Component {
         id: aeSystem
         Aero.System {
+            ctx: root.ctx
+            sink: root.actions
+            panel: root.panel
+            words: root.words
+            big: root.expanded
+        }
+    }
+
+    readonly property var blueprintFaces: ({
+            system: bpSystem,
+            clock: bpClock,
+            workspaces: bpWorkspaces,
+            battery: bpBattery,
+            messages: bpMessages,
+            capture: bpCapture,
+            caffeine: bpCaffeine,
+            clipboard: bpClipboard,
+            todo: bpTodo
+        })
+    Loader {
+        anchors.fill: parent
+        active: root.blueprintFace !== null
+        sourceComponent: root.blueprintFace
+    }
+    Component {
+        id: bpSystem
+        Bp.System {
+            ctx: root.ctx
+            sink: root.actions
+            panel: root.panel
+            words: root.words
+            big: root.expanded
+        }
+    }
+    Component {
+        id: bpClock
+        Bp.Clock {
+            ctx: root.ctx
+            sink: root.actions
+            panel: root.panel
+            words: root.words
+            big: root.expanded
+        }
+    }
+    Component {
+        id: bpWorkspaces
+        Bp.Workspaces {
+            ctx: root.ctx
+            sink: root.actions
+            panel: root.panel
+            words: root.words
+            big: root.expanded
+        }
+    }
+    Component {
+        id: bpBattery
+        Bp.Battery {
+            ctx: root.ctx
+            sink: root.actions
+            panel: root.panel
+            words: root.words
+            big: root.expanded
+        }
+    }
+    Component {
+        id: bpMessages
+        Bp.Messages {
+            ctx: root.ctx
+            sink: root.actions
+            panel: root.panel
+            words: root.words
+            big: root.expanded
+        }
+    }
+    Component {
+        id: bpCapture
+        Bp.Capture {
+            ctx: root.ctx
+            sink: root.actions
+            panel: root.panel
+            words: root.words
+            big: root.expanded
+        }
+    }
+    Component {
+        id: bpCaffeine
+        Bp.Caffeine {
+            ctx: root.ctx
+            sink: root.actions
+            panel: root.panel
+            words: root.words
+            big: root.expanded
+        }
+    }
+    Component {
+        id: bpClipboard
+        Bp.Clipboard {
+            ctx: root.ctx
+            sink: root.actions
+            panel: root.panel
+            words: root.words
+            big: root.expanded
+        }
+    }
+    Component {
+        id: bpTodo
+        Bp.Todo {
             ctx: root.ctx
             sink: root.actions
             panel: root.panel

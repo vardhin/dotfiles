@@ -14,6 +14,14 @@ const looks = {
         keyFill: "#e8f6fd", keyRim: "#9fd8f5", keyInk: "#0b3f80",
         head: "#0b3f80", sub: "#1f7fd1", marble: true
     },
+    // Pale blue ruled notes on the drafting paper, the live one ruled in
+    // white; pale blue app names, near-white words, boxed white keys.
+    blueprint: {
+        fill: "transparent", rim: "#a9cdfa", live: "#ffffff", radius: 0,
+        app: "#a9cdfa", text: "#e8f1ff", body: "#a9cdfa", time: "#a9cdfa", crit: "#ff9b8a",
+        keyFill: "transparent", keyRim: "#e8f1ff", keyInk: "#ffffff",
+        head: "#ffffff", sub: "#a9cdfa", marble: false
+    },
     // Violet-ruled cards on the dot glass, the live one in a cyan tube;
     // cyan app names, pink words, cyan key outlines.
     tokyo: {

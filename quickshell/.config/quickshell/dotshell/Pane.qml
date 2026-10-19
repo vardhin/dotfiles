@@ -4,6 +4,7 @@ import Quickshell.Hyprland
 import Quickshell.Wayland
 import qs.services
 import qs.aero as Aero
+import qs.blueprint as Bp
 import "Hardware.js" as Hardware
 
 // A floating LED pane: one layer-shell window holding one DotSurface.
@@ -52,8 +53,9 @@ PanelWindow {
     property var hardware: null
     property bool skyGlass: false
     property bool eraFrame: false
-    // "aero", "tokyo", "vfd" or "" (plain).
-    readonly property string frame: hardware ? "" : Tokens.era === "aero" && (skyGlass || eraFrame) ? "aero" : eraFrame && (Tokens.era === "tokyo" || Tokens.era === "vfd") ? Tokens.era : ""
+    // "aero", "tokyo", "vfd", "blueprint" or "" (plain). Blueprint: the
+    // drafting paper (blueprint/Paper.qml) with only the lit dots on it.
+    readonly property string frame: hardware ? "" : (Tokens.era === "aero" || Tokens.era === "blueprint") && (skyGlass || eraFrame) ? Tokens.era : eraFrame && (Tokens.era === "tokyo" || Tokens.era === "vfd") ? Tokens.era : ""
     readonly property bool sky: frame === "aero"
     // The key row under the display window (with `hardware`).
     property alias keys: keyRow.data
@@ -121,6 +123,11 @@ PanelWindow {
         }
         Loader {
             anchors.fill: parent
+            active: pane.frame === "blueprint"
+            sourceComponent: Bp.Paper {}
+        }
+        Loader {
+            anchors.fill: parent
             active: pane.frame === "tokyo" || pane.frame === "vfd"
             sourceComponent: PaneFrame {
                 kind: pane.frame
@@ -152,7 +159,7 @@ PanelWindow {
                 // A well rounded display window cuts the dots to its corners.
                 shape: pane.hardware && typeof pane.hardware.window.radius === "number" && pane.hardware.window.radius >= 8 ? Hardware.windowPath(pane.hardware, cols, rows, Tokens.pitch) : pane.frame === "tokyo" ? Hardware.rounded(0, 0, cols, rows, 15 / Tokens.pitch) : pane.frame === "vfd" ? Hardware.rounded(0, 0, cols, rows, 4 / Tokens.pitch) : ""
                 focus: true
-                bare: pane.sky
+                bare: pane.sky || pane.frame === "blueprint"
                 // Frosted: LEDs on blurred glass (Hyprland blurs dotshell-* panes).
                 // With hardware: smoked glass, opaque.
                 glassAlpha: Tokens.frosted && !pane.hardware && !pane.frame ? (Tokens.current.light ? 0.7 : 0.55) : 1
