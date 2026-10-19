@@ -281,6 +281,8 @@ Singleton {
             tempHist: Sys.tempHist,
             cores: Sys.cores.map((v, i) => ({ n: i, v: v })),
             top: Sys.top,
+            load: Sys.load,
+            tasks: Sys.tasks,
             cpuSlot: Sys.cpu > 0.85 ? 2 : 0
         })
 

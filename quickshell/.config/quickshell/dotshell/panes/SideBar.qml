@@ -76,12 +76,22 @@ Variants {
             }
         }
 
+        // Frutiger Aero: the rail is sky glass with only its lit dots on it.
+        BarChrome {
+            x: surface.x
+            width: bar.full
+            height: bar.height
+            visible: Tokens.era === "aero" && surface.visible
+            place: "rail"
+        }
+
         DotSurface {
             id: surface
             x: bar.width - bar.full * bar.reveal
             visible: bar.reveal > 0
             cols: bar.cols
             rows: Math.floor(bar.height / Tokens.pitch)
+            bare: Tokens.era === "aero"
 
             Component.onCompleted: Sys.want("side-" + bar.modelData.name, true)
             Component.onDestruction: Sys.want("side-" + bar.modelData.name, false)

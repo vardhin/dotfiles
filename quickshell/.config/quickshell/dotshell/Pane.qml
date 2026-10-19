@@ -3,6 +3,7 @@ import Quickshell
 import Quickshell.Hyprland
 import Quickshell.Wayland
 import qs.services
+import qs.aero as Aero
 import "Hardware.js" as Hardware
 
 // A floating LED pane: one layer-shell window holding one DotSurface.
@@ -20,6 +21,12 @@ import "Hardware.js" as Hardware
 // in screen px, the panel it belongs to) it opens over that rect and grows
 // out of it, and shrinks back into it on close; the owner places the window
 // at `growX`, `growY` (margins, anchored top left).
+//
+// With `skyGlass`, in Frutiger Aero (and no hardware) the pane is the
+// era's sky glass (aero/Sky.qml) with only its lit dots on it, as glossy
+// bubbles (DotSurface.bare), like the aero desktop panels. `eraFrame` does
+// that and, in Tokyo Night and VFD, frames the dots as the era's device
+// (PaneFrame.qml: a neon sign; a gunmetal unit).
 //
 // Escape closes it. Clicking outside closes it unless `grab` is false.
 // Keyboard: on demand. The focus grab hands the pane the keyboard; Exclusive
@@ -43,11 +50,16 @@ PanelWindow {
     property alias overlay: overlayLayer.data
 
     property var hardware: null
+    property bool skyGlass: false
+    property bool eraFrame: false
+    // "aero", "tokyo", "vfd" or "" (plain).
+    readonly property string frame: hardware ? "" : Tokens.era === "aero" && (skyGlass || eraFrame) ? "aero" : eraFrame && (Tokens.era === "tokyo" || Tokens.era === "vfd") ? Tokens.era : ""
+    readonly property bool sky: frame === "aero"
     // The key row under the display window (with `hardware`).
     property alias keys: keyRow.data
     property var from: null
     readonly property bool grows: !!from && from.width > 0
-    readonly property int bezel: hardware ? hardware.bezel.l : 0
+    readonly property int bezel: hardware ? hardware.bezel.l : sky ? 16 : frame ? 14 : 0
     readonly property int keysH: hardware && keyRow.children.length > 0 ? hardware.keys.h + hardware.keys.gap : 0
     // Where the window goes when it grows: from's corner, kept on screen
     // (margins under the strip, left of the side bar).
@@ -99,6 +111,24 @@ PanelWindow {
 
         Loader {
             anchors.fill: parent
+            anchors.margins: 4
+            active: pane.sky
+            sourceComponent: Aero.Sky {
+                radius: 28
+                glossInset: 24
+                glossHeight: Math.min(60, height * 0.2)
+            }
+        }
+        Loader {
+            anchors.fill: parent
+            active: pane.frame === "tokyo" || pane.frame === "vfd"
+            sourceComponent: PaneFrame {
+                kind: pane.frame
+                win: Qt.rect(pane.bezel, pane.bezel, surface.width, surface.height)
+            }
+        }
+        Loader {
+            anchors.fill: parent
             active: !!pane.hardware
             sourceComponent: Faceplate {
                 hw: pane.hardware
@@ -120,17 +150,18 @@ PanelWindow {
                 cols: Math.min(pane.cols, pane.maxCols)
                 rows: Math.min(pane.rows, pane.maxRows)
                 // A well rounded display window cuts the dots to its corners.
-                shape: pane.hardware && typeof pane.hardware.window.radius === "number" && pane.hardware.window.radius >= 8 ? Hardware.windowPath(pane.hardware, cols, rows, Tokens.pitch) : ""
+                shape: pane.hardware && typeof pane.hardware.window.radius === "number" && pane.hardware.window.radius >= 8 ? Hardware.windowPath(pane.hardware, cols, rows, Tokens.pitch) : pane.frame === "tokyo" ? Hardware.rounded(0, 0, cols, rows, 15 / Tokens.pitch) : pane.frame === "vfd" ? Hardware.rounded(0, 0, cols, rows, 4 / Tokens.pitch) : ""
                 focus: true
+                bare: pane.sky
                 // Frosted: LEDs on blurred glass (Hyprland blurs dotshell-* panes).
                 // With hardware: smoked glass, opaque.
-                glassAlpha: Tokens.frosted && !pane.hardware ? (Tokens.current.light ? 0.7 : 0.55) : 1
+                glassAlpha: Tokens.frosted && !pane.hardware && !pane.frame ? (Tokens.current.light ? 0.7 : 0.55) : 1
 
                 // LED border: the outermost ring of dots, at the dim level, animated
                 // by LedFx.
                 LedRing {
                     z: -1
-                    visible: Tokens.borders && !pane.hardware
+                    visible: Tokens.borders && !pane.hardware && !pane.frame
                     width: surface.cols
                     height: surface.rows
                     color: Tokens.slot1
@@ -155,6 +186,15 @@ PanelWindow {
                 y: surface.y
                 width: surface.width
                 height: surface.height
+            }
+            Loader {
+                anchors.fill: parent
+                active: pane.frame === "vfd"
+                sourceComponent: PaneFrame {
+                    kind: pane.frame
+                    over: true
+                    win: Qt.rect(surface.x, surface.y, surface.width, surface.height)
+                }
             }
             Loader {
                 x: surface.x

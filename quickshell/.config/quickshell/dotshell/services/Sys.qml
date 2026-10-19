@@ -25,6 +25,9 @@ Singleton {
     property var tempHist: []
     property var cores: []
     property var top: []
+    // The 1-minute load average, and how many tasks (threads) exist.
+    property real load: 0
+    property int tasks: 0
     readonly property real tempFraction: temp < 0 ? 0 : Math.max(0, Math.min(1, (temp - 30) / 70))
 
     property var wants: ({})
@@ -72,6 +75,15 @@ Singleton {
             root.memGb = (total - avail) / 1048576;
         }
     }
+    FileView {
+        id: loadavg
+        path: "/proc/loadavg"
+        onLoaded: {
+            const f = text().trim().split(/\s+/);
+            root.load = Number(f[0]) || 0;
+            root.tasks = Number((f[3] ?? "").split("/")[1]) || 0;
+        }
+    }
     // A sysfs file reports no size, so FileView never loads it; cat it instead.
     Process {
         id: sensor
@@ -116,6 +128,7 @@ Singleton {
         onTriggered: {
             stat.reload();
             meminfo.reload();
+            loadavg.reload();
             if (sensor.path)
                 sensor.running = true;
             if (root.topWanted)

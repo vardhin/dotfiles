@@ -1,14 +1,71 @@
-# Handoff: era hardware for panels (media first), then the panel manager
+# Handoff: Dot Shell panels, one era at a time
 
-Written 2026-10-18 for the next Claude Code chat. Read all of it before touching a file.
+Written 2026-10-18, rewritten 2026-10-19 for the next Claude Code chat. When the user says **"continue from handoff"**, do the "START HERE" section below, start to finish, for the next era. Read the whole file before touching anything; the dated sections further down say how each finished era was built.
+
+## START HERE: perfect the next era
+
+**Done eras:** Tokyo Night (`tokyo/`), VFD (`vfd/`), Frutiger Aero (`aero/`).
+**Next era: Game Boy (`gameboy`)**, its design column header is `GAME BOY`. After that, in `Eras.qml` order: nixie, flap, nightvision, vapor, arcade, blueprint, then the ones before tokyo that are not done (phosphor, nineties, matrix). If the user names a different era, do that one.
+
+"Perfect the era" means **everything below, in one go**, not one panel then stop. The user was angry when only System was done for aero ("you only did cpu panel, every other panel is slop"). Do all the panels, then ask for a screenshot.
+
+### 1. Read the design for the era
+
+- Source: `~/dotfiles/dot-shell-panels.html` (the canvas exported as static HTML). Each board has one column per era; that column is the spec.
+- Cut the era's column out of every board and render it (tools in `~/dotfiles/dot-shell-tools/`, output into your scratchpad):
+  - `python3 -I ~/dotfiles/dot-shell-tools/extract.py ~/dotfiles/dot-shell-panels.html <scratch>/<era> "GAME BOY"` (the third argument is the start of the era's column header: `GAME BOY`, `NIXIE`, `SPLIT-FLAP`, `NIGHT VISION`, `VAPORWAVE`, `ARCADE`, `BLUEPRINT`, `PHOSPHOR`, `90S NIGHTS`, `MATRIX`; quote it).
+  - Files are `<board>-<n>.html`: `-0` is compact + strip + rail, `-2` is expanded, `now-3` the expanded media, `now-4` popped, `dnd-1` the Drag & dock board.
+  - `~/dotfiles/dot-shell-tools/render.sh <scratch>/<era>` screenshots them all to `<scratch>/<era>/png/` (headless Firefox, 2x, trimmed). Look at every PNG with Read.
+- Read the HTML too (strip `<style>`, collapse SVG) to see which parts are dots (`.dm` / `.pn` classes) and which are crisp, and to get exact colours, radii, gradients and font sizes. Fonts the design uses are not installed: fetch the OFL face into `fonts/` (e.g. `curl -L https://github.com/google/fonts/raw/main/ofl/<name>/<File>.ttf`) with its `OFL.txt`, load with `FontLoader` in the era's `Ink`.
+
+### 2. Build `<era>/` (module `qs.<era>`), like `aero/`, `vfd/`, `tokyo/`
+
+- `Ink.qml` singleton: the era's palette + font.
+- A small kit of the era's materials (plate/glass/case, keys, cards, rules), then **one face per template, compact and expanded (`big`)**: System, Clock, Battery, Caffeine, Capture, Messages, Todo, Clipboard, Workspaces, and media compact (`<era>/Media.qml`, registered in `DeskPanel.devices`). The user's scope so far is these; Tray, Downloads, Files, Screenshots, Dock keep the generic board unless asked.
+- Faces extend `T.Face` (`import qs.tokyo as T`) and use `T.Hit` for clicks (a hold/drag still lifts the panel), `T.Field` for text input, `T.DotPic` for pictures. Read the VFD face of the same template first: it has all the data fields and actions (`ctx.*`, `run("…")`) to copy.
+- Every feature the generic board had must still work in the face (clicks, actions, inputs, keys).
+- Dots vs crisp: dot parts go on a DotSurface (or aero's `Dots` for lit-only eras); crisp parts (plates, keys, rules, cards) are plain QML placed in px = dots × `Tokens.pitch`. Small words in `MatrixText` 5x7/3x5 (5x7 when it fits, else 3x5); only big numbers/titles in the era font at dot scale. Varela-at-4-dots style tiny fonts are unreadable; don't.
+- Wire into `DeskPanel.qml`: `<era>Face` / `<era>Faces` exactly like `aeroFace`/`aeroFaces` (add the face's Component only after its file exists).
+- Check each face offscreen (below) against the design render before wiring it.
+
+### 3. The rest of the era, in the same go
+
+- **MEDIA pane (Super M) and the message centre (Super N) and notification popups must follow the era too, with all their features.** The user rejected slimmed-down replacements ("the styled messages and media panels should still have all features"). Do it by skinning the real panes, never by replacing them:
+  - Notifications: add the era to `NotifLook.js` (card fill/rule, live accent, inks, keys, heading, from its Messages boards). `NotifCard`, `NotifKey`, `MessagesPane`, `ToastStack` already read it.
+  - Pane frame: add the era to `Pane.frame` / `PaneFrame.qml` (`eraFrame` panes: toasts, message centre).
+  - MEDIA: `MediaPane.hardware` uses `Hardware.js` devices for vfd/tokyo; aero uses `skyGlass`. Give the new era its device or frame there.
+  - Clicking the Media panel opens MEDIA; clicking a notification on the Messages panel opens the message centre. Keep it that way.
+- **Strip and rail: NO per-item borders/casings/pills.** The user: "remove the panel borders in the strip and rail across eras, why did you even put em". Docked items stay plain dots on the bar. Only a whole-bar material change is OK when the era needs it (aero: `BarChrome.qml` sky glass + `DotSurface.bare`).
+
+### 4. Check, then hand over
+
+- After every save: `timeout 5 qs log -p ~/.config/quickshell/dotshell 2>&1 | grep -E "Reloading|Loaded|caused|Failed" | tail -3`. Wait a few seconds; you want the last line "Configuration Loaded" with no `caused by` after it. Older errors further up (PanelNode[540], DeskPanel[51], TopStrip[147/203], LauncherPane `pad`) are stale.
+- Then append a dated section for the era at the bottom of this file (kit, faces, what is not done, data you added), like the aero one.
+- Then `notify-send "Claude" "<≤2 lines: what is ready, what to screenshot>"` as the **very last tool call**, and end the turn.
+
+### The user's rules (all sessions)
+
+- Dot Shell hot-reloads on every save and the user watches it live. Every save must leave a working shell. Change a shared table and its readers in the same save, or add new fields next to old ones (see "The mistake" below). Never rename/remove a property something else still reads.
+- When you need the user: short `notify-send "Claude" "…"` (≤2 lines), and it must be the **last** tool call of the turn. No log checks after it.
+- Never take screenshots or open panes yourself to look. Ask the user.
+- The user gets impatient with silence: in long turns, write a one-line progress note between steps.
+- Follow the design accurately; generic boards are "garbage slop". Do the whole era, not a pilot.
+- Don't invent decoration the user didn't ask for, even if a design board shows it (the strip/rail casings came from the Drag & dock board and were rejected).
+- `rm` is aliased interactive here: use `command rm -f` for files you created, or it hangs.
+- "Delete panel X" means drop its desktop form only (keep the strip item).
+
+### Gotchas met so far
+
+- QML: `top`, `left` and other anchor names are FINAL on Item; `state` is Item's own property; don't name properties that. Don't give an inline component or delegate a property that shadows an id in scope (`ink`, `s`, `words`).
+- `MultiEffect` has `saturation`, not `saturationEnabled`.
+- `DotText` fills its parent's height and centres; give it an explicit `height: Tokens.fontPx` when placing it by y.
+- Big era-font text at dot scale: antialiased edges fade; aero's `bubble.frag` snaps alpha past ~0.55 to whole dots. Don't outline to thicken (fills counters).
+- zsh: `$S[0]` indexes a string; use `${S}`.
+- MatrixText 5x7 lacks `<` `>`; 3x5 lacks `[ ] # < > _ =`. Add glyphs to `Matrix.js` first if you need them.
 
 ## Ground rules (from the user)
 
-- **Dot Shell hot-reloads on every save.** The user is looking at it live. Every save must leave a working shell. See "The mistake" below.
-- When you need the user, send a short `notify-send "Claude" "<one line>"` and **then stop and end the turn**. Don't keep working; they come back with what you asked for.
-- Never take screenshots yourself (no grim, no opening panes over IPC to look). Ask the user for screenshots.
-- Get one panel looking right in every era before starting on the next panel. The user called the earlier generic boards "garbage slop".
-- Check the live log after each save: `timeout 5 qs log -p ~/.config/quickshell/dotshell 2>&1 | grep -vE "socket|textinput|font.db" | tail`. You want "Configuration Loaded" with no `caused by`. The `PanelNode.qml[540]` and `DeskPanel.qml[51]` errors further up are old.
+See "The user's rules" in START HERE.
 
 ## The mistake that skeletonized the VFD media panel
 
@@ -74,7 +131,9 @@ Built and tested offscreen, but **not wired for the other eras yet**:
   - Helpers: `get(era)` fills in the defaults, `big(hw)` gives the full-pane form (pill/skew → rounded rect, keys in a row), `layout(hw, w, h)` gives the rects, plus `platePath`/`windowPath`/`rounded`/`skewed`/`ink`/`icons`.
 - `Faceplate.qml`, `WindowGlass.qml`, `DeviceKey.qml` and `DeviceKeys.qml` render any of those entries. All key styles were checked offscreen; see "Offscreen test" below. Tokyo's glow-only neon rings can't be checked offscreen, because MultiEffect doesn't render in the software backend.
 
-## Next: the media panel in the other 12 eras
+## (History) the original plan for the media panel in the other eras
+
+Superseded: Tokyo, VFD and aero media faces exist (`MediaTokyo.qml`, `MediaDevice.qml`, `aero/Media.qml`). Kept for the `Hardware.js` notes.
 
 Switch them **one era at a time**, each in a working state, and get the user's screenshot before moving on.
 
@@ -99,23 +158,17 @@ Switch them **one era at a time**, each in a working state, and get the user's s
 
 Then apply the same recipe to the next panel the user picks (clock, system, battery, ...): read its component + Eras + Expanded boards, add a per-era device for it (generalize `Hardware.js` per template, e.g. `Hardware.get(era, template)`), and build its readout.
 
-## Next: the panel manager (asked for, not started)
+## Panel manager (done)
 
-The user wants to close a panel and have it go into a manager, then open the manager and spawn it straight to the desktop, the top strip or the right rail. The plan:
+`panes/PanelsPane.qml` (Super+O), `Panels.close(id)` / `Panels.open(id, where)`, right-click a panel to close it to the shelf.
 
-- **Store.** `Panels.qml` gets a new place, `"shelf"` (closed). Add `close(id)` (remember `before` for undo, then set place to shelf) and `open(id, where)` (home at its last x/y/ws, strip zone `r` at the end, rail at the end). `send()` already does most of the open.
-  - The home/strip/rail lists filter by place, so shelved panels drop out on their own.
-  - Check other users of `Panels.panels`, e.g. `mediaHome()` and `media()`.
-- **Pane.** `panes/PanelsPane.qml` (name `"panels"`), styled like the other panes (`DotText`, `DotButton`, `Line`; `BluetoothPane.qml` is a short example).
-  - Rows grouped as ON DESKTOP / IN STRIP / IN RAIL / CLOSED, each with `DESK STRIP RAIL ×` buttons (the lit one is where it is).
-  - Plus a NEW section listing `Templates.names` to spawn fresh ones.
-- **Wiring.** Add `"panels"` to `Ui.names`, add `PanelsPane {}` in `shell.qml`, and add a DotBus `close` command next to `rm`.
-  - Bind **Super+O** (free) in `~/dotfiles/hypr/.config/hypr/lua/binds.lua` as `bind(key(M, "O"), D.ipc("pane toggle panels"), "Panel manager")`.
-- **Closing from the panel.** Right-click any panel (desktop, strip, rail) to close it to the shelf, with a 3 s undo through `Panels.undo`. Also show a small × on hover on desktop panels.
+## Offscreen test
 
-## Offscreen test (how the keys bug was found)
+Harness: `~/dotfiles/dot-shell-tools/harness/`. `./run.sh <page.qml> <out.png>` runs `sync.sh` (mirrors root QML + `tokyo/ vfd/ aero/` into `w/` with service stubs from `stubs/`), then renders with `QT_QUICK_BACKEND=rhi QT_QPA_PLATFORM=offscreen qml6`. Pages are `a<face>.qml` (one per aero face, with sample `ctx`): copy one, swap `import "aero" as V` for the new era dir and add it to the `for d in tokyo vfd aero` lists in `sync.sh`. Stubs: Tokens (era "vfd" colours; set `Tokens.era` etc. in `Component.onCompleted` for another era), Feeds, Notifs, Power, Media, Lyrics, LyricLine, Spectrum, MatchVideo, Process. Write the PNGs to your scratchpad, not the repo.
 
-Scratch harness: `/tmp/claude-1000/-home-vardhin-dotfiles/cfbaf717-7212-445f-bfef-e1e360011106/scratchpad/keytest/`. It holds stub `Tokens`/`Media` singletons, a `qmldir`, and a `main.qml` that lays out every era's keys and grabs `out.png`.
+### Older note: how the keys bug was found
+
+Scratch harness: (old /tmp copy; now `~/dotfiles/dot-shell-tools/harness/`). It holds stub `Tokens`/`Media` singletons, a `qmldir`, and a `main.qml` that lays out every era's keys and grabs `out.png`.
 
 - Copy the component in with `sed '/import qs.services/d'` and run `QT_QPA_PLATFORM=offscreen QT_QUICK_BACKEND=software qml6 main.qml`.
 - `console.log` and `Text` don't show up in that setup. Debug with colored Rectangle swatches.
@@ -130,7 +183,7 @@ Source: `~/dotfiles/dot-shell-panels.html` (the canvas exported as static HTML; 
 - `DeskPanel.qml`: `tokyoFace` picks the face (era tokyo, rect, not raw, no own layout/feed); `tokyoRim` gives any other board the pink tube. `DockItem.qml`: in tokyo each docked item is padded and gets a crisp pill on the bar's `plainLayer`.
 - Small additive data: `Sys.top` rows have `rss` and `pid`, `Sys.tempHist`/`sysFeed.tempHist`; todo rows have `lists` and `next`; 3x5 gained `% ° ~ * ; | " @ $ → ← ↓ ↑ × • ⌂ ▸ ◂ ✓`.
 - Gotchas: `top`, `left` (and other anchor names) are FINAL on Item; don't name properties that. Inside `MatrixText`, `face` is its own property, so faces use `id: root`. Don't give an inline component a property that shadows a layout id (`s`).
-- Offscreen check: `/tmp/claude-1000/-home-vardhin-dotfiles/c40ffcac-69f5-4cdd-bc8a-09edbc19b975/scratchpad/h/` (`sync.sh`, `run.sh <page.qml> <out.png>`, stubs). `QT_QUICK_BACKEND=rhi` is what makes the dot shader and glows render offscreen.
+- Offscreen check: (old /tmp copy; now `~/dotfiles/dot-shell-tools/harness/`) (`sync.sh`, `run.sh <page.qml> <out.png>`, stubs). `QT_QUICK_BACKEND=rhi` is what makes the dot shader and glows render offscreen.
 
 ## VFD: desktop panels (2026-10-19)
 
@@ -153,5 +206,25 @@ Scope the user set: only the panels below. The user stopped the session at Tray.
   - 5x7 gained `° ~ • × ▸ ◂ ✓ → ← ↓ ↑`.
   - `Notifs.forget(ts)` plus the action `notifs forget TS`, for the ERASE key.
 - No backend exists for the design's clipboard PIN, alarm (clock), steps (todo), or capture delay/after/pause/mark. Those were left out or replaced with real data (UTC, week, weekday).
-- Offscreen check: `/tmp/claude-1000/-home-vardhin-dotfiles/e97a160e-1898-41d1-96b4-d336e66aa5fc/scratchpad/h/` (`run.sh <page.qml> <out.png>`). It mirrors root, `tokyo/` and `vfd/` as real modules, and `stubs/Tokens.qml` is set to vfd.
+- Offscreen check: (old /tmp copy; now `~/dotfiles/dot-shell-tools/harness/`) (`run.sh <page.qml> <out.png>`). It mirrors root, `tokyo/` and `vfd/` as real modules, and `stubs/Tokens.qml` is set to vfd.
 - The design per era, rendered: `extract2.py` in that scratchpad cuts one era's column out of every board. Render each with `firefox --headless --screenshot` (add `zoom:2` to the body). Change `'VFD'` in the script to `'FRUTIGER'` for aero.
+
+## Frutiger Aero: desktop panels (2026-10-19)
+
+Aero has **no unlit dot grid** anywhere in its boards: every dot is lit ink (`.dm`) straight on a crisp glossy plate. So it does not use DotSurface:
+
+- `shaders/bubble.frag` + `aero/Dots.qml`: a lit-only bubble-dot layer (children in dots, as on a DotSurface). Texel alpha past ~0.55 is a whole dot, below that it fades, so `opacity: 0.3` reads as a faint dot. Dot size is capped at 0.88 of the pitch so dots stay separate bubbles.
+- Kit in `aero/` (`qs.aero`): `Ink` (palette + Varela Round from `fonts/`, OFL), `Sky` (the plate: white, sky horizon, rim, shadow, gloss), `Say` (big Varela in dots), `Card` (white glass card, optional ring), `Key` (glossy button: plain/lit/red/green/ghost), `Orb` (marble), `Dial` (gauge), `Clockface`, `Desk` (workspace tile), `Geo` (window layout via hyprctl). Faces reuse `qs.tokyo` as `T` for `Face`, `Hit`, `Field`, `DotPic`.
+- Pattern per face: crisp parts (cards, keys, pills) placed in px = dots × pitch, then one `Dots` over them for the words. Small words are 5x7/3x5 MatrixText (5x7 when it fits); only big numbers use `Say`.
+- Faces, compact and expanded: System, Clock, Battery, Caffeine, Capture, Messages, Todo, Clipboard (wooden board, steel clip, paper), Workspaces; media compact is `aero/Media.qml` (in `DeskPanel.devices`). Not done: Tray, Downloads, Files, Screenshots, Dock.
+- Additive data: `Sys.load`/`Sys.tasks` (from /proc/loadavg) in `sysFeed`.
+- Offscreen: (old /tmp copy; now `~/dotfiles/dot-shell-tools/harness/`) (`run.sh a<face>.qml out.png`; media stubs added). Design renders per era: `../aero/png/`.
+- Panes in aero: `Pane.skyGlass: true` (set on MEDIA and the message centre) draws the pane as `Aero.Sky` with its DotSurface in `bare` mode (DotSurface.bare uses bubble.frag: lit dots only, no unlit grid). Every pane feature stays; other panes can opt in the same way.
+
+## Strip and rail (2026-10-19)
+
+No per-item casings in the strip or rail (tried, the user rejected them: keep docked items as plain dots on the bar). Aero only: `BarChrome.qml` is the sky-glass bar under a `bare` DotSurface (TopStrip.qml, panes/SideBar.qml). `RailButton` centres the icon's ink (TextMetrics), not its advance.
+
+## Notifications (2026-10-19)
+
+`NotifLook.js` is each finished era's notification look from the Messages boards (card fill/rule, accent for the live one, app/words/body/time inks, keys, heading). `NotifCard.qml` (toasts and live cards), `NotifKey.qml` (era keys; plain eras get a DotButton) and `MessagesPane.qml` (log grouped by app on ruled cards in those eras) read it; other eras keep the plain layout. `Pane.eraFrame` frames a pane per era: aero sky glass (same as `skyGlass`), Tokyo a neon sign (pink tube, cyan inner tube, rounded dot glass), VFD a gunmetal unit with a smoked sunken window (`PaneFrame.qml`). On for the toasts and the message centre.

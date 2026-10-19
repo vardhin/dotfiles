@@ -80,12 +80,20 @@ PanelWindow {
         onTriggered: strip.publishZones()
     }
 
+    // Frutiger Aero: the strip is sky glass with only its lit dots on it.
+    BarChrome {
+        anchors.fill: parent
+        visible: Tokens.era === "aero"
+        place: "strip"
+    }
+
     DotSurface {
         id: surface
         anchors.horizontalCenter: parent.horizontalCenter
         anchors.verticalCenter: parent.verticalCenter
         cols: strip.cols
         rows: strip.rows
+        bare: Tokens.era === "aero"
 
         // ── Left ────────────────────────────────────────────────────
         DockRow {

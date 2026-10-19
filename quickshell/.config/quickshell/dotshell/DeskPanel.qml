@@ -5,6 +5,7 @@ import Quickshell
 import qs.services
 import qs.tokyo as Tokyo
 import qs.vfd as Vfd
+import qs.aero as Aero
 import "Shapes.js" as Shapes
 import "Skins.js" as Skins
 import "Templates.js" as Templates
@@ -58,9 +59,11 @@ Item {
     readonly property Component tokyoFace: Tokens.era === "tokyo" && !raw && rect && !panel.layout && !panel.feed ? (tokyoFaces[panel.template] ?? null) : null
     // VFD draws each template as the car stereo's head unit (vfd/), the same way.
     readonly property Component vfdFace: Tokens.era === "vfd" && !raw && rect && !panel.layout && !panel.feed ? (vfdFaces[panel.template] ?? null) : null
+    // Frutiger Aero draws each template on its own sky glass (aero/).
+    readonly property Component aeroFace: Tokens.era === "aero" && !raw && rect && !panel.layout && !panel.feed ? (aeroFaces[panel.template] ?? null) : null
     // Notes: no board at all, just its words (NotesPanel.qml).
     readonly property bool notes: panel.template === "notes"
-    readonly property bool faced: mediaFaced || tokyoFace !== null || vfdFace !== null || notes
+    readonly property bool faced: mediaFaced || tokyoFace !== null || vfdFace !== null || aeroFace !== null || notes
     // Any other board in Tokyo Night still gets the sign's neon tube.
     readonly property bool tokyoRim: Tokens.era === "tokyo" && !faced && rect && !raw
 
@@ -457,7 +460,8 @@ Item {
     readonly property var devices: ({
             vfd: vfdDevice,
             phosphor: phosphorDevice,
-            tokyo: tokyoDevice
+            tokyo: tokyoDevice,
+            aero: aeroDevice
         })
     Component {
         id: vfdDevice
@@ -471,6 +475,15 @@ Item {
     Component {
         id: phosphorDevice
         MediaPhosphor {
+            ctx: root.ctx
+            sink: root.actions
+            panel: root.panel
+            words: root.words
+        }
+    }
+    Component {
+        id: aeroDevice
+        Aero.Media {
             ctx: root.ctx
             sink: root.actions
             panel: root.panel
@@ -769,6 +782,113 @@ Item {
     Component {
         id: vfSystem
         Vfd.System {
+            ctx: root.ctx
+            sink: root.actions
+            panel: root.panel
+            words: root.words
+            big: root.expanded
+        }
+    }
+
+    readonly property var aeroFaces: ({
+            system: aeSystem,
+            clock: aeClock,
+            workspaces: aeWorkspaces,
+            battery: aeBattery,
+            messages: aeMessages,
+            capture: aeCapture,
+            caffeine: aeCaffeine,
+            clipboard: aeClipboard,
+            todo: aeTodo
+        })
+    Loader {
+        anchors.fill: parent
+        active: root.aeroFace !== null
+        sourceComponent: root.aeroFace
+    }
+    Component {
+        id: aeClock
+        Aero.Clock {
+            ctx: root.ctx
+            sink: root.actions
+            panel: root.panel
+            words: root.words
+            big: root.expanded
+        }
+    }
+    Component {
+        id: aeWorkspaces
+        Aero.Workspaces {
+            ctx: root.ctx
+            sink: root.actions
+            panel: root.panel
+            words: root.words
+            big: root.expanded
+        }
+    }
+    Component {
+        id: aeBattery
+        Aero.Battery {
+            ctx: root.ctx
+            sink: root.actions
+            panel: root.panel
+            words: root.words
+            big: root.expanded
+        }
+    }
+    Component {
+        id: aeMessages
+        Aero.Messages {
+            ctx: root.ctx
+            sink: root.actions
+            panel: root.panel
+            words: root.words
+            big: root.expanded
+        }
+    }
+    Component {
+        id: aeCapture
+        Aero.Capture {
+            ctx: root.ctx
+            sink: root.actions
+            panel: root.panel
+            words: root.words
+            big: root.expanded
+        }
+    }
+    Component {
+        id: aeCaffeine
+        Aero.Caffeine {
+            ctx: root.ctx
+            sink: root.actions
+            panel: root.panel
+            words: root.words
+            big: root.expanded
+        }
+    }
+    Component {
+        id: aeClipboard
+        Aero.Clipboard {
+            ctx: root.ctx
+            sink: root.actions
+            panel: root.panel
+            words: root.words
+            big: root.expanded
+        }
+    }
+    Component {
+        id: aeTodo
+        Aero.Todo {
+            ctx: root.ctx
+            sink: root.actions
+            panel: root.panel
+            words: root.words
+            big: root.expanded
+        }
+    }
+    Component {
+        id: aeSystem
+        Aero.System {
             ctx: root.ctx
             sink: root.actions
             panel: root.panel

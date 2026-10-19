@@ -21,10 +21,17 @@ Item {
         color: btn.color
         opacity: btn.active ? 1 : 0.5
     }
+    // Nerd Font icons draw wider than their advance, so centre the ink
+    // itself, not the advance, in the rail.
+    TextMetrics {
+        id: ink
+        font.family: Tokens.font
+        font.pixelSize: Tokens.fontPx
+        text: btn.glyph
+    }
     DotText {
-        x: 1
-        width: parent.width - 1
-        horizontalAlignment: Text.AlignHCenter
+        x: Math.round((btn.width - ink.tightBoundingRect.width) / 2 - ink.tightBoundingRect.x)
+        width: btn.width - x
         text: btn.glyph
         color: btn.color
         opacity: mouse.containsMouse || btn.active ? 1 : 0.8

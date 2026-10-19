@@ -46,6 +46,10 @@ Item {
     // Opacity of the glass between the dots (frosted panes: under 1, so the
     // compositor's blur shows through).
     property real glassAlpha: 1
+    // Bare: only the lit dots, as glossy bubbles, with nothing between them
+    // (shaders/bubble.frag), so they sit on whatever is drawn under the
+    // surface (Frutiger Aero's sky glass). No era cascade.
+    property bool bare: false
     // Image mode: spread the four era levels (or the color depth) with a 4x4
     // ordered dither, so album art keeps its shading on a coarse board.
     property bool dither: false
@@ -138,7 +142,7 @@ Item {
 
         property variant source: buffer
         property size grid: Qt.size(root.cols, root.rows)
-        property real dotSize: root.flat ? 1.2 : Tokens.dotSize   // >1: no seams at fractional pitch
+        property real dotSize: root.flat ? 1.2 : root.bare ? Math.max(0.7, Math.min(0.88, Tokens.dotSize)) : Tokens.dotSize   // >1: no seams at fractional pitch
         property real depth: root.flat ? 24 : Tokens.depthBits
         property real imageMode: root.imageMode ? 1 : 0
         property real shape: root.flat ? 1 : root.shapeCode(Tokens.current.shape)
@@ -167,7 +171,7 @@ Item {
         property color oldRamp3: was.ramp[3]
         property variant oldSource: root.dot && !root.flat ? oldBuffer : buffer
 
-        fragmentShader: Qt.resolvedUrl("shaders/dot.frag.qsb")
+        fragmentShader: root.bare ? Qt.resolvedUrl("shaders/bubble.frag.qsb") : Qt.resolvedUrl("shaders/dot.frag.qsb")
     }
 
     // Above the dots, in screen px: pictures shown as they are (PlainArt).

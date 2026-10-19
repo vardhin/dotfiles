@@ -4,6 +4,7 @@ import Quickshell.Wayland
 import Quickshell.Services.Notifications
 import qs
 import qs.services
+import "../NotifLook.js" as NotifLook
 
 // New notifications, top right under the strip. Critical ones stay until
 // dismissed; the rest leave after their own timeout (or 6 s). Leaving the
@@ -12,6 +13,7 @@ Pane {
     id: pane
 
     name: "toasts"
+    eraFrame: true
     managed: false
     shown: Notifs.toasts.length > 0 && Ui.pane !== "notifs"
     grab: false
@@ -45,7 +47,7 @@ Pane {
 
                 // Rule between toasts: one dim dot row.
                 Rectangle {
-                    visible: toast.index > 0
+                    visible: toast.index > 0 && !NotifLook.get(Tokens.era)
                     width: parent.width
                     height: 1
                     color: Tokens.slot1
@@ -55,6 +57,7 @@ Pane {
                 NotifCard {
                     width: parent.width
                     notif: toast.modelData
+                    live: toast.index === 0
                 }
 
                 Timer {
