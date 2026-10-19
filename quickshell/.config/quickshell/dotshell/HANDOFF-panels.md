@@ -131,3 +131,27 @@ Source: `~/dotfiles/dot-shell-panels.html` (the canvas exported as static HTML; 
 - Small additive data: `Sys.top` rows have `rss` and `pid`, `Sys.tempHist`/`sysFeed.tempHist`; todo rows have `lists` and `next`; 3x5 gained `% ° ~ * ; | " @ $ → ← ↓ ↑ × • ⌂ ▸ ◂ ✓`.
 - Gotchas: `top`, `left` (and other anchor names) are FINAL on Item; don't name properties that. Inside `MatrixText`, `face` is its own property, so faces use `id: root`. Don't give an inline component a property that shadows a layout id (`s`).
 - Offscreen check: `/tmp/claude-1000/-home-vardhin-dotfiles/c40ffcac-69f5-4cdd-bc8a-09edbc19b975/scratchpad/h/` (`sync.sh`, `run.sh <page.qml> <out.png>`, stubs). `QT_QUICK_BACKEND=rhi` is what makes the dot shader and glows render offscreen.
+
+## VFD: desktop panels (2026-10-19)
+
+The user's prompt for this round, to reuse for the next era: "Refer to the dot-shell-panels.html in the root directory and make the currently available desktop panels accurately follow the design principle, like the media panel did. Finish one era, then slowly tackle all the other eras." Tokyo Night and VFD are done. **Next era: Frutiger Aero** (`aero`; the boards' FRUTIGER AERO column, BUBBLE DOTS).
+
+Scope the user set: only the panels below. The user stopped the session at Tray. Don't extend VFD further unless asked.
+
+- `vfd/` is the `qs.vfd` module. It's the car stereo's head unit, from the VFD columns.
+  - Kit:
+    - `Ink`: cyan/amber/green/red/teal/deep/ghost, plus the gunmetal plate and key colours.
+    - `Unit`: the plate plus the sunken dot window. Children are in dots. `over` holds crisp parts placed in px from the window's first dot (`px()`). `foot` + `deck` are keys under the window; `side` + `rack` are keys to its right.
+    - `Digits`: big 5x7 numerals, `size`× scale, spaced dots from size 3, with unlit 8s behind (`cells`, `mask`).
+    - `Bar`: segment bar. `Hist`: dotted history columns. `Box`: crisp rule round a dot rect. `Key`: gunmetal hard key (`on` ring, `ink` legend colour, `led` lamp strip).
+  - It reuses `qs.tokyo` as `T` for `Face`, `Hit`, `Field` and `DotPic`.
+- Faces, compact and expanded: **System, Clipboard, Todo, Clock, Workspaces, Battery, Messages, Capture, Caffeine**. Media stays `MediaDevice.qml`.
+  - **Not done in VFD** (they keep the generic board): Tray, Downloads, Files, Screenshots, Dock.
+- `DeskPanel.qml`: `vfdFace`/`vfdFaces`, the same pattern as tokyo. Add a face's Component only after its file exists.
+- Small additive changes:
+  - `MatrixText.dot` (lit part of each scaled cell).
+  - 5x7 gained `° ~ • × ▸ ◂ ✓ → ← ↓ ↑`.
+  - `Notifs.forget(ts)` plus the action `notifs forget TS`, for the ERASE key.
+- No backend exists for the design's clipboard PIN, alarm (clock), steps (todo), or capture delay/after/pause/mark. Those were left out or replaced with real data (UTC, week, weekday).
+- Offscreen check: `/tmp/claude-1000/-home-vardhin-dotfiles/e97a160e-1898-41d1-96b4-d336e66aa5fc/scratchpad/h/` (`run.sh <page.qml> <out.png>`). It mirrors root, `tokyo/` and `vfd/` as real modules, and `stubs/Tokens.qml` is set to vfd.
+- The design per era, rendered: `extract2.py` in that scratchpad cuts one era's column out of every board. Render each with `firefox --headless --screenshot` (add `zoom:2` to the body). Change `'VFD'` in the script to `'FRUTIGER'` for aero.

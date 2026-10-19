@@ -20,7 +20,7 @@ import qs
 //   open PATH | reveal PATH | edit PATH | copyimg PATH | ocr PATH | trash PATH
 //   paste N | clip forget N | clip clear
 //   todo add TEXT | todo toggle N | todo rm N
-//   dnd toggle | notifs clear
+//   dnd toggle | notifs clear | notifs forget TS
 //   caffeine toggle|on|off | caffeine for MINUTES
 //   capture shot area|window|screen | capture rec area|screen | capture stop
 //   capture audio | capture pick
@@ -132,6 +132,8 @@ Singleton {
             if (w1 === "clear") {
                 Notifs.clearLive();
                 Notifs.clearHistory();
+            } else if (w1 === "forget") {
+                Notifs.forget(Number(words[2]));
             }
             return "ok";
         case "caffeine":

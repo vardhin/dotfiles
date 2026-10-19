@@ -4,6 +4,7 @@ import QtQuick.Shapes
 import Quickshell
 import qs.services
 import qs.tokyo as Tokyo
+import qs.vfd as Vfd
 import "Shapes.js" as Shapes
 import "Skins.js" as Skins
 import "Templates.js" as Templates
@@ -55,9 +56,11 @@ Item {
     // Tokyo Night draws every template as its own neon sign (tokyo/), compact
     // and expanded; a panel with a layout or feed of its own keeps the board.
     readonly property Component tokyoFace: Tokens.era === "tokyo" && !raw && rect && !panel.layout && !panel.feed ? (tokyoFaces[panel.template] ?? null) : null
+    // VFD draws each template as the car stereo's head unit (vfd/), the same way.
+    readonly property Component vfdFace: Tokens.era === "vfd" && !raw && rect && !panel.layout && !panel.feed ? (vfdFaces[panel.template] ?? null) : null
     // Notes: no board at all, just its words (NotesPanel.qml).
     readonly property bool notes: panel.template === "notes"
-    readonly property bool faced: mediaFaced || tokyoFace !== null || notes
+    readonly property bool faced: mediaFaced || tokyoFace !== null || vfdFace !== null || notes
     // Any other board in Tokyo Night still gets the sign's neon tube.
     readonly property bool tokyoRim: Tokens.era === "tokyo" && !faced && rect && !raw
 
@@ -659,6 +662,113 @@ Item {
     Component {
         id: tkCaffeine
         Tokyo.Caffeine {
+            ctx: root.ctx
+            sink: root.actions
+            panel: root.panel
+            words: root.words
+            big: root.expanded
+        }
+    }
+
+    readonly property var vfdFaces: ({
+            caffeine: vfCaffeine,
+            capture: vfCapture,
+            messages: vfMessages,
+            battery: vfBattery,
+            system: vfSystem,
+            clipboard: vfClipboard,
+            todo: vfTodo,
+            clock: vfClock,
+            workspaces: vfWorkspaces
+        })
+    Loader {
+        anchors.fill: parent
+        active: root.vfdFace !== null
+        sourceComponent: root.vfdFace
+    }
+    Component {
+        id: vfClipboard
+        Vfd.Clipboard {
+            ctx: root.ctx
+            sink: root.actions
+            panel: root.panel
+            words: root.words
+            big: root.expanded
+        }
+    }
+    Component {
+        id: vfTodo
+        Vfd.Todo {
+            ctx: root.ctx
+            sink: root.actions
+            panel: root.panel
+            words: root.words
+            big: root.expanded
+        }
+    }
+    Component {
+        id: vfClock
+        Vfd.Clock {
+            ctx: root.ctx
+            sink: root.actions
+            panel: root.panel
+            words: root.words
+            big: root.expanded
+        }
+    }
+    Component {
+        id: vfWorkspaces
+        Vfd.Workspaces {
+            ctx: root.ctx
+            sink: root.actions
+            panel: root.panel
+            words: root.words
+            big: root.expanded
+        }
+    }
+    Component {
+        id: vfBattery
+        Vfd.Battery {
+            ctx: root.ctx
+            sink: root.actions
+            panel: root.panel
+            words: root.words
+            big: root.expanded
+        }
+    }
+    Component {
+        id: vfMessages
+        Vfd.Messages {
+            ctx: root.ctx
+            sink: root.actions
+            panel: root.panel
+            words: root.words
+            big: root.expanded
+        }
+    }
+    Component {
+        id: vfCapture
+        Vfd.Capture {
+            ctx: root.ctx
+            sink: root.actions
+            panel: root.panel
+            words: root.words
+            big: root.expanded
+        }
+    }
+    Component {
+        id: vfCaffeine
+        Vfd.Caffeine {
+            ctx: root.ctx
+            sink: root.actions
+            panel: root.panel
+            words: root.words
+            big: root.expanded
+        }
+    }
+    Component {
+        id: vfSystem
+        Vfd.System {
             ctx: root.ctx
             sink: root.actions
             panel: root.panel

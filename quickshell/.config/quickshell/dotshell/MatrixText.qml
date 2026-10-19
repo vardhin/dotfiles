@@ -23,6 +23,9 @@ Canvas {
     property int gap: 1
     // Each font dot drawn as size x size dots.
     property int size: 1
+    // Of which the lit part (from the top left): less than `size` spaces the
+    // font's dots apart, like a dot-matrix display's big digits.
+    property int dot: size
     // left | right | center, when the text is shorter than the width.
     property string align: "left"
     // Step through the text when it does not fit.
@@ -62,6 +65,7 @@ Canvas {
     onLitCharsChanged: requestPaint()
     onRestChanged: requestPaint()
     onFollowChanged: requestPaint()
+    onDotChanged: requestPaint()
 
     Timer {
         interval: root.stepMs
@@ -104,7 +108,7 @@ Canvas {
                         continue;
                     const sung = litChars < 0 || first + i - lead < litChars;
                     ctx.fillStyle = lit ? (sung ? on : later) : off;
-                    ctx.fillRect(cx + c * s, r * s, s, s);
+                    ctx.fillRect(cx + c * s, r * s, root.dot, root.dot);
                 }
             }
         }

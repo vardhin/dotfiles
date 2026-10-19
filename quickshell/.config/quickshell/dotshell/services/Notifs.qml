@@ -93,6 +93,18 @@ Singleton {
         store.items = [];
     }
 
+    // One message out of the history (by its time), and off the screen if
+    // it is still there.
+    function forget(ts: real): void {
+        const e = store.items.find(x => x.ts === ts);
+        if (!e)
+            return;
+        for (const n of [...server.trackedNotifications.values])
+            if ((n.appName || "System") === e.app && (n.summary || n.body || n.appName || "Notification").trim() === e.summary)
+                n.dismiss();
+        store.items = store.items.filter(x => x !== e);
+    }
+
     // ── Persistence ─────────────────────────────────────────────────
     FileView {
         id: file
