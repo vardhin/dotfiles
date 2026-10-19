@@ -2,6 +2,8 @@ import QtQuick
 import Quickshell
 import Quickshell.Hyprland
 import qs.services
+import qs.vfd as Vfd
+import qs.tokyo as Tokyo
 import "Skins.js" as Skins
 import "Templates.js" as Templates
 
@@ -36,9 +38,15 @@ Item {
     readonly property int padX: 0
     readonly property int padY: 0
 
-    visible: layout !== null && node.shown
-    implicitWidth: mode === "rail" ? Tokens.railDots : node.implicitWidth + padX * 2
-    implicitHeight: mode === "rail" ? node.implicitHeight + padY * 2 : 11
+    // VFD draws its own strip and rail forms (vfd/Docked.qml) for these.
+    readonly property bool vfdForm: Tokens.era === "vfd" && !panel.layout && ["media", "clock", "workspaces", "system", "battery", "messages", "capture", "caffeine", "clipboard", "todo"].includes(template?.name ?? "")
+    // Tokyo Night likewise (tokyo/Docked.qml).
+    readonly property bool tokyoForm: Tokens.era === "tokyo" && !panel.layout && ["media", "clock", "workspaces", "system", "battery", "messages", "capture", "caffeine", "clipboard", "todo"].includes(template?.name ?? "")
+    readonly property Item form: vfdForm ? vfd.item : tokyoForm ? tokyo.item : node
+
+    visible: layout !== null && (vfdForm ? (vfd.item?.shown ?? false) : tokyoForm ? (tokyo.item?.shown ?? false) : node.shown)
+    implicitWidth: mode === "rail" ? Tokens.railDots : (form?.implicitWidth ?? 0) + padX * 2
+    implicitHeight: mode === "rail" ? (form?.implicitHeight ?? 0) + padY * 2 : 11
     width: implicitWidth
     height: implicitHeight
     opacity: ghost ? 0.6 : lifted && (Panels.drag?.target ?? place) !== place ? 0.25 : 1
@@ -125,6 +133,33 @@ Item {
         sink: sink
         tube: root.tube
         enabled: !root.ghost
+        visible: !root.vfdForm && !root.tokyoForm && shown
+    }
+    Loader {
+        id: tokyo
+        active: root.tokyoForm
+        enabled: !root.ghost
+        sourceComponent: Tokyo.Docked {
+            template: root.template?.name ?? ""
+            rail: root.mode === "rail"
+            ctx: root.ctx
+            sink: sink
+            panel: root.panel
+            words: root.ctx["~"] ?? ({})
+        }
+    }
+    Loader {
+        id: vfd
+        active: root.vfdForm
+        enabled: !root.ghost
+        sourceComponent: Vfd.Docked {
+            template: root.template?.name ?? ""
+            rail: root.mode === "rail"
+            ctx: root.ctx
+            sink: sink
+            panel: root.panel
+            words: root.ctx["~"] ?? ({})
+        }
     }
 
     // ── Drag out ────────────────────────────────────────────────────

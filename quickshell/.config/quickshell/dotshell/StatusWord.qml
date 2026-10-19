@@ -1,4 +1,6 @@
 import QtQuick
+import qs.vfd as Vfd
+import qs.tokyo as Tokyo
 
 // A clickable word on the strip ("VOL 45"). `dim` drops it to the low
 // brightness level; `wheel(up)` fires on scroll.
@@ -12,14 +14,51 @@ Item {
     signal middleClicked
     signal wheel(bool up)
 
-    width: label.implicitWidth
+    // VFD: the display's 5x7 cells, teal when dim.
+    readonly property bool vfd: Tokens.era === "vfd"
+
+    // Tokyo Night: 5x7 too, the label violet and the reading cyan.
+    readonly property bool tokyo: Tokens.era === "tokyo"
+    readonly property int cut: text.lastIndexOf(" ")
+
+    width: vfd ? cells.implicitWidth : tokyo ? neon.implicitWidth : label.implicitWidth
     height: parent ? parent.height : Tokens.fontPx
 
     DotText {
         id: label
+        visible: !root.vfd && !root.tokyo
         text: root.text
         color: root.color
         opacity: root.dim ? 0.5 : 1
+    }
+    MatrixText {
+        id: cells
+        visible: root.vfd
+        y: Math.floor((root.height - 7) / 2)
+        width: implicitWidth
+        height: 7
+        text: root.text.toUpperCase()
+        color: root.dim ? Vfd.Ink.teal : root.color
+    }
+    Row {
+        id: neon
+        visible: root.tokyo
+        y: Math.floor((root.height - 7) / 2)
+        height: 7
+        opacity: root.dim ? 0.45 : 1
+        MatrixText {
+            visible: root.cut > 0
+            width: implicitWidth
+            height: 7
+            text: root.text.slice(0, root.cut + 1).toUpperCase()
+            color: Tokyo.Ink.violet
+        }
+        MatrixText {
+            width: implicitWidth
+            height: 7
+            text: root.text.slice(root.cut + 1).toUpperCase()
+            color: root.cut > 0 && !root.dim ? Tokyo.Ink.cyan : Tokyo.Ink.violet
+        }
     }
 
     // Hover: underline, same as the workspace focus mark.

@@ -4,6 +4,8 @@ import Quickshell.Hyprland
 import Quickshell.Services.Notifications
 import Quickshell.Wayland
 import qs.services
+import qs.vfd as Vfd
+import qs.tokyo as Tokyo
 
 // Top LED strip. Since part 2 most of it is docked panels (services/Panels.qml),
 // each in its strip form, in four zones:
@@ -22,7 +24,15 @@ PanelWindow {
     screen: modelData
 
     readonly property int rows: 11
-    readonly property int cols: Math.floor(width / Tokens.pitch)
+    // VFD: the dots sit in a window sunk into a gunmetal plate (vfd/Dash.qml),
+    // this much plate round it, in px.
+    readonly property bool vfd: Tokens.era === "vfd"
+    readonly property int pad: vfd ? Math.max(3, Math.round(Tokens.pitch * 1.5)) : 0
+    // Tokyo Night: a pink neon tube along the bottom (tokyo/Edge.qml), this
+    // many px under the dots.
+    readonly property bool tokyo: Tokens.era === "tokyo"
+    readonly property int edge: tokyo ? 4 : 0
+    readonly property int cols: Math.floor((width - pad * 2) / Tokens.pitch)
     readonly property HyprlandMonitor monitor: Hyprland.monitorFor(screen)
     // Narrow strips (coarse pitch) drop words and keep numbers.
     readonly property bool compact: cols < 420
@@ -38,8 +48,8 @@ PanelWindow {
     readonly property real dpr: devicePixelRatio > 0 ? devicePixelRatio : 1
     implicitHeight: {
         // Layer sizes are whole logical px; also want whole device px.
-        let h = rows * Tokens.pitch;
-        while (Math.abs(h * dpr - Math.round(h * dpr)) > 0.01 && h < rows * Tokens.pitch + 10)
+        let h = rows * Tokens.pitch + pad * 2 + edge;
+        while (Math.abs(h * dpr - Math.round(h * dpr)) > 0.01 && h < rows * Tokens.pitch + pad * 2 + edge + 10)
             h++;
         return h;
     }
@@ -87,10 +97,19 @@ PanelWindow {
         place: "strip"
     }
 
+    // VFD: a gunmetal head unit, the dots in one long sunken window.
+    Vfd.Dash {
+        anchors.fill: parent
+        visible: strip.vfd
+        place: "strip"
+        win: Qt.rect(surface.x, surface.y, surface.width, surface.height)
+    }
+
     DotSurface {
         id: surface
         anchors.horizontalCenter: parent.horizontalCenter
         anchors.verticalCenter: parent.verticalCenter
+        anchors.verticalCenterOffset: -strip.edge / 2
         cols: strip.cols
         rows: strip.rows
         bare: Tokens.era === "aero"
@@ -112,11 +131,22 @@ PanelWindow {
             readonly property int room: center.x - x - 8
             x: left.x + left.width + 8
             width: Math.max(0, room)
-            visible: Tokens.title && !strip.compact && !ticker.visible && room >= Tokens.charDots * 4 && text !== ""
+            visible: !strip.vfd && !strip.tokyo && Tokens.title && !strip.compact && !ticker.visible && room >= Tokens.charDots * 4 && text !== ""
             elide: Text.ElideRight
             text: (ToplevelManager.activeToplevel?.activated ? ToplevelManager.activeToplevel.title : "").toUpperCase()
             color: Tokens.slot1
             opacity: 0.5
+        }
+        MatrixText {
+            readonly property int room: center.x - x - 8
+            x: left.x + left.width + 8
+            y: 2
+            width: Math.max(0, room)
+            height: 7
+            visible: (strip.vfd || strip.tokyo) && Tokens.title && !strip.compact && !ticker.visible && room >= 6 * 4 && text !== ""
+            text: (ToplevelManager.activeToplevel?.activated ? ToplevelManager.activeToplevel.title : "").toUpperCase()
+            color: strip.tokyo ? Tokyo.Ink.violet : Vfd.Ink.teal
+            opacity: strip.tokyo ? 0.6 : 1
         }
 
         // ── Center: the clock, or the ticker when a message arrives ─
@@ -238,5 +268,20 @@ PanelWindow {
                 screenH: strip.screen.height
             }
         }
+    }
+
+    // Tokyo Night: the bar's one neon tube, at the desktop.
+    Tokyo.Edge {
+        anchors.fill: parent
+        visible: strip.tokyo
+        place: "strip"
+    }
+
+    Vfd.Smoke {
+        visible: strip.vfd
+        x: surface.x
+        y: surface.y
+        width: surface.width
+        height: surface.height
     }
 }

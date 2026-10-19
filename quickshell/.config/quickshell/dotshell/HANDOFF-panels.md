@@ -239,3 +239,21 @@ Done out of order (the user asked for blueprint after aero). In the BLUEPRINT bo
 - Panes: `Pane.frame` is "blueprint" for `skyGlass`/`eraFrame` panes in that era (MEDIA, message centre, toasts): `Bp.Paper` behind a `bare` DotSurface. `NotifLook.js` has `blueprint`.
 - Design boards with no backend were swapped for real data: no DELAY/AFTER (capture), PAUSE/MARK, Pin, events (calendar footer shows week + UTC), SHT/REV numbers are fixed words.
 - Offscreen: `dot-shell-tools/harness/mk.sh a<face>.qml` makes `b<face>.qml` (blueprint, Tokens slots set) and renders it to the scratchpad path in the script.
+
+## VFD strip and rail (2026-10-19)
+
+The user said the VFD strip and rail "still don't follow the design principles". Fixed, still with no per-item casings:
+
+- Bar material: `vfd/Dash.qml` (gunmetal plate, lit edge, black rule at the desktop, glass) under the bar's DotSurface and `vfd/Smoke.qml` (top shadow + black lip) over it: the whole strip/rail is one head unit with ONE long sunken window. `TopStrip.qml` / `panes/SideBar.qml` grow by `pad` (1.5 dots) each side in vfd only; the strip's real height is what `Pane.stripH` reads.
+- Docked forms: `vfd/Docked.qml` (a `T.Face`) draws the strip and rail forms of media, clock, workspaces, system, battery, messages, capture, caffeine, clipboard, todo from the VFD boards' small forms: teal small print (3x5), cyan readings (5x7), amber counts/accents, red alarms, segment `Bar`s with ghost cells, `Digits` over unlit 88:88. `DockItem.qml` loads it (`vfdForm`) instead of `PanelNode` for those templates in vfd; a form's whole-item click is its `action`, a form with none falls through to the peek. Tray, downloads, files, shots, dock keep the generic forms.
+- Strip status words (VOL/BRT/net/BT) and the window title are 5x7 MatrixText in vfd (`StatusWord.vfd`). 5x7 gained `⌂`.
+- Offscreen: `dot-shell-tools/harness/vdock.qml` (all forms) and `vdock2.qml` (with the plate).
+
+## Tokyo Night strip and rail (2026-10-19)
+
+Same treatment as VFD's, still no per-item pills (the boards draw every strip/rail item in its own neon pill; the user rejects those):
+
+- Bar material: `tokyo/Edge.qml`, one pink neon tube where the bar meets the desktop (strip bottom, rail left) plus a faint pink spill back over the glass (the Drag & dock board's bar: `box-shadow: 0 1px 0 #ff3cac`). `TopStrip.qml` / `panes/SideBar.qml` grow by `edge` (4 px) in tokyo only; the rail paints glass under that band.
+- Docked forms: `tokyo/Docked.qml` (a `Face`), loaded by `DockItem.qml` (`tokyoForm`) for media, clock, workspaces, system, battery, messages, capture, caffeine, clipboard, todo. Inks from the boards: readings cyan, small print violet, titles/marks pink, alarms red. Pictograms are dot patterns (`Pix`: rows of digits, n = inks[n-1]): cup, dashed frame, rings, discs, sheets, vinyl, 11-dot transport rings. System uses rising wedges; battery a cyan cell with pink blocks; album art is a masked disc of dots (vinyl when none). Rail clipboard shows the last 4 copies as slots (click pastes).
+- Strip words: `StatusWord.tokyo`, 5x7, label violet + reading cyan; the window title is 5x7 violet.
+- Offscreen: `dot-shell-tools/harness/tdock.qml` (all forms + the edge, pitch 5).
