@@ -90,7 +90,9 @@ Singleton {
             mark: t.done ? words.on : words.off,
             markSlot: t.done ? "dim" : t === next ? 2 : 0,
             textSlot: t.done ? "dim" : t === next ? 2 : 0,
-            opacity: t.done ? 0.6 : 1
+            opacity: t.done ? 0.6 : 1,
+            lists: t.lists ?? [],
+            next: t === next
         });
         const counts = {};
         for (const t of open)

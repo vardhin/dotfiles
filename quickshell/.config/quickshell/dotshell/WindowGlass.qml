@@ -79,12 +79,12 @@ Item {
         x: 10
         y: 3
         width: parent.width - 20
-        height: Math.min(parent.height * 0.4, 60)
+        height: Math.min(parent.height * 0.3, 40)
         radius: Math.min(height / 2, typeof root.w.radius === "number" ? root.w.radius : 20)
         gradient: Gradient {
             GradientStop {
                 position: 0
-                color: Qt.rgba(1, 1, 1, 0.55)
+                color: Qt.rgba(1, 1, 1, 0.3)
             }
             GradientStop {
                 position: 1

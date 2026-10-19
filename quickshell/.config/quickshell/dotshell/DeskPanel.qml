@@ -3,6 +3,7 @@ import QtQuick.Effects
 import QtQuick.Shapes
 import Quickshell
 import qs.services
+import qs.tokyo as Tokyo
 import "Shapes.js" as Shapes
 import "Skins.js" as Skins
 import "Templates.js" as Templates
@@ -48,8 +49,17 @@ Item {
     readonly property bool photo: panel.template === "image"
     readonly property bool rect: panel.shape === "rect" || panel.shape === ""
     // A face of its own (the design canvas's hardware for this era) instead
-    // of the generic board: only the VFD media panel, compact, so far.
-    readonly property bool faced: panel.template === "media" && !expanded && !raw && rect && Tokens.era === "vfd"
+    // of the generic board: the media panel, compact, in the eras whose
+    // device is done (MediaDevice.qml).
+    readonly property bool mediaFaced: panel.template === "media" && !expanded && !raw && rect && !!devices[Tokens.era]
+    // Tokyo Night draws every template as its own neon sign (tokyo/), compact
+    // and expanded; a panel with a layout or feed of its own keeps the board.
+    readonly property Component tokyoFace: Tokens.era === "tokyo" && !raw && rect && !panel.layout && !panel.feed ? (tokyoFaces[panel.template] ?? null) : null
+    // Notes: no board at all, just its words (NotesPanel.qml).
+    readonly property bool notes: panel.template === "notes"
+    readonly property bool faced: mediaFaced || tokyoFace !== null || notes
+    // Any other board in Tokyo Night still gets the sign's neon tube.
+    readonly property bool tokyoRim: Tokens.era === "tokyo" && !faced && rect && !raw
 
     // Frame insets in dots: the ring, and the title band when the era has one.
     readonly property bool header: skin.header === true && rows >= 30 && !["sign", "image", "pixels", "dock"].includes(panel.template)
@@ -150,6 +160,8 @@ Item {
 
     // Where would a drop at (sx, sy) screen px land?
     function aim(sx: real, sy: real): var {
+        if (Templates.deskOnly.includes(panel.template))
+            return { target: "home", zone: "", order: 0 };
         const stripH = Tokens.top ? Tokens.pitch * 11 : -1000;
         const railW = Tokens.side === "off" ? -1000 : Tokens.pitch * Tokens.railDots;
         if (Tokens.top && sy < stripH + 48)
@@ -210,6 +222,14 @@ Item {
         onTriggered: root.lift()
     }
 
+    // Right-click: close to the shelf (panel manager, Super O).
+    MouseArea {
+        z: -2
+        anchors.fill: parent
+        acceptedButtons: Qt.RightButton
+        onClicked: Panels.close(root.panel.id)
+    }
+
     MouseArea {
         id: grab
         anchors.fill: parent
@@ -258,7 +278,7 @@ Item {
 
         // ── Frame ──
         LedRing {
-            visible: Tokens.borders && !root.raw && root.rect && (root.skin.frame === "ring" || root.skin.frame === "double")
+            visible: Tokens.borders && !root.raw && root.rect && !root.tokyoRim && (root.skin.frame === "ring" || root.skin.frame === "double")
             width: root.cols
             height: root.rows
             color: root.tube
@@ -359,7 +379,7 @@ Item {
         }
         // Any other outline: the ring follows the shape.
         Shape {
-            visible: Tokens.borders && !root.raw && (!root.rect || root.skin.round > 0) && root.skin.frame !== "brackets"
+            visible: Tokens.borders && !root.raw && !root.tokyoRim && (!root.rect || root.skin.round > 0) && root.skin.frame !== "brackets"
             width: root.cols
             height: root.rows
             preferredRendererType: Shape.CurveRenderer
@@ -430,14 +450,220 @@ Item {
         }
     }
 
-    Loader {
-        anchors.fill: parent
-        active: root.faced
-        sourceComponent: MediaVfd {
+    // One skin per era (the design canvas's sk.<era>), as they are done.
+    readonly property var devices: ({
+            vfd: vfdDevice,
+            phosphor: phosphorDevice,
+            tokyo: tokyoDevice
+        })
+    Component {
+        id: vfdDevice
+        MediaDevice {
             ctx: root.ctx
             sink: root.actions
             panel: root.panel
             words: root.words
+        }
+    }
+    Component {
+        id: phosphorDevice
+        MediaPhosphor {
+            ctx: root.ctx
+            sink: root.actions
+            panel: root.panel
+            words: root.words
+        }
+    }
+    Component {
+        id: tokyoDevice
+        MediaTokyo {
+            ctx: root.ctx
+            sink: root.actions
+            panel: root.panel
+            words: root.words
+        }
+    }
+    Loader {
+        anchors.fill: parent
+        active: root.mediaFaced
+        sourceComponent: root.devices[Tokens.era] ?? null
+    }
+
+    Loader {
+        anchors.fill: parent
+        active: root.tokyoRim && Tokens.borders
+        sourceComponent: Tokyo.Sign {
+            radius: root.skin.round * Tokens.pitch
+        }
+    }
+
+    Loader {
+        anchors.fill: parent
+        active: root.notes
+        sourceComponent: NotesPanel {
+            panel: root.panel
+        }
+    }
+
+    readonly property var tokyoFaces: ({
+            clock: tkClock,
+            workspaces: tkWorkspaces,
+            system: tkSystem,
+            battery: tkBattery,
+            messages: tkMessages,
+            capture: tkCapture,
+            caffeine: tkCaffeine,
+            tray: tkTray,
+            downloads: tkDownloads,
+            files: tkFiles,
+            clipboard: tkClipboard,
+            todo: tkTodo,
+            screenshots: tkScreenshots,
+            dock: tkDock
+        })
+    Loader {
+        anchors.fill: parent
+        active: root.tokyoFace !== null
+        sourceComponent: root.tokyoFace
+    }
+    Component {
+        id: tkClock
+        Tokyo.Clock {
+            ctx: root.ctx
+            sink: root.actions
+            panel: root.panel
+            words: root.words
+            big: root.expanded
+        }
+    }
+    Component {
+        id: tkWorkspaces
+        Tokyo.Workspaces {
+            ctx: root.ctx
+            sink: root.actions
+            panel: root.panel
+            words: root.words
+            big: root.expanded
+        }
+    }
+    Component {
+        id: tkSystem
+        Tokyo.System {
+            ctx: root.ctx
+            sink: root.actions
+            panel: root.panel
+            words: root.words
+            big: root.expanded
+        }
+    }
+    Component {
+        id: tkBattery
+        Tokyo.Battery {
+            ctx: root.ctx
+            sink: root.actions
+            panel: root.panel
+            words: root.words
+            big: root.expanded
+        }
+    }
+    Component {
+        id: tkMessages
+        Tokyo.Messages {
+            ctx: root.ctx
+            sink: root.actions
+            panel: root.panel
+            words: root.words
+            big: root.expanded
+        }
+    }
+    Component {
+        id: tkCapture
+        Tokyo.Capture {
+            ctx: root.ctx
+            sink: root.actions
+            panel: root.panel
+            words: root.words
+            big: root.expanded
+        }
+    }
+    Component {
+        id: tkTray
+        Tokyo.Tray {
+            ctx: root.ctx
+            sink: root.actions
+            panel: root.panel
+            words: root.words
+            big: root.expanded
+        }
+    }
+    Component {
+        id: tkDownloads
+        Tokyo.Downloads {
+            ctx: root.ctx
+            sink: root.actions
+            panel: root.panel
+            words: root.words
+            big: root.expanded
+        }
+    }
+    Component {
+        id: tkFiles
+        Tokyo.Files {
+            ctx: root.ctx
+            sink: root.actions
+            panel: root.panel
+            words: root.words
+            big: root.expanded
+        }
+    }
+    Component {
+        id: tkClipboard
+        Tokyo.Clipboard {
+            ctx: root.ctx
+            sink: root.actions
+            panel: root.panel
+            words: root.words
+            big: root.expanded
+        }
+    }
+    Component {
+        id: tkTodo
+        Tokyo.Todo {
+            ctx: root.ctx
+            sink: root.actions
+            panel: root.panel
+            words: root.words
+            big: root.expanded
+        }
+    }
+    Component {
+        id: tkScreenshots
+        Tokyo.Screenshots {
+            ctx: root.ctx
+            sink: root.actions
+            panel: root.panel
+            words: root.words
+            big: root.expanded
+        }
+    }
+    Component {
+        id: tkDock
+        Tokyo.Dock {
+            ctx: root.ctx
+            sink: root.actions
+            panel: root.panel
+            words: root.words
+            big: root.expanded
+        }
+    }
+    Component {
+        id: tkCaffeine
+        Tokyo.Caffeine {
+            ctx: root.ctx
+            sink: root.actions
+            panel: root.panel
+            words: root.words
+            big: root.expanded
         }
     }
 

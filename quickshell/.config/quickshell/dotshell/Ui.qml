@@ -22,13 +22,17 @@ Singleton {
     // The pane out over its panel (Pane.qml `from`): open, or still
     // shrinking back into it. The panel stays hidden until it is "".
     property string grown: ""
+    // Where the click that opened the pane came from: "rail" or "strip" for
+    // a docked item, "" otherwise. Panes that sit under the strip (the
+    // calendar) move beside the rail when it is "rail".
+    property string from: ""
     property ShellScreen screen: focusedScreen()
 
     // Top strips register themselves so a pane's click-outside grab lets
     // clicks on the strip through (clicking another glyph switches panes).
     property list<QtObject> strips: []
 
-    readonly property var names: ["launcher", "session", "notifs", "cheatsheet", "calendar", "audio", "brightness", "wifi", "bluetooth", "battery", "eras", "packages", "media", "capture", "clip", "overview"]
+    readonly property var names: ["launcher", "session", "notifs", "cheatsheet", "calendar", "audio", "brightness", "wifi", "bluetooth", "battery", "eras", "packages", "media", "capture", "clip", "overview", "panels"]
 
     function focusedScreen(): ShellScreen {
         const name = Hyprland.focusedMonitor?.name;
@@ -64,6 +68,7 @@ Singleton {
 
     function close(): void {
         pane = "";
+        from = "";
     }
 
     function addStrip(win: QtObject): void {

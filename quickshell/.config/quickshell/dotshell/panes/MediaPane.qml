@@ -36,9 +36,12 @@ Pane {
     // and keys); with none, it hangs from the top right as before.
     readonly property var home: Panels.mediaHome()
     from: home && screen ? Panels.rectOf(home, screen.width, screen.height) : null
-    // Only VFD has its device built so far; the other eras keep the plain pane.
-    hardware: Tokens.era === "vfd" ? Hardware.get("vfd") : null
-    readonly property bool vfd: !!hardware
+    // The eras whose device is built (VFD, Tokyo); the others keep the plain
+    // pane. Full size, the device stands square (Hardware.big).
+    hardware: Tokens.era === "vfd" ? Hardware.get("vfd") : Tokens.era === "tokyo" ? Hardware.big(Hardware.get("tokyo")) : null
+    // On a device: its readout instead of the plain lines, its keys on the
+    // faceplate instead of the buttons.
+    readonly property bool hasDevice: !!hardware
     anchors {
         top: true
         left: grows
@@ -555,7 +558,16 @@ Pane {
                         // The era's own readout: the mini panel's display, here at
                         // the top of the device it grew into.
                         VfdReadout {
-                            visible: pane.vfd
+                            visible: pane.hasDevice && Tokens.era === "vfd"
+                            full: true
+                            x: now.art > 0 ? now.art + 6 : 0
+                            width: pane.inner - x
+                            height: now.height
+                        }
+
+                        MediaReadout {
+                            visible: pane.hasDevice && Tokens.era !== "vfd"
+                            hw: pane.hardware ?? Hardware.get("vfd")
                             full: true
                             x: now.art > 0 ? now.art + 6 : 0
                             width: pane.inner - x
@@ -563,7 +575,7 @@ Pane {
                         }
 
                         Column {
-                            visible: !pane.vfd
+                            visible: !pane.hasDevice
                             x: now.art > 0 ? now.art + 6 : 0
                             width: pane.inner - x
 
@@ -640,39 +652,39 @@ Pane {
                     LyricsView {
                         width: pane.inner
                         height: Tokens.lineDots * 5
-                        visible: pane.page === "now" && (Lyrics.has && !Lyrics.synced || Lyrics.status === "looking" || !pane.vfd && Lyrics.has)
+                        visible: pane.page === "now" && (Lyrics.has && !Lyrics.synced || Lyrics.status === "looking" || !pane.hasDevice && Lyrics.has)
                     }
 
                     // Transport and time (with a readout: the keys are on the
                     // faceplate, the time in the readout; MIX and SCREEN stay).
                     Item {
-                        visible: !pane.vfd || Media.isTv || Media.isVideo
+                        visible: !pane.hasDevice || Media.isTv || Media.isVideo
                         width: pane.inner
                         height: Tokens.lineDots
 
                         Row {
                             spacing: 3
                             DotButton {
-                                visible: !pane.vfd
+                                visible: !pane.hasDevice
                                 text: ""
                                 enabled: Media.player?.canGoPrevious ?? false
                                 onClicked: Media.previous()
                             }
                             DotButton {
-                                visible: !pane.vfd
+                                visible: !pane.hasDevice
                                 text: Media.isPlaying ? " PAUSE" : " PLAY"
                                 color: Tokens.slot2
                                 enabled: Media.player?.canTogglePlaying ?? false
                                 onClicked: Media.toggle()
                             }
                             DotButton {
-                                visible: !pane.vfd
+                                visible: !pane.hasDevice
                                 text: ""
                                 enabled: Media.player?.canGoNext ?? false
                                 onClicked: Media.next()
                             }
                             Item {
-                                visible: !pane.vfd
+                                visible: !pane.hasDevice
                                 width: 4
                                 height: 1
                             }
@@ -690,7 +702,7 @@ Pane {
                         }
                         DotText {
                             anchors.right: parent.right
-                            visible: Media.length > 0 && !pane.vfd
+                            visible: Media.length > 0 && !pane.hasDevice
                             text: Media.clock(Media.position) + " / " + Media.clock(Media.length)
                             color: Tokens.slot1
                         }

@@ -51,7 +51,7 @@ Variants {
         // Parallax offset, 0 .. 1 of the screen width, eased.
         readonly property bool atHome: wsId === Tokens.home
         // Home: no shift at all. Elsewhere a step per workspace from home.
-        property real slide: atHome ? 0 : win.step * Math.min(win.span - 1, Math.abs(win.wsId - Tokens.home))
+        property real slide: atHome ? 0 : win.step * Math.min(win.span - 1, Tokens.wsStep(win.wsId))
         Behavior on slide {
             NumberAnimation {
                 duration: 380

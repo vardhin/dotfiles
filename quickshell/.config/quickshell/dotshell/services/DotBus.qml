@@ -85,6 +85,10 @@ Singleton {
             return msgAction(Actions.run(String(q.run ?? "")));
         case "rm":
             return Panels.remove(q.id);
+        case "close":
+            return { panel: Panels.close(q.id) };
+        case "open":
+            return { panel: Panels.open(q.id, String(q.place ?? "home")) };
         case "move":
             return { panel: Panels.move(q.id, q.x, q.y) };
         case "set":

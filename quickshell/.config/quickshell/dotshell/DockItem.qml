@@ -32,9 +32,13 @@ Item {
     readonly property var ctx: Object.assign({ "~": Skins.words(Tokens.era, template), "@": panel }, Feeds.get(feedId))
     readonly property color tube: [Tokens.slot0, Tokens.slot1, Tokens.slot2][panel.slot] ?? Tokens.slot0
 
+    // No frame around docked items; kept at 0 (the node still reads them).
+    readonly property int padX: 0
+    readonly property int padY: 0
+
     visible: layout !== null && node.shown
-    implicitWidth: mode === "rail" ? Tokens.railDots : node.implicitWidth
-    implicitHeight: mode === "rail" ? node.implicitHeight : 11
+    implicitWidth: mode === "rail" ? Tokens.railDots : node.implicitWidth + padX * 2
+    implicitHeight: mode === "rail" ? node.implicitHeight + padY * 2 : 11
     width: implicitWidth
     height: implicitHeight
     opacity: ghost ? 0.6 : lifted && (Panels.drag?.target ?? place) !== place ? 0.25 : 1
@@ -90,6 +94,7 @@ Item {
                     Panels.pop(root.panel.id, w[2]);
                 return;
             }
+            Ui.from = root.mode;
             Actions.run(a);
         }
         // Held or dragged from a clickable part of the item (PanelNode.grip);
@@ -111,9 +116,10 @@ Item {
     // In the rail the form stands centred in its two glyphs of width.
     PanelNode {
         id: node
-        width: root.mode === "rail" ? Math.min(root.width, Math.max(1, implicitWidth)) : root.width
-        x: root.mode === "rail" ? Math.floor((root.width - width) / 2) : 0
-        height: root.height
+        width: root.mode === "rail" ? Math.min(root.width, Math.max(1, implicitWidth)) : root.width - root.padX * 2
+        x: root.mode === "rail" ? Math.floor((root.width - width) / 2) : root.padX
+        y: root.padY
+        height: root.height - root.padY * 2
         node: root.layout ?? ({})
         ctx: root.ctx
         sink: sink
@@ -227,6 +233,14 @@ Item {
         }
     }
     onLiftedChanged: if (lifted && Panels.hint?.id === panel.id) Panels.hint = null
+
+    // Right-click: close to the shelf (panel manager, Super O).
+    MouseArea {
+        z: -2
+        anchors.fill: parent
+        acceptedButtons: Qt.RightButton
+        onClicked: Panels.close(root.panel.id)
+    }
 
     // Below the node, so the item's own actions (clicks) win; those pass
     // their presses on through sink.grip.

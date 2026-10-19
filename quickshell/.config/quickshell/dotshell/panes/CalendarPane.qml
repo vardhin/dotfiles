@@ -6,7 +6,11 @@ Pane {
     id: pane
 
     name: "calendar"
-    anchors.top: true
+    anchors {
+        top: true
+        // Opened from the clock in the rail: beside the rail, not mid-strip.
+        right: Ui.from === "rail"
+    }
 
     readonly property int cell: 3 * Tokens.charDots
     readonly property int inner: 7 * cell

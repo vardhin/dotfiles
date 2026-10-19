@@ -119,6 +119,8 @@ PanelWindow {
                 y: pane.bezel
                 cols: Math.min(pane.cols, pane.maxCols)
                 rows: Math.min(pane.rows, pane.maxRows)
+                // A well rounded display window cuts the dots to its corners.
+                shape: pane.hardware && typeof pane.hardware.window.radius === "number" && pane.hardware.window.radius >= 8 ? Hardware.windowPath(pane.hardware, cols, rows, Tokens.pitch) : ""
                 focus: true
                 // Frosted: LEDs on blurred glass (Hyprland blurs dotshell-* panes).
                 // With hardware: smoked glass, opaque.

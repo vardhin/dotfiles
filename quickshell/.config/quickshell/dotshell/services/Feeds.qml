@@ -237,9 +237,14 @@ Singleton {
     readonly property var wsFeed: {
         const live = Hyprland.workspaces.values.filter(w => w.id > 0);
         const focused = Hyprland.focusedWorkspace?.id ?? 0;
-        const count = Math.max(5, Tokens.home, ...live.map(w => w.id));
+        // Home first, then 1.. (at least 5, up to the last one in use).
+        const count = Math.max(5, ...live.filter(w => w.id !== Tokens.home).map(w => w.id));
+        const ids = [Tokens.home];
+        for (let id = 1; id <= count; id++)
+            if (id !== Tokens.home)
+                ids.push(id);
         const list = [];
-        for (let id = 1; id <= count; id++) {
+        for (const id of ids) {
             const w = live.find(x => x.id === id) ?? null;
             const wins = windows.filter(x => x.ws === id);
             list.push({
@@ -273,6 +278,7 @@ Singleton {
             hasTemp: Sys.temp >= 0,
             cpuHist: Sys.cpuHist,
             memHist: Sys.memHist,
+            tempHist: Sys.tempHist,
             cores: Sys.cores.map((v, i) => ({ n: i, v: v })),
             top: Sys.top,
             cpuSlot: Sys.cpu > 0.85 ? 2 : 0

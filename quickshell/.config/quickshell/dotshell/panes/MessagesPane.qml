@@ -16,6 +16,9 @@ Pane {
     }
 
     readonly property int inner: 40 * Tokens.charDots
+    // The log entry opened in full (its ts; 0 = none). Click a row to toggle.
+    property real openTs: 0
+    onOpened: openTs = 0
     cols: inner + 8
     rows: Math.min(maxRows - 2, flick.y + Math.max(body.implicitHeight, Tokens.lineDots * 12) + 4)
 
@@ -118,8 +121,9 @@ Pane {
                 Item {
                     id: row
                     required property var modelData
+                    readonly property bool open: pane.openTs === modelData.ts
                     width: body.width
-                    height: Tokens.lineDots
+                    height: open ? Tokens.lineDots + 2 + more.implicitHeight : Tokens.lineDots
 
                     readonly property string time: {
                         const d = new Date(modelData.ts);
@@ -129,6 +133,7 @@ Pane {
 
                     DotText {
                         id: stamp
+                        height: Tokens.lineDots
                         width: 6 * Tokens.charDots
                         text: row.time
                         color: Tokens.slot1
@@ -136,6 +141,7 @@ Pane {
                     }
                     DotText {
                         id: app
+                        height: Tokens.lineDots
                         x: stamp.width + Tokens.charDots
                         width: 10 * Tokens.charDots
                         text: row.modelData.app.toUpperCase()
@@ -145,8 +151,37 @@ Pane {
                     DotText {
                         x: app.x + app.width + Tokens.charDots
                         width: row.width - x
+                        height: Tokens.lineDots
+                        visible: !row.open
                         text: row.modelData.summary + (row.modelData.body ? " · " + row.modelData.body : "")
                         elide: Text.ElideRight
+                    }
+                    // Opened: the whole summary and body, wrapped.
+                    Column {
+                        id: more
+                        visible: row.open
+                        y: Tokens.lineDots + 2
+                        width: row.width
+                        spacing: 2
+
+                        DotLabel {
+                            width: parent.width
+                            text: row.modelData.summary
+                            color: row.modelData.urgency === "critical" ? Tokens.slot2 : Tokens.slot0
+                            wrapMode: Text.Wrap
+                        }
+                        DotLabel {
+                            width: parent.width
+                            visible: text !== ""
+                            text: row.modelData.body ?? ""
+                            color: Tokens.slot1
+                            wrapMode: Text.Wrap
+                        }
+                    }
+                    MouseArea {
+                        anchors.fill: parent
+                        cursorShape: Qt.PointingHandCursor
+                        onClicked: pane.openTs = row.open ? 0 : row.modelData.ts
                     }
                 }
             }

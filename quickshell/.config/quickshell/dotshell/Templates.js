@@ -284,8 +284,8 @@ all.messages = {
             L("{body|upper}", { slot: "dim", scroll: true, when: "body" })
         ]), { max: 6, gap: 2, empty: "{~quiet}" })
     ], { pad: 2, gap: 1 }),
-    strip: R([L("{~dndw}", { slot: 1, when: "dnd" }), L("{~icon} {live}", { slot: 2, when: "!dnd" })], { action: "pane notifs", when: "dnd||live>0" }),
-    rail: C([L("{live}", { align: "center", slot: 2 })], { action: "pane notifs", when: "live>0" })
+    strip: R([L("{~dndw}", { slot: 1, when: "dnd" }), L("{~icon} {live}", { slot: 2, when: "!dnd&&live>0" }), L("{~icon}", { slot: "dim", when: "!dnd&&live==0" })], { action: "pane notifs" }),
+    rail: C([L("{live}", { align: "center", slot: 2, when: "live>0" }), L("", { align: "center", slot: "dim", when: "live==0" })], { action: "pane notifs" })
 };
 
 // ── Capture ──────────────────────────────────────────────────────────
@@ -304,8 +304,8 @@ all.capture = {
         RULE,
         LIST("recent", R([L("{name|upper}", { w: "fill", scroll: true, action: "open {path}" }), L("{ts|ago}", { slot: "dim" })]), { max: 5, empty: "NO CAPTURES YET" })
     ], { pad: 2, gap: 2 }),
-    strip: R([L("REC {elapsed}", { slot: 2, opacity: "{blink}" })], { action: "capture stop", when: "recording" }),
-    rail: C([L("", { align: "center", slot: 2, opacity: "{blink}" })], { action: "capture stop", when: "recording" })
+    strip: R([L("REC {elapsed}", { slot: 2, opacity: "{blink}", action: "capture stop", when: "recording" }), L("{~shot}", { slot: 1, action: "pane capture", when: "!recording" })]),
+    rail: C([L("", { align: "center", slot: 2, opacity: "{blink}", action: "capture stop", when: "recording" }), L("", { align: "center", slot: 1, action: "pane capture", when: "!recording" })])
 };
 
 // ── Caffeine ─────────────────────────────────────────────────────────
@@ -325,8 +325,8 @@ all.caffeine = {
         L("HOLDING THE SCREEN ON", { slot: "dim" }),
         LIST("holders", L("{who|upper} · {why|upper}", { scroll: true, slot: 1 }), { max: 4, empty: "NOTHING ELSE" })
     ], { pad: 2, gap: 2 }),
-    strip: R([L("{~icon}", { slot: 2 }), L("{left}", { slot: 1, when: "left" })], { gap: 4, when: "on", action: "caffeine toggle" }),
-    rail: C([L("", { align: "center", slot: 2 })], { when: "on", action: "caffeine toggle" })
+    strip: R([L("{~icon}", { slot: "{slot}" }), L("{left}", { slot: 1, when: "left" })], { gap: 4, action: "caffeine toggle" }),
+    rail: C([L("", { align: "center", slot: "{slot}" })], { action: "caffeine toggle" })
 };
 
 // ── Tray ─────────────────────────────────────────────────────────────
@@ -357,8 +357,8 @@ all.downloads = {
             L("UNDO", { slot: 2, action: "dotd undo {id}", when: "undo" })
         ], { gap: 3 }), { max: 8, empty: "{~none}" })
     ], { pad: 2, gap: 1 }),
-    strip: R([L(" {activeName|upper}", { slot: 1, scroll: true, w: 98 }), L("{activePct|pct}%", { slot: 2 })], { gap: 4, when: "active" }),
-    rail: C([F("vmeter", { value: "activePct", w: 5, h: 30, slot: 1 }), L("", { align: "center", slot: 2 })], { gap: 2, when: "active" })
+    strip: R([L(" {activeName|upper}", { slot: 1, scroll: true, w: 98, when: "active" }), L("{activePct|pct}%", { slot: 2, when: "active" }), L("", { slot: "dim", when: "!active" })], { gap: 4 }),
+    rail: C([F("vmeter", { value: "activePct", w: 5, h: 30, slot: 1, when: "active" }), L("", { align: "center", slot: 2 })], { gap: 2 })
 };
 
 // ── Files ────────────────────────────────────────────────────────────
@@ -400,7 +400,7 @@ all.clipboard = {
             L("{~del}", { slot: 2, action: "clip forget {$index}" })
         ], { gap: 3 }), { max: 10, empty: "{~empty}" })
     ], { pad: 2, gap: 1 }),
-    strip: R([L("{~icon}", { slot: 2 }), L("{lastPreview|upper}", { slot: 1, scroll: true, w: 84, action: "paste 0" })], { gap: 4, when: "count>0" }),
+    strip: R([L("{~icon}", { slot: 2, action: "pane clip" }), L("{lastPreview|upper}", { slot: 1, scroll: true, w: 84, action: "paste 0", when: "count>0" })], { gap: 4 }),
     rail: C([L("", { align: "center", slot: 1, action: "pane clip" })])
 };
 
@@ -531,6 +531,12 @@ all.pixels = {
     strip: F("pixels", { w: 30 }),
     rail: F("pixels", { h: 13 })
 };
+// Notes: drawn by NotesPanel.qml (no frame, no glass, the era's hues), on
+// the desktop only. The layout is the fallback if it is ever drawn as a board.
+all.notes = {
+    name: "notes", title: "Notes", feed: "panel", size: { w: 24, h: 20 }, click: "none",
+    compact: L("{@text}", { wrap: true, slot: "@", pad: 2 })
+};
 // A layout pushed with the panel itself (`dot spawn board --layout '{...}'`).
 all.board = {
     name: "board", title: "Board", feed: "", size: { w: 30, h: 12 },
@@ -538,7 +544,11 @@ all.board = {
 };
 
 // The home set, in the order `dot home --reset` lays it out.
-var homeSet = ["media", "clock", "workspaces", "system", "battery", "messages", "capture", "caffeine", "tray", "downloads", "files", "clipboard", "todo", "screenshots", "dock"];
+var homeSet = ["media", "clock", "workspaces", "system", "battery", "messages", "capture", "caffeine", "clipboard", "todo"];
+// Strip-only: these have no desktop panel; they dock in the strip or rail.
+var stripOnly = ["workspaces"];
+// Desktop-only: these never dock in the strip or rail.
+var deskOnly = ["notes"];
 var names = Object.keys(all).filter(n => !all[n].alias);
 
 function get(name) {

@@ -21,6 +21,8 @@ Singleton {
     // processes (only while someone wants "top": want("top-<key>", true)).
     property var cpuHist: []
     property var memHist: []
+    // Temperature, 0 .. 1 (tempFraction), sampled with the others.
+    property var tempHist: []
     property var cores: []
     property var top: []
     readonly property real tempFraction: temp < 0 ? 0 : Math.max(0, Math.min(1, (temp - 30) / 70))
@@ -55,6 +57,7 @@ Singleton {
                 root.cores = now.slice(1).map((c, i) => load(c, root.last[i + 1]));
                 root.cpuHist = [...root.cpuHist, root.cpu].slice(-60);
                 root.memHist = [...root.memHist, root.mem].slice(-60);
+                root.tempHist = [...root.tempHist, root.tempFraction].slice(-60);
             }
             root.last = now;
         }
@@ -94,12 +97,13 @@ Singleton {
     readonly property bool topWanted: Object.keys(wants).some(k => k.startsWith("top-"))
     Process {
         id: ps
-        command: ["ps", "-eo", "comm=,%cpu=,%mem=", "--sort=-%cpu"]
+        command: ["ps", "-eo", "comm=,%cpu=,%mem=,rss=,pid=", "--sort=-%cpu"]
         stdout: StdioCollector {
+            // mem is a percent; rss the resident size in KiB.
             onStreamFinished: root.top = text.split("\n").filter(l => l.trim()).slice(0, 8).map(l => {
                 const f = l.trim().split(/\s+/);
-                const mem = f.pop(), cpu = f.pop();
-                return { name: f.join(" "), cpu: cpu, mem: mem };
+                const pid = f.pop(), rss = Number(f.pop()), mem = f.pop(), cpu = f.pop();
+                return { name: f.join(" "), cpu: cpu, mem: mem, rss: rss, pid: pid };
             })
         }
     }

@@ -41,6 +41,7 @@ bind(key(M, "M"), D.ipc("pane toggle media"), "Media (now playing)")
 bind(key(M, "SHIFT + M"), D.ipc("mediapane open tv"), "Dot TV library")
 bind(key(M, "CTRL + M"), "dottv open", "Dot TV window")
 bind(key(M, "Tab"), D.ipc("pane toggle overview"), "Switchboard (all workspaces)")
+bind(key(M, "O"), D.ipc("pane toggle panels"), "Panel manager")
 bind(key(M, "SHIFT + S"), D.ipc("scene toggle"), "Era scene (screensaver)")
 bind(key(M, "SHIFT + W"), D.ipc("winshade cycle"), "Window LED shading")
 bind(key(M, "CTRL + D"), D.dotshell .. " kill; " .. D.dotshell, "Restart Dot Shell")
@@ -73,6 +74,8 @@ for i = 1, 10 do
     bind(key(M, "SHIFT + " .. k), "dotws move " .. i, "Move window to workspace")
     bind(key(M, "ALT + " .. k), dsp.window.move({ workspace = tostring(i), follow = false }), "Send window to workspace")
 end
+-- Home (the desk panels, no apps) is its own workspace, 11 (the `home` token).
+bind(key(M, "grave"), "dotws go 11", "Home (desk panels)")
 bind(key(M, "SHIFT + E"), "dotws go empty", "Empty workspace")
 bind(key(M, "mouse_down"), "dotws go e+1", "Next workspace")
 bind(key(M, "mouse_up"), "dotws go e-1", "Previous workspace")
@@ -134,7 +137,7 @@ bind(key(M, "KP_Add"), zoom(1.1), "Zoom in", { repeating = true })
 bind(key(M, "KP_Subtract"), zoom(0.9), "Zoom out", { repeating = true })
 
 -- ── Lexicon shell overlay ───────────────────────────────────────────
-bind(key(M, "grave"),
+bind(key(M, "SHIFT + grave"),
     "pkill -x lexicon-frontend && hyprctl dispatch 'hl.dsp.focus({ last = true })' || ~/Documents/git/lexicon/lexicon-frontend/src-tauri/target/release/lexicon-frontend",
     "Lexicon overlay")
 

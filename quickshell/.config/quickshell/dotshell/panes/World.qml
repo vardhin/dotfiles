@@ -106,7 +106,7 @@ Variants {
             id: world
             width: win.width
             height: win.height
-            x: -(win.wsId - Tokens.home) * win.width
+            x: -Tokens.wsStep(win.wsId) * win.width
             visible: win.homeScreen
 
             Behavior on x {
@@ -122,7 +122,7 @@ Variants {
                 DeskPanel {
                     required property var modelData
                     panel: modelData
-                    originX: (Panels.wsOf(modelData) - Tokens.home) * win.width
+                    originX: Tokens.wsStep(Panels.wsOf(modelData)) * win.width
                     screenW: win.width
                     screenH: win.height
                     // Its own workspace, and while sliding past it.

@@ -14,6 +14,7 @@ import "../Templates.js" as Templates
 //   strip   docked in the top strip, in a zone (l left, c center, r before
 //           the settings words, e after them) at an order
 //   rail    docked in the side rail, at an order
+//   shelf   closed: kept in the panel manager (Super O) to open again
 // Persisted to
 //   ${XDG_STATE_HOME:-~/.local/state}/dotshell/panels.json
 // and driven from the `dot` CLI over services/DotBus.qml.
@@ -39,7 +40,7 @@ Singleton {
     // One grid unit in logical px; panels keep their size at any dot pitch.
     readonly property int unit: 12
     readonly property var kinds: Templates.names
-    readonly property var places: ["home", "strip", "rail"]
+    readonly property var places: ["home", "strip", "rail", "shelf"]
     readonly property var zones: ["l", "c", "r", "e"]
 
     readonly property var panels: store.panels
@@ -75,6 +76,7 @@ Singleton {
     }
     readonly property var strip: panels.filter(p => p.place === "strip").sort((a, b) => zones.indexOf(a.zone) - zones.indexOf(b.zone) || a.order - b.order)
     readonly property var rail: panels.filter(p => p.place === "rail").sort((a, b) => a.order - b.order)
+    readonly property var shelf: panels.filter(p => p.place === "shelf")
     function inStrip(zone: string): var {
         return strip.filter(p => p.zone === zone);
     }
@@ -193,14 +195,9 @@ Singleton {
             mk("messages", { place: "strip", zone: "r", order: 2 }),
             mk("caffeine", { place: "strip", zone: "r", order: 3 }),
             mk("battery", { place: "strip", zone: "e", order: 0 }),
-            mk("tray", { place: "strip", zone: "e", order: 1 }),
             mk("system", { place: "rail", order: 0 }),
-            mk("dock", { place: "home", x: 1, y: 6 }),
-            mk("downloads", { place: "home", x: 8, y: 6 }),
-            mk("files", { place: "home", x: 8, y: 20 }),
             mk("clipboard", { place: "home", x: 8, y: 36 }),
-            mk("todo", { place: "home", x: 42, y: 6 }),
-            mk("screenshots", { place: "home", x: 42, y: 25 })
+            mk("todo", { place: "home", x: 42, y: 6 })
         ];
     }
 
@@ -243,6 +240,22 @@ Singleton {
             return place(id, "home", "", 0, p.x ?? 4, p.y ?? 6, p.ws ?? 0);
         return place(id, where, where === "strip" ? "r" : "", 0, 0, 0, 0);
     }
+    // Close a panel to the shelf (the panel manager), undoable for 3 s.
+    function close(id: string): var {
+        return place(id, "shelf", "", 0, 0, 0, 0);
+    }
+    // Open a panel from anywhere to home (where it last sat), the strip or
+    // the rail, at the end of the row.
+    function open(id: string, where: string): var {
+        const p = find(id);
+        if (!p)
+            return { error: "no panel " + id };
+        if (where === "home")
+            return place(id, "home", "", 0, p.x ?? 4, p.y ?? 6, p.ws ?? 0);
+        const z = where === "strip" ? "r" : "";
+        return place(id, where, z, (where === "rail" ? rail : inStrip(z)).filter(q => q.id !== id).length, 0, 0, 0);
+    }
+
     // The media panel on home, the one MEDIA (Super M) grows out of.
     function mediaHome(): var {
         return store.panels.find(p => p.template === "media" && p.place === "home") ?? null;
@@ -270,6 +283,10 @@ Singleton {
     function spawn(template: string, opts: var): var {
         if (!Templates.get(template))
             return { error: "unknown template; one of: " + kinds.join(", ") };
+        // One of each: the home set never has duplicates.
+        const have = Templates.homeSet.includes(template) ? store.panels.find(p => p.template === template) : null;
+        if (have)
+            return { error: "a " + template + " panel exists: " + have.id };
         opts = opts ?? {};
         const id = opts.id ? String(opts.id) : freeId(template);
         if (!/^[A-Za-z0-9_-]+$/.test(id))
@@ -280,6 +297,12 @@ Singleton {
         const r = apply(p, opts, true);
         if (r.error)
             return r;
+        if (p.place !== "home" && Templates.deskOnly.includes(template))
+            p.place = "home";
+        if (p.place === "home" && Templates.stripOnly.includes(template)) {
+            p.place = "strip";
+            p.zone = "r";
+        }
         if (p.place !== "home" && opts.order === undefined)
             p.order = (p.place === "rail" ? rail : inStrip(p.zone)).length;
         commit([...store.panels, p]);
@@ -370,6 +393,10 @@ Singleton {
             return { error: "no panel " + id };
         if (!places.includes(where))
             return { error: "place is one of: " + places.join(", ") };
+        if (where === "home" && Templates.stripOnly.includes(old.template))
+            return { error: old.template + " has no desktop panel; strip or rail only" };
+        if ((where === "strip" || where === "rail") && Templates.deskOnly.includes(old.template))
+            return { error: old.template + " is a desktop panel only" };
         const before = { place: old.place, zone: old.zone, order: old.order, x: old.x, y: old.y, ws: old.ws ?? 0 };
         const p = Object.assign({}, old, { place: where });
         if (where === "home") {

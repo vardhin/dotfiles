@@ -54,7 +54,8 @@ import Quickshell.Io
 //              idle, before the screen dims (not while a video plays) (panes/Scene.qml; Super Shift S now)
 //   sounds     off | soft | full: the era's UI sounds (services/Sound.qml):
 //              panes, toasts, the cascade, workspace switches
-//   home       the home workspace (1 .. 10): the only one with desktop
+//   home       the home workspace (1 .. 11; 11 = its own, Super `, so
+//              Super 1..0 are all app workspaces): the only one with desktop
 //              panels, the whole wallpaper unshifted, and no apps (Hyprland
 //              moves anything opened there to the next empty workspace)
 //   homeWall   an animated wallpaper for home only: a .gif, .webp, .mp4,
@@ -91,7 +92,12 @@ Singleton {
     readonly property string sounds: soundModes.includes(store.sounds) ? store.sounds : "soft"
     readonly property var soundModes: ["off", "soft", "full"]
     readonly property bool frosted: store.frosted
-    readonly property int home: store.home >= 1 && store.home <= 10 ? store.home : 1
+    readonly property int home: store.home >= 1 && store.home <= 11 ? store.home : 11
+    // A workspace's place left to right: home first (0), then the others in
+    // order. Panels, the world layer and the wallpaper slide by it.
+    function wsStep(id: int): int {
+        return id === home ? 0 : id < home ? id : id - home;
+    }
     readonly property string homeWall: store.homeWall.replace(/^~(?=\/|$)/, Quickshell.env("HOME"))
 
     readonly property var walls: ["dots", "image", "off"]
@@ -302,7 +308,7 @@ Singleton {
             property bool scene: true
             property string sounds: "soft"
             property bool frosted: false
-            property int home: 1
+            property int home: 11
             property string homeWall: ""
         }
     }
@@ -395,8 +401,8 @@ Singleton {
             break;
         case "home": {
             const n = parseInt(value);
-            if (!(n >= 1 && n <= 10))
-                return "home is a workspace, 1 .. 10";
+            if (!(n >= 1 && n <= 11))
+                return "home is a workspace, 1 .. 11";
             store.home = n;
             break;
         }

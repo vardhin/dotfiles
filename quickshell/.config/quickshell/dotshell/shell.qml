@@ -53,6 +53,7 @@ ShellRoot {
     ClipPane {}
     PeekPane {}
     OverviewPane {}
+    PanelsPane {}
     PolkitPane {}
     Scene {}
     LockScreen {}

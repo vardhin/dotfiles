@@ -64,7 +64,12 @@
 //     bar      segments | blocks | lives | line | chevrons | text | box |
 //              tube | dim | flap
 //     flaps    the title in split-flap tiles    rain     falling code behind
-//     time     right (the big time) | none (the tubes show it)
+//     cells    the unlit 5x7 cells show through (a VFD grid)
+//     time     right (the big time) | bar (small, after the bar) | none
+//              (the tubes or the head band show it)
+//     ink      the era tube (slot 0..2) for [title, sub, time, bar, alt]:
+//              alt is the bar's second color (its knob, rule or outline)
+//     stripe   lit bar cells alternate bar and alt
 var eras = {
     phosphor: {
         plate: {
@@ -86,7 +91,7 @@ var eras = {
                 { act: "next", label: "[>|]" }
             ]
         },
-        readout: { art: "square", legends: "none", prefix: "> ", cursor: true, bar: "text" }
+        readout: { art: "square", legends: "none", prefix: "> ", cursor: true, bar: "text", time: "bar", ink: [1, 0, 0, 0, 2] }
     },
     tokyo: {
         plate: {
@@ -96,18 +101,18 @@ var eras = {
                 { inset: 9, width: 2, color: "#2de2e6", glow: "#2de2e6", opacity: 0.8 }
             ]
         },
-        bezel: { l: 16, t: 16, r: 14, b: 16 },
+        bezel: { l: 16, t: 14, r: 16, b: 12 },
         window: { radius: "pill" },
         keys: {
-            at: "right", w: 118, h: 36, gap: 8, align: "center",
+            at: "bottom", h: 32, gap: 10, align: "center",
             style: { shape: "round", border: { w: 2, color: "#ff3cac" }, glow: "#ff3cac", ink: "#ff3cac" },
             items: [
                 { act: "prev", w: 28, h: 28 },
-                { act: "toggle", w: 36, h: 36, style: { border: { w: 2, color: "#2de2e6" }, glow: "#2de2e6", ink: "#2de2e6" } },
+                { act: "toggle", w: 32, h: 32, style: { border: { w: 2, color: "#2de2e6" }, glow: "#2de2e6", ink: "#2de2e6" } },
                 { act: "next", w: 28, h: 28 }
             ]
         },
-        readout: { art: "round", legends: "none", bar: "line" }
+        readout: { art: "round", legends: "none", bar: "line", time: "bar", ink: [1, 0, 2, 1, 1] }
     },
     nineties: {
         plate: {
@@ -126,7 +131,7 @@ var eras = {
                 { act: "next", w: 34 }
             ]
         },
-        readout: { art: "square", legends: "none", bar: "chevrons" }
+        readout: { art: "square", legends: "none", bar: "chevrons", time: "bar", ink: [2, 1, 2, 2, 0], stripe: true }
     },
     matrix: {
         plate: {
@@ -144,7 +149,7 @@ var eras = {
                 { act: "next", label: ">>" }
             ]
         },
-        readout: { art: "square", legends: "//SIGNAL.LOCKED", bar: "blocks", rain: true }
+        readout: { art: "square", legends: "//SIGNAL.LOCKED", bar: "blocks", rain: true, time: "bar", ink: [1, 0, 0, 0, 1] }
     },
     vfd: {
         plate: {
@@ -165,7 +170,7 @@ var eras = {
                 { act: "next", weight: 1 }
             ]
         },
-        readout: { art: "none", legends: "annunciators", bar: "segments" }
+        readout: { art: "none", legends: "annunciators", cells: true, bar: "segments", time: "right", ink: [0, 2, 1, 0, 1] }
     },
     aero: {
         plate: {
@@ -178,15 +183,15 @@ var eras = {
         bezel: { l: 16, t: 14, r: 12, b: 14 },
         window: { radius: 22, edge: "#9fd8f5", gloss: true },
         keys: {
-            at: "right", w: 128, h: 38, gap: 8, align: "center",
+            at: "bottom", h: 34, gap: 8, align: "center",
             style: { shape: "round", orb: ["#ffffff", "#62c3ee", "#1f7fd1"], ink: "#0b3f80", under: "#400b3f80" },
             items: [
                 { act: "prev", w: 28, h: 28 },
-                { act: "toggle", w: 38, h: 38, style: { orb: ["#ffffff", "#8fe07a", "#23963c"] } },
+                { act: "toggle", w: 34, h: 34, style: { orb: ["#ffffff", "#8fe07a", "#23963c"] } },
                 { act: "next", w: 28, h: 28 }
             ]
         },
-        readout: { art: "square", legends: "none", bar: "box" }
+        readout: { art: "square", legends: "none", bar: "box", time: "bar", ink: [0, 2, 2, 1, 2] }
     },
     gameboy: {
         plate: { radius: [10, 10, 40, 10], color: "#c9c5c0", under: "#a19c96" },
@@ -204,7 +209,7 @@ var eras = {
                 { act: "toggle", x: 90, y: 16, w: 24, h: 24, label: "", caption: "A" }
             ]
         },
-        readout: { art: "square", legends: "none", bar: "box" }
+        readout: { art: "square", legends: "none", bar: "box", time: "bar", ink: [0, 1, 0, 0, 0] }
     },
     nixie: {
         plate: {
@@ -227,7 +232,7 @@ var eras = {
                 { act: "next", w: 22, h: 22 }
             ]
         },
-        readout: { art: "none", legends: "none", bar: "tube", time: "none" }
+        readout: { art: "none", legends: "none", bar: "tube", time: "none", ink: [1, 0, 1, 0, 2] }
     },
     flap: {
         plate: {
@@ -247,7 +252,7 @@ var eras = {
                 { act: "next", w: 28 }
             ]
         },
-        readout: { art: "none", legends: "none", bar: "flap", flaps: true }
+        readout: { art: "none", legends: "none", bar: "flap", flaps: true, time: "bar", ink: [0, 0, 1, 1, 2] }
     },
     nightvision: {
         plate: {
@@ -265,7 +270,7 @@ var eras = {
                 { act: "next", label: "▷▷" }
             ]
         },
-        readout: { art: "round", reticle: true, legends: "TGT ACQ · CH 02", bar: "line" }
+        readout: { art: "round", reticle: true, legends: "TGT ACQ · CH 02", bar: "line", time: "bar", ink: [1, 0, 0, 0, 2] }
     },
     vapor: {
         plate: { color: "#c9b8e8", bevel: { light: "#ffffff", dark: "#3d1d63", inner: "#8a6fb8" } },
@@ -284,7 +289,7 @@ var eras = {
                 { act: "next", w: 32 }
             ]
         },
-        readout: { art: "square", legends: "none", bar: "blocks" }
+        readout: { art: "square", legends: "none", bar: "blocks", time: "bar", ink: [1, 0, 1, 2, 1], stripe: true }
     },
     arcade: {
         plate: { color: "#000000", strokes: [{ inset: 1.5, width: 3, color: "#2040ff" }] },
@@ -303,7 +308,7 @@ var eras = {
                 { act: "next", w: 26, h: 26, style: { orb: ["#99ff99", "#33ff33", "#008000"], under: "#005000" } }
             ]
         },
-        readout: { art: "square", legends: "none", bar: "lives" }
+        readout: { art: "square", legends: "none", bar: "lives", time: "none", ink: [2, 0, 2, 1, 1] }
     },
     blueprint: {
         plate: {
@@ -323,7 +328,7 @@ var eras = {
                 { act: "next", w: 26, h: 26 }
             ]
         },
-        readout: { art: "square", legends: "none", bar: "dim" }
+        readout: { art: "square", legends: "none", bar: "dim", time: "bar", ink: [2, 1, 1, 2, 1] }
     }
 };
 
@@ -357,7 +362,8 @@ function get(era) {
         side: e.side ? Object.assign({ kind: "", w: 0, gap: 0 }, e.side) : null,
         keys: keys,
         readout: Object.assign({
-            art: "none", reticle: false, legends: "none", prefix: "", cursor: false, bar: "segments", flaps: false, rain: false, time: "right"
+            art: "none", reticle: false, legends: "none", prefix: "", cursor: false, bar: "segments", flaps: false, rain: false, time: "right",
+            ink: [0, 2, 1, 0, 1], stripe: false, cells: false
         }, e.readout)
     };
 }
