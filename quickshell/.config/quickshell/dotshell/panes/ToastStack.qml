@@ -14,6 +14,8 @@ Pane {
 
     name: "toasts"
     eraFrame: true
+    title: "inbox.exe"
+    icon: "✉"
     managed: false
     shown: Notifs.toasts.length > 0 && Ui.pane !== "notifs"
     grab: false

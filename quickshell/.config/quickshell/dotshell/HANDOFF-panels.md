@@ -4,8 +4,8 @@ Written 2026-10-18, rewritten 2026-10-19 for the next Claude Code chat. When the
 
 ## START HERE: perfect the next era
 
-**Done eras:** Tokyo Night (`tokyo/`), VFD (`vfd/`), Frutiger Aero (`aero/`), Blueprint (`blueprint/`, built 2026-10-19, waiting on the user's screenshot).
-**Next era: Game Boy (`gameboy`)**, its design column header is `GAME BOY`. After that, in `Eras.qml` order: nixie, flap, nightvision, vapor, arcade, then the ones before tokyo that are not done (phosphor, nineties, matrix). If the user names a different era, do that one.
+**Done eras:** Tokyo Night (`tokyo/`), VFD (`vfd/`), Frutiger Aero (`aero/`), Blueprint (`blueprint/`), Vaporwave (`vapor/`, built 2026-10-19, waiting on the user's screenshot).
+**Next era: Game Boy (`gameboy`)**, its design column header is `GAME BOY`. After that, in `Eras.qml` order: nixie, flap, nightvision, arcade, then the ones before tokyo that are not done (phosphor, nineties, matrix). If the user names a different era, do that one.
 
 "Perfect the era" means **everything below, in one go**, not one panel then stop. The user was angry when only System was done for aero ("you only did cpu panel, every other panel is slop"). Do all the panels, then ask for a screenshot.
 
@@ -39,7 +39,8 @@ Written 2026-10-18, rewritten 2026-10-19 for the next Claude Code chat. When the
 
 ### 4. Check, then hand over
 
-- After every save: `timeout 5 qs log -p ~/.config/quickshell/dotshell 2>&1 | grep -E "Reloading|Loaded|caused|Failed" | tail -3`. Wait a few seconds; you want the last line "Configuration Loaded" with no `caused by` after it. Older errors further up (PanelNode[540], DeskPanel[51], TopStrip[147/203], LauncherPane `pad`) are stale.
+- After every save, read the **real log file** (timestamped): `grep -aE "Reloading|Loaded|ERROR" /run/user/1000/quickshell/by-pid/$(pgrep -f 'qs -p .*dotshell' | head -1)/log.log | tail -6`. You want the newest line "Configuration Loaded" with no ERROR after it. **Don't trust `qs log -p …`**: on 2026-10-19 it showed old lines only, every vapor reload had actually failed, the shell kept the old config, and the user screenshotted generic boards. A failed reload keeps the previous config running, so the screen can look fine while your code never loaded.
+- Era component names must not match a root `qs` type or a `qs.services` singleton: imports win over the era dir's own file (vapor's `Line` lost to root `Line.qml`, hence `Trace`).
 - Then append a dated section for the era at the bottom of this file (kit, faces, what is not done, data you added), like the aero one.
 - Then `notify-send "Claude" "<≤2 lines: what is ready, what to screenshot>"` as the **very last tool call**, and end the turn.
 
@@ -164,7 +165,7 @@ Then apply the same recipe to the next panel the user picks (clock, system, batt
 
 ## Offscreen test
 
-Harness: `~/dotfiles/dot-shell-tools/harness/`. `./run.sh <page.qml> <out.png>` runs `sync.sh` (mirrors root QML + `tokyo/ vfd/ aero/` into `w/` with service stubs from `stubs/`), then renders with `QT_QUICK_BACKEND=rhi QT_QPA_PLATFORM=offscreen qml6`. Pages are `a<face>.qml` (one per aero face, with sample `ctx`): copy one, swap `import "aero" as V` for the new era dir and add it to the `for d in tokyo vfd aero` lists in `sync.sh`. Stubs: Tokens (era "vfd" colours; set `Tokens.era` etc. in `Component.onCompleted` for another era), Feeds, Notifs, Power, Media, Lyrics, LyricLine, Spectrum, MatchVideo, Process. Write the PNGs to your scratchpad, not the repo.
+Harness: `~/dotfiles/dot-shell-tools/harness/`. `./run.sh <page.qml> <out.png>` runs `sync.sh` (mirrors root QML + `tokyo/ vfd/ aero/` into `w/` with service stubs from `stubs/`), then renders with `QT_QUICK_BACKEND=rhi QT_QPA_PLATFORM=offscreen qml6`. Pages are `a<face>.qml` (one per aero face, with sample `ctx`): copy one, swap `import "aero" as V` for the new era dir and add it to the `for d in tokyo vfd aero blueprint vapor` lists in `sync.sh`. `mkv.sh a<face>.qml` does that for vapor (Tokens set to the vapor palette) and renders `v<face>.png` into a scratchpad path written in the script: change it. Stubs: Tokens (era "vfd" colours; set `Tokens.era` etc. in `Component.onCompleted` for another era), Feeds, Notifs, Power, Media, Lyrics, LyricLine, Spectrum, MatchVideo, Process. Write the PNGs to your scratchpad, not the repo.
 
 ### Older note: how the keys bug was found
 
@@ -257,3 +258,15 @@ Same treatment as VFD's, still no per-item pills (the boards draw every strip/ra
 - Docked forms: `tokyo/Docked.qml` (a `Face`), loaded by `DockItem.qml` (`tokyoForm`) for media, clock, workspaces, system, battery, messages, capture, caffeine, clipboard, todo. Inks from the boards: readings cyan, small print violet, titles/marks pink, alarms red. Pictograms are dot patterns (`Pix`: rows of digits, n = inks[n-1]): cup, dashed frame, rings, discs, sheets, vinyl, 11-dot transport rings. System uses rising wedges; battery a cyan cell with pink blocks; album art is a masked disc of dots (vinyl when none). Rail clipboard shows the last 4 copies as slots (click pastes).
 - Strip words: `StatusWord.tokyo`, 5x7, label violet + reading cyan; the window title is 5x7 violet.
 - Offscreen: `dot-shell-tools/harness/tdock.qml` (all forms + the edge, pitch 5).
+
+## Vaporwave: every panel (2026-10-19)
+
+Done on request after blueprint (out of order). In the VAPORWAVE boards every panel is a **Windows 95 window**: lilac face with a double bevel, a violet → pink → cyan title bar (icon, `name.exe`, `_ □ ×`), push buttons, and readouts on **dark dot screens with unlit dots** (`.pn`, which is just the era's own DotSurface: glass `#130a24`, unlit `#2d1b4e`). Words on the lilac or on white sheets are lit-only dots (`.dm`) with a pink glow.
+
+- `vapor/` is `qs.vapor`. Kit: `Ink` (face `#c9b8e8`, hi, shade `#3d1d63`, mid `#8a6fb8`, ink `#130a24`, violet/pink/cyan, yellow `#fffb96`, red; VT323 from `fonts/`, OFL), `Win` (the window + title bar; `bodyY` is where contents start; □ runs `panel expand`/`panel fold`, `_`/× fold, `closed()` on ×; `controls` max/help/close; `boxed` keys for the media player), `Bevel` (raised/sunk, `outer` mid ring), `Well` (sunken frame, `paper` = white sheet), `Crt` (sunken DotSurface screen, `grid` cyan rules, `radius` + `shape` for round), `Dots` (lit-only, bubble.frag, pink glow), `Pen` (crisp VT323), `Say` (VT323 in dots), `Key` (push button, `on` = hot pink, `glyph` prev/next/play/pause/stop/rec via `Glyph`), `Meter` (progress bar of violet/cyan blocks, `seek`), `Line` (dotted history line), `Bars` (solid dot columns), `Check` (check box).
+- **Don't call a component `Screen`** (clashes with Qt's attached Screen) – that's why the screen is `Crt`. Don't put a property named like an id in scope (Media had `side`).
+- Faces, compact and expanded: System (taskmgr.exe Performance / Processes: pick a row, End Task = `run kill PID`, Switch To = `jump`, New Task = `launcher`), Clock (date_time.exe: round dot dial + time screen, OK = expand, Calendar = `pane calendar` / calendar screen with ◂ ▸), Battery (power_meter.exe / Details: graph, 4 readings, PROFILE steps the profile), Caffeine (display.cpl: check box toggles, Wait field / Screen Saver timers), Capture (capture.exe recorder: ✂ shot, ● rec, region/window target, ■ stop, mic / Options), Messages (inbox.exe message box, OK = message centre, Clear all; DND greys it / History on a white sheet with live action keys, Open/Clear/Do Not Disturb), Todo (todo.txt — Notepad, next task on the sunset bar / lists), Clipboard (clipbrd.exe / search, kinds, Contents page with Paste/Delete), Workspaces (pager.exe tiles / overview; uses `qs.aero` Geo). Media compact: `vapor/Media.qml` (now_playing.exe: cover screen + matched video, title/artist screen, seek Meter, transport keys, time, VID VIS LYR → `pane media`). Not done: Tray, Downloads, Files, Screenshots, Dock.
+- No backend, dropped: capture pause/mark/delay/after, clipboard Pin, the "N of M steps" todo line, drag-to-move in the pager.
+- `DeskPanel.qml`: `vaporFace`/`vaporFaces`, `devices.vapor`.
+- Panes: `Pane.frame` is "vapor" for `skyGlass`/`eraFrame` panes. The pane gets `head` (22 px) for the title bar above the dots, `bezel` 8, and `title`/`icon` (MEDIA: now_playing.exe, message centre: inbox.exe — History, toasts: inbox.exe). `skyGlass` panes (MEDIA) keep the dark dot screen; `eraFrame`-only panes (`vaporSheet`: message centre, toasts) are a white sheet with a bare DotSurface. × closes the pane. `NotifLook.js` has `vapor` (dark ink on white, pink apps, violet rules).
+- Strip and rail (same day, after the user asked): `vapor/Taskbar.qml` is the lilac Win95 taskbar (white outer edge, shade + mid ring at the desktop) under a `bare` DotSurface in `TopStrip.qml` / `panes/SideBar.qml`. `vapor/Docked.qml` is `tokyo/Docked.qml` re-inked (readings ink, small print deep violet, marks pink, alarms red, dim tracks mid violet), loaded by `DockItem.qml` (`vaporForm`) for the ten templates. `StatusWord` and the window title are 5x7 in vapor (label violet, reading ink). No per-item casings. Offscreen: `dot-shell-tools/harness/vdockv.qml`.

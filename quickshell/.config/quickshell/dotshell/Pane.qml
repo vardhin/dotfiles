@@ -5,6 +5,7 @@ import Quickshell.Wayland
 import qs.services
 import qs.aero as Aero
 import qs.blueprint as Bp
+import qs.vapor as Vw
 import "Hardware.js" as Hardware
 
 // A floating LED pane: one layer-shell window holding one DotSurface.
@@ -55,13 +56,22 @@ PanelWindow {
     property bool eraFrame: false
     // "aero", "tokyo", "vfd", "blueprint" or "" (plain). Blueprint: the
     // drafting paper (blueprint/Paper.qml) with only the lit dots on it.
-    readonly property string frame: hardware ? "" : (Tokens.era === "aero" || Tokens.era === "blueprint") && (skyGlass || eraFrame) ? Tokens.era : eraFrame && (Tokens.era === "tokyo" || Tokens.era === "vfd") ? Tokens.era : ""
+    readonly property string frame: hardware ? "" : (Tokens.era === "aero" || Tokens.era === "blueprint" || Tokens.era === "vapor") && (skyGlass || eraFrame) ? Tokens.era : eraFrame && (Tokens.era === "tokyo" || Tokens.era === "vfd") ? Tokens.era : ""
+    // Vaporwave: the pane is a Windows 95 window (vapor/Win.qml) named
+    // `title`, its dots on a dark dot screen sunk into it, or, an `eraFrame`
+    // pane without `skyGlass` (the message centre, the toasts), lit dots
+    // only on a white sheet.
+    property string title: name + ".exe"
+    property string icon: ""
+    readonly property bool vaporSheet: frame === "vapor" && !skyGlass
+    // The title bar's height above the dots (Vaporwave).
+    readonly property int head: frame === "vapor" ? 22 : 0
     readonly property bool sky: frame === "aero"
     // The key row under the display window (with `hardware`).
     property alias keys: keyRow.data
     property var from: null
     readonly property bool grows: !!from && from.width > 0
-    readonly property int bezel: hardware ? hardware.bezel.l : sky ? 16 : frame ? 14 : 0
+    readonly property int bezel: hardware ? hardware.bezel.l : sky ? 16 : frame === "vapor" ? 8 : frame ? 14 : 0
     readonly property int keysH: hardware && keyRow.children.length > 0 ? hardware.keys.h + hardware.keys.gap : 0
     // Where the window goes when it grows: from's corner, kept on screen
     // (margins under the strip, left of the side bar).
@@ -83,7 +93,7 @@ PanelWindow {
     exclusionMode: ExclusionMode.Normal
     exclusiveZone: 0
     implicitWidth: surface.implicitWidth + bezel * 2
-    implicitHeight: surface.implicitHeight + bezel * 2 + keysH
+    implicitHeight: surface.implicitHeight + bezel * 2 + head + keysH
 
     WlrLayershell.namespace: "dotshell-" + name
     WlrLayershell.layer: WlrLayer.Overlay
@@ -97,7 +107,7 @@ PanelWindow {
     // The strip's rows are taken (the pane sits under it): its real height,
     // which TopStrip rounds to whole device px.
     readonly property int stripH: !Tokens.top ? 0 : Ui.strips.find(w => w.screen === screen)?.height ?? 11 * Tokens.pitch
-    readonly property int maxRows: screen ? Math.floor((screen.height - stripH - bezel * 2 - keysH) / Tokens.pitch) : rows
+    readonly property int maxRows: screen ? Math.floor((screen.height - stripH - bezel * 2 - head - keysH) / Tokens.pitch) : rows
 
     // What shows: all of it, or while growing the part inside a rect moving
     // from `from` out to the whole window, the faceplate drawn at that rect.
@@ -128,6 +138,36 @@ PanelWindow {
         }
         Loader {
             anchors.fill: parent
+            active: pane.frame === "vapor"
+            sourceComponent: Item {
+                Vw.Win {
+                    anchors.fill: parent
+                    icon: pane.icon
+                    title: pane.title
+                    controls: "close"
+                    onClosed: if (pane.managed)
+                        Ui.close()
+                }
+                // The sunken screen or sheet round the dots.
+                Rectangle {
+                    x: surface.x - 2
+                    y: surface.y - 2
+                    width: surface.width + 4
+                    height: surface.height + 4
+                    color: pane.vaporSheet ? Vw.Ink.hi : Vw.Ink.glass
+                }
+                Vw.Bevel {
+                    x: surface.x - 2
+                    y: surface.y - 2
+                    width: surface.width + 4
+                    height: surface.height + 4
+                    line: 2
+                    sunk: true
+                }
+            }
+        }
+        Loader {
+            anchors.fill: parent
             active: pane.frame === "tokyo" || pane.frame === "vfd"
             sourceComponent: PaneFrame {
                 kind: pane.frame
@@ -153,13 +193,13 @@ PanelWindow {
             DotSurface {
                 id: surface
                 x: pane.bezel
-                y: pane.bezel
+                y: pane.bezel + pane.head
                 cols: Math.min(pane.cols, pane.maxCols)
                 rows: Math.min(pane.rows, pane.maxRows)
                 // A well rounded display window cuts the dots to its corners.
                 shape: pane.hardware && typeof pane.hardware.window.radius === "number" && pane.hardware.window.radius >= 8 ? Hardware.windowPath(pane.hardware, cols, rows, Tokens.pitch) : pane.frame === "tokyo" ? Hardware.rounded(0, 0, cols, rows, 15 / Tokens.pitch) : pane.frame === "vfd" ? Hardware.rounded(0, 0, cols, rows, 4 / Tokens.pitch) : ""
                 focus: true
-                bare: pane.sky || pane.frame === "blueprint"
+                bare: pane.sky || pane.frame === "blueprint" || pane.vaporSheet
                 // Frosted: LEDs on blurred glass (Hyprland blurs dotshell-* panes).
                 // With hardware: smoked glass, opaque.
                 glassAlpha: Tokens.frosted && !pane.hardware && !pane.frame ? (Tokens.current.light ? 0.7 : 0.55) : 1
@@ -216,7 +256,7 @@ PanelWindow {
             Item {
                 id: keyRow
                 x: pane.bezel
-                y: pane.bezel + surface.height + (pane.hardware?.keys.gap ?? 0)
+                y: pane.bezel + pane.head + surface.height + (pane.hardware?.keys.gap ?? 0)
                 width: surface.width
                 height: pane.hardware?.keys.h ?? 0
             }

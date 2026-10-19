@@ -4,6 +4,7 @@ import Quickshell.Hyprland
 import qs.services
 import qs.vfd as Vfd
 import qs.tokyo as Tokyo
+import qs.vapor as Vw
 import "Skins.js" as Skins
 import "Templates.js" as Templates
 
@@ -42,9 +43,11 @@ Item {
     readonly property bool vfdForm: Tokens.era === "vfd" && !panel.layout && ["media", "clock", "workspaces", "system", "battery", "messages", "capture", "caffeine", "clipboard", "todo"].includes(template?.name ?? "")
     // Tokyo Night likewise (tokyo/Docked.qml).
     readonly property bool tokyoForm: Tokens.era === "tokyo" && !panel.layout && ["media", "clock", "workspaces", "system", "battery", "messages", "capture", "caffeine", "clipboard", "todo"].includes(template?.name ?? "")
-    readonly property Item form: vfdForm ? vfd.item : tokyoForm ? tokyo.item : node
+    // Vaporwave likewise, dark dots on the lilac taskbar (vapor/Docked.qml).
+    readonly property bool vaporForm: Tokens.era === "vapor" && !panel.layout && ["media", "clock", "workspaces", "system", "battery", "messages", "capture", "caffeine", "clipboard", "todo"].includes(template?.name ?? "")
+    readonly property Item form: vfdForm ? vfd.item : tokyoForm ? tokyo.item : vaporForm ? vapor.item : node
 
-    visible: layout !== null && (vfdForm ? (vfd.item?.shown ?? false) : tokyoForm ? (tokyo.item?.shown ?? false) : node.shown)
+    visible: layout !== null && (vfdForm ? (vfd.item?.shown ?? false) : tokyoForm ? (tokyo.item?.shown ?? false) : vaporForm ? (vapor.item?.shown ?? false) : node.shown)
     implicitWidth: mode === "rail" ? Tokens.railDots : (form?.implicitWidth ?? 0) + padX * 2
     implicitHeight: mode === "rail" ? (form?.implicitHeight ?? 0) + padY * 2 : 11
     width: implicitWidth
@@ -133,13 +136,26 @@ Item {
         sink: sink
         tube: root.tube
         enabled: !root.ghost
-        visible: !root.vfdForm && !root.tokyoForm && shown
+        visible: !root.vfdForm && !root.tokyoForm && !root.vaporForm && shown
     }
     Loader {
         id: tokyo
         active: root.tokyoForm
         enabled: !root.ghost
         sourceComponent: Tokyo.Docked {
+            template: root.template?.name ?? ""
+            rail: root.mode === "rail"
+            ctx: root.ctx
+            sink: sink
+            panel: root.panel
+            words: root.ctx["~"] ?? ({})
+        }
+    }
+    Loader {
+        id: vapor
+        active: root.vaporForm
+        enabled: !root.ghost
+        sourceComponent: Vw.Docked {
             template: root.template?.name ?? ""
             rail: root.mode === "rail"
             ctx: root.ctx

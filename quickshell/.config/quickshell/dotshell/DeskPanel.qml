@@ -7,6 +7,7 @@ import qs.tokyo as Tokyo
 import qs.vfd as Vfd
 import qs.aero as Aero
 import qs.blueprint as Bp
+import qs.vapor as Vw
 import "Shapes.js" as Shapes
 import "Skins.js" as Skins
 import "Templates.js" as Templates
@@ -64,9 +65,11 @@ Item {
     readonly property Component aeroFace: Tokens.era === "aero" && !raw && rect && !panel.layout && !panel.feed ? (aeroFaces[panel.template] ?? null) : null
     // Blueprint draws each template as a sheet of drafting paper (blueprint/).
     readonly property Component blueprintFace: Tokens.era === "blueprint" && !raw && rect && !panel.layout && !panel.feed ? (blueprintFaces[panel.template] ?? null) : null
+    // Vaporwave draws each template as a Windows 95 window (vapor/).
+    readonly property Component vaporFace: Tokens.era === "vapor" && !raw && rect && !panel.layout && !panel.feed ? (vaporFaces[panel.template] ?? null) : null
     // Notes: no board at all, just its words (NotesPanel.qml).
     readonly property bool notes: panel.template === "notes"
-    readonly property bool faced: mediaFaced || tokyoFace !== null || vfdFace !== null || aeroFace !== null || blueprintFace !== null || notes
+    readonly property bool faced: mediaFaced || tokyoFace !== null || vfdFace !== null || aeroFace !== null || blueprintFace !== null || vaporFace !== null || notes
     // Any other board in Tokyo Night still gets the sign's neon tube.
     readonly property bool tokyoRim: Tokens.era === "tokyo" && !faced && rect && !raw
 
@@ -465,8 +468,18 @@ Item {
             phosphor: phosphorDevice,
             tokyo: tokyoDevice,
             aero: aeroDevice,
-            blueprint: blueprintDevice
+            blueprint: blueprintDevice,
+            vapor: vaporDevice
         })
+    Component {
+        id: vaporDevice
+        Vw.Media {
+            ctx: root.ctx
+            sink: root.actions
+            panel: root.panel
+            words: root.words
+        }
+    }
     Component {
         id: blueprintDevice
         Bp.Media {
@@ -1009,6 +1022,113 @@ Item {
     Component {
         id: bpTodo
         Bp.Todo {
+            ctx: root.ctx
+            sink: root.actions
+            panel: root.panel
+            words: root.words
+            big: root.expanded
+        }
+    }
+
+    readonly property var vaporFaces: ({
+            system: vwSystem,
+            clock: vwClock,
+            workspaces: vwWorkspaces,
+            battery: vwBattery,
+            messages: vwMessages,
+            capture: vwCapture,
+            caffeine: vwCaffeine,
+            clipboard: vwClipboard,
+            todo: vwTodo
+        })
+    Loader {
+        anchors.fill: parent
+        active: root.vaporFace !== null
+        sourceComponent: root.vaporFace
+    }
+    Component {
+        id: vwSystem
+        Vw.System {
+            ctx: root.ctx
+            sink: root.actions
+            panel: root.panel
+            words: root.words
+            big: root.expanded
+        }
+    }
+    Component {
+        id: vwClock
+        Vw.Clock {
+            ctx: root.ctx
+            sink: root.actions
+            panel: root.panel
+            words: root.words
+            big: root.expanded
+        }
+    }
+    Component {
+        id: vwWorkspaces
+        Vw.Workspaces {
+            ctx: root.ctx
+            sink: root.actions
+            panel: root.panel
+            words: root.words
+            big: root.expanded
+        }
+    }
+    Component {
+        id: vwBattery
+        Vw.Battery {
+            ctx: root.ctx
+            sink: root.actions
+            panel: root.panel
+            words: root.words
+            big: root.expanded
+        }
+    }
+    Component {
+        id: vwMessages
+        Vw.Messages {
+            ctx: root.ctx
+            sink: root.actions
+            panel: root.panel
+            words: root.words
+            big: root.expanded
+        }
+    }
+    Component {
+        id: vwCapture
+        Vw.Capture {
+            ctx: root.ctx
+            sink: root.actions
+            panel: root.panel
+            words: root.words
+            big: root.expanded
+        }
+    }
+    Component {
+        id: vwCaffeine
+        Vw.Caffeine {
+            ctx: root.ctx
+            sink: root.actions
+            panel: root.panel
+            words: root.words
+            big: root.expanded
+        }
+    }
+    Component {
+        id: vwClipboard
+        Vw.Clipboard {
+            ctx: root.ctx
+            sink: root.actions
+            panel: root.panel
+            words: root.words
+            big: root.expanded
+        }
+    }
+    Component {
+        id: vwTodo
+        Vw.Todo {
             ctx: root.ctx
             sink: root.actions
             panel: root.panel

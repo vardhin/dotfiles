@@ -32,6 +32,8 @@ Pane {
 
     name: "media"
     skyGlass: true
+    title: "now_playing.exe"
+    icon: "♪"
     // One device: with a media panel on home, MEDIA opens out of it (Pane
     // `from`), wherever it sits, as the same hardware (the era's faceplate
     // and keys); with none, it hangs from the top right as before.

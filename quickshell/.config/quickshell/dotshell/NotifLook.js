@@ -22,6 +22,14 @@ const looks = {
         keyFill: "transparent", keyRim: "#e8f1ff", keyInk: "#ffffff",
         head: "#ffffff", sub: "#a9cdfa", marble: false
     },
+    // Messages on the inbox's white sheet: violet-ruled cards, the live one
+    // ruled hot pink; pink app names, near-black words, lilac push keys.
+    vapor: {
+        fill: "transparent", rim: "#b967ff", live: "#ff71ce", radius: 0,
+        app: "#ff71ce", text: "#130a24", body: "#3d1d63", time: "#b967ff", crit: "#ff3d7f",
+        keyFill: "#c9b8e8", keyRim: "#3d1d63", keyInk: "#130a24",
+        head: "#130a24", sub: "#ff71ce", marble: false
+    },
     // Violet-ruled cards on the dot glass, the live one in a cyan tube;
     // cyan app names, pink words, cyan key outlines.
     tokyo: {
