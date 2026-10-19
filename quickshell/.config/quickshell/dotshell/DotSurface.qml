@@ -171,7 +171,8 @@ Item {
         property color oldRamp3: was.ramp[3]
         property variant oldSource: root.dot && !root.flat ? oldBuffer : buffer
 
-        fragmentShader: root.bare ? Qt.resolvedUrl("shaders/bubble.frag.qsb") : Qt.resolvedUrl("shaders/dot.frag.qsb")
+        // Bare: lit dots only; square ones in a square era (Split-Flap).
+        fragmentShader: root.bare ? Qt.resolvedUrl(Tokens.current.shape === "square" ? "shaders/flap.frag.qsb" : "shaders/bubble.frag.qsb") : Qt.resolvedUrl("shaders/dot.frag.qsb")
     }
 
     // Above the dots, in screen px: pictures shown as they are (PlainArt).

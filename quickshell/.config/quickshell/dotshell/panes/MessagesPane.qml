@@ -17,6 +17,8 @@ Pane {
     eraFrame: true
     title: "inbox.exe — History"
     icon: "✉"
+    caption: "ARRIVALS · ALL MESSAGES"
+    captionStatus: Notifs.dnd ? "HELD" : "LIVE"
     readonly property var look: NotifLook.get(Tokens.era)
     // The log grouped by app, newest app first: [{ app, items }].
     readonly property var groups: {

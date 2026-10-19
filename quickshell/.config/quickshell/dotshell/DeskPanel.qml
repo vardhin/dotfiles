@@ -8,6 +8,7 @@ import qs.vfd as Vfd
 import qs.aero as Aero
 import qs.blueprint as Bp
 import qs.vapor as Vw
+import qs.flap as Fl
 import "Shapes.js" as Shapes
 import "Skins.js" as Skins
 import "Templates.js" as Templates
@@ -67,9 +68,11 @@ Item {
     readonly property Component blueprintFace: Tokens.era === "blueprint" && !raw && rect && !panel.layout && !panel.feed ? (blueprintFaces[panel.template] ?? null) : null
     // Vaporwave draws each template as a Windows 95 window (vapor/).
     readonly property Component vaporFace: Tokens.era === "vapor" && !raw && rect && !panel.layout && !panel.feed ? (vaporFaces[panel.template] ?? null) : null
+    // Split-Flap draws each template as a departure board (flap/).
+    readonly property Component flapFace: Tokens.era === "flap" && !raw && rect && !panel.layout && !panel.feed ? (flapFaces[panel.template] ?? null) : null
     // Notes: no board at all, just its words (NotesPanel.qml).
     readonly property bool notes: panel.template === "notes"
-    readonly property bool faced: mediaFaced || tokyoFace !== null || vfdFace !== null || aeroFace !== null || blueprintFace !== null || vaporFace !== null || notes
+    readonly property bool faced: mediaFaced || tokyoFace !== null || vfdFace !== null || aeroFace !== null || blueprintFace !== null || vaporFace !== null || flapFace !== null || notes
     // Any other board in Tokyo Night still gets the sign's neon tube.
     readonly property bool tokyoRim: Tokens.era === "tokyo" && !faced && rect && !raw
 
@@ -469,8 +472,18 @@ Item {
             tokyo: tokyoDevice,
             aero: aeroDevice,
             blueprint: blueprintDevice,
-            vapor: vaporDevice
+            vapor: vaporDevice,
+            flap: flapDevice
         })
+    Component {
+        id: flapDevice
+        Fl.Media {
+            ctx: root.ctx
+            sink: root.actions
+            panel: root.panel
+            words: root.words
+        }
+    }
     Component {
         id: vaporDevice
         Vw.Media {
@@ -1022,6 +1035,113 @@ Item {
     Component {
         id: bpTodo
         Bp.Todo {
+            ctx: root.ctx
+            sink: root.actions
+            panel: root.panel
+            words: root.words
+            big: root.expanded
+        }
+    }
+
+    readonly property var flapFaces: ({
+            system: flSystem,
+            clock: flClock,
+            workspaces: flWorkspaces,
+            battery: flBattery,
+            messages: flMessages,
+            capture: flCapture,
+            caffeine: flCaffeine,
+            clipboard: flClipboard,
+            todo: flTodo
+        })
+    Loader {
+        anchors.fill: parent
+        active: root.flapFace !== null
+        sourceComponent: root.flapFace
+    }
+    Component {
+        id: flSystem
+        Fl.System {
+            ctx: root.ctx
+            sink: root.actions
+            panel: root.panel
+            words: root.words
+            big: root.expanded
+        }
+    }
+    Component {
+        id: flClock
+        Fl.Clock {
+            ctx: root.ctx
+            sink: root.actions
+            panel: root.panel
+            words: root.words
+            big: root.expanded
+        }
+    }
+    Component {
+        id: flWorkspaces
+        Fl.Workspaces {
+            ctx: root.ctx
+            sink: root.actions
+            panel: root.panel
+            words: root.words
+            big: root.expanded
+        }
+    }
+    Component {
+        id: flBattery
+        Fl.Battery {
+            ctx: root.ctx
+            sink: root.actions
+            panel: root.panel
+            words: root.words
+            big: root.expanded
+        }
+    }
+    Component {
+        id: flMessages
+        Fl.Messages {
+            ctx: root.ctx
+            sink: root.actions
+            panel: root.panel
+            words: root.words
+            big: root.expanded
+        }
+    }
+    Component {
+        id: flCapture
+        Fl.Capture {
+            ctx: root.ctx
+            sink: root.actions
+            panel: root.panel
+            words: root.words
+            big: root.expanded
+        }
+    }
+    Component {
+        id: flCaffeine
+        Fl.Caffeine {
+            ctx: root.ctx
+            sink: root.actions
+            panel: root.panel
+            words: root.words
+            big: root.expanded
+        }
+    }
+    Component {
+        id: flClipboard
+        Fl.Clipboard {
+            ctx: root.ctx
+            sink: root.actions
+            panel: root.panel
+            words: root.words
+            big: root.expanded
+        }
+    }
+    Component {
+        id: flTodo
+        Fl.Todo {
             ctx: root.ctx
             sink: root.actions
             panel: root.panel

@@ -6,6 +6,7 @@ import qs.services
 import qs.aero as Aero
 import qs.blueprint as Bp
 import qs.vapor as Vw
+import qs.flap as Fl
 import "Hardware.js" as Hardware
 
 // A floating LED pane: one layer-shell window holding one DotSurface.
@@ -56,7 +57,7 @@ PanelWindow {
     property bool eraFrame: false
     // "aero", "tokyo", "vfd", "blueprint" or "" (plain). Blueprint: the
     // drafting paper (blueprint/Paper.qml) with only the lit dots on it.
-    readonly property string frame: hardware ? "" : (Tokens.era === "aero" || Tokens.era === "blueprint" || Tokens.era === "vapor") && (skyGlass || eraFrame) ? Tokens.era : eraFrame && (Tokens.era === "tokyo" || Tokens.era === "vfd") ? Tokens.era : ""
+    readonly property string frame: hardware ? "" : (Tokens.era === "aero" || Tokens.era === "blueprint" || Tokens.era === "vapor" || Tokens.era === "flap") && (skyGlass || eraFrame) ? Tokens.era : eraFrame && (Tokens.era === "tokyo" || Tokens.era === "vfd") ? Tokens.era : ""
     // Vaporwave: the pane is a Windows 95 window (vapor/Win.qml) named
     // `title`, its dots on a dark dot screen sunk into it, or, an `eraFrame`
     // pane without `skyGlass` (the message centre, the toasts), lit dots
@@ -64,14 +65,21 @@ PanelWindow {
     property string title: name + ".exe"
     property string icon: ""
     readonly property bool vaporSheet: frame === "vapor" && !skyGlass
+    // Split-Flap: the pane is a departure board's housing (flap/Housing.qml)
+    // with `caption` and "● `captionStatus`" across its top; a `skyGlass`
+    // pane (MEDIA) keeps its dot screen, an `eraFrame`-only one shows lit
+    // square dots straight on the housing.
+    property string caption: name.toUpperCase()
+    property string captionStatus: ""
+    readonly property bool flapSheet: frame === "flap" && !skyGlass
     // The title bar's height above the dots (Vaporwave).
-    readonly property int head: frame === "vapor" ? 22 : 0
+    readonly property int head: frame === "vapor" || frame === "flap" ? 22 : 0
     readonly property bool sky: frame === "aero"
     // The key row under the display window (with `hardware`).
     property alias keys: keyRow.data
     property var from: null
     readonly property bool grows: !!from && from.width > 0
-    readonly property int bezel: hardware ? hardware.bezel.l : sky ? 16 : frame === "vapor" ? 8 : frame ? 14 : 0
+    readonly property int bezel: hardware ? hardware.bezel.l : sky ? 16 : frame === "vapor" ? 8 : frame === "flap" ? 12 : frame ? 14 : 0
     readonly property int keysH: hardware && keyRow.children.length > 0 ? hardware.keys.h + hardware.keys.gap : 0
     // Where the window goes when it grows: from's corner, kept on screen
     // (margins under the strip, left of the side bar).
@@ -168,6 +176,16 @@ PanelWindow {
         }
         Loader {
             anchors.fill: parent
+            active: pane.frame === "flap"
+            sourceComponent: Fl.Housing {
+                label: pane.caption
+                status: pane.captionStatus
+                screws: pane.skyGlass
+                padX: pane.bezel + 2
+            }
+        }
+        Loader {
+            anchors.fill: parent
             active: pane.frame === "tokyo" || pane.frame === "vfd"
             sourceComponent: PaneFrame {
                 kind: pane.frame
@@ -199,7 +217,7 @@ PanelWindow {
                 // A well rounded display window cuts the dots to its corners.
                 shape: pane.hardware && typeof pane.hardware.window.radius === "number" && pane.hardware.window.radius >= 8 ? Hardware.windowPath(pane.hardware, cols, rows, Tokens.pitch) : pane.frame === "tokyo" ? Hardware.rounded(0, 0, cols, rows, 15 / Tokens.pitch) : pane.frame === "vfd" ? Hardware.rounded(0, 0, cols, rows, 4 / Tokens.pitch) : ""
                 focus: true
-                bare: pane.sky || pane.frame === "blueprint" || pane.vaporSheet
+                bare: pane.sky || pane.frame === "blueprint" || pane.vaporSheet || pane.flapSheet
                 // Frosted: LEDs on blurred glass (Hyprland blurs dotshell-* panes).
                 // With hardware: smoked glass, opaque.
                 glassAlpha: Tokens.frosted && !pane.hardware && !pane.frame ? (Tokens.current.light ? 0.7 : 0.55) : 1

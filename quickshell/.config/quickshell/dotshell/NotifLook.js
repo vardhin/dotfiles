@@ -30,6 +30,15 @@ const looks = {
         keyFill: "#c9b8e8", keyRim: "#3d1d63", keyInk: "#130a24",
         head: "#130a24", sub: "#ff71ce", marble: false
     },
+    // Split-Flap: the arrivals board's cards, flap dark ruled in the rim's
+    // grey, the live one in yellow; yellow app names, off-white words,
+    // grey times, yellow tags with dark words.
+    flap: {
+        fill: "#212121", rim: "#2a2a2a", live: "#ffd400", radius: 0,
+        app: "#ffd400", text: "#f2f2e6", body: "#bdbdb0", time: "#6e6e64", crit: "#ff5a36",
+        keyFill: "#ffd400", keyRim: "#ffd400", keyInk: "#141414",
+        head: "#ffd400", sub: "#ffd400", marble: false
+    },
     // Violet-ruled cards on the dot glass, the live one in a cyan tube;
     // cyan app names, pink words, cyan key outlines.
     tokyo: {

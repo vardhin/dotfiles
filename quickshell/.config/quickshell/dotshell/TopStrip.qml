@@ -7,6 +7,7 @@ import qs.services
 import qs.vfd as Vfd
 import qs.tokyo as Tokyo
 import qs.vapor as Vw
+import qs.flap as Fl
 
 // Top LED strip. Since part 2 most of it is docked panels (services/Panels.qml),
 // each in its strip form, in four zones:
@@ -105,6 +106,13 @@ PanelWindow {
         place: "strip"
     }
 
+    // Split-Flap: one long departure board housing, lit square dots on it.
+    Fl.Rack {
+        anchors.fill: parent
+        visible: Tokens.era === "flap"
+        place: "strip"
+    }
+
     // VFD: a gunmetal head unit, the dots in one long sunken window.
     Vfd.Dash {
         anchors.fill: parent
@@ -120,7 +128,7 @@ PanelWindow {
         anchors.verticalCenterOffset: -strip.edge / 2
         cols: strip.cols
         rows: strip.rows
-        bare: Tokens.era === "aero" || Tokens.era === "vapor"
+        bare: Tokens.era === "aero" || Tokens.era === "vapor" || Tokens.era === "flap"
 
         // ── Left ────────────────────────────────────────────────────
         DockRow {
@@ -139,7 +147,7 @@ PanelWindow {
             readonly property int room: center.x - x - 8
             x: left.x + left.width + 8
             width: Math.max(0, room)
-            visible: !strip.vfd && !strip.tokyo && Tokens.era !== "vapor" && Tokens.title && !strip.compact && !ticker.visible && room >= Tokens.charDots * 4 && text !== ""
+            visible: !strip.vfd && !strip.tokyo && Tokens.era !== "vapor" && Tokens.era !== "flap" && Tokens.title && !strip.compact && !ticker.visible && room >= Tokens.charDots * 4 && text !== ""
             elide: Text.ElideRight
             text: (ToplevelManager.activeToplevel?.activated ? ToplevelManager.activeToplevel.title : "").toUpperCase()
             color: Tokens.slot1
@@ -151,9 +159,9 @@ PanelWindow {
             y: 2
             width: Math.max(0, room)
             height: 7
-            visible: (strip.vfd || strip.tokyo || Tokens.era === "vapor") && Tokens.title && !strip.compact && !ticker.visible && room >= 6 * 4 && text !== ""
+            visible: (strip.vfd || strip.tokyo || Tokens.era === "vapor" || Tokens.era === "flap") && Tokens.title && !strip.compact && !ticker.visible && room >= 6 * 4 && text !== ""
             text: (ToplevelManager.activeToplevel?.activated ? ToplevelManager.activeToplevel.title : "").toUpperCase()
-            color: strip.tokyo ? Tokyo.Ink.violet : Tokens.era === "vapor" ? Vw.Ink.label : Vfd.Ink.teal
+            color: strip.tokyo ? Tokyo.Ink.violet : Tokens.era === "vapor" ? Vw.Ink.label : Tokens.era === "flap" ? Fl.Ink.label : Vfd.Ink.teal
             opacity: strip.tokyo ? 0.6 : 1
         }
 
