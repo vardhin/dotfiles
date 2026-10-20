@@ -4,6 +4,7 @@ import qs.tokyo as Tokyo
 import qs.vapor as Vw
 import qs.flap as Fl
 import qs.nixie as Nx
+import qs.nineties as Ni
 
 // A clickable word on the strip ("VOL 45"). `dim` drops it to the low
 // brightness level; `wheel(up)` fires on scroll.
@@ -29,13 +30,15 @@ Item {
     readonly property bool flap: Tokens.era === "flap"
     // Nixie: 5x7 too, the label brass, the reading the tubes' bright digit.
     readonly property bool nixie: Tokens.era === "nixie"
+    // 90s Nights: 5x7 too, the label electric blue, the reading yellow.
+    readonly property bool nineties: Tokens.era === "nineties"
 
-    width: vfd ? cells.implicitWidth : tokyo || vapor || flap || nixie ? neon.implicitWidth : label.implicitWidth
+    width: vfd ? cells.implicitWidth : tokyo || vapor || flap || nixie || nineties ? neon.implicitWidth : label.implicitWidth
     height: parent ? parent.height : Tokens.fontPx
 
     DotText {
         id: label
-        visible: !root.vfd && !root.tokyo && !root.vapor && !root.flap && !root.nixie
+        visible: !root.vfd && !root.tokyo && !root.vapor && !root.flap && !root.nixie && !root.nineties
         text: root.text
         color: root.color
         opacity: root.dim ? 0.5 : 1
@@ -51,7 +54,7 @@ Item {
     }
     Row {
         id: neon
-        visible: root.tokyo || root.vapor || root.flap || root.nixie
+        visible: root.tokyo || root.vapor || root.flap || root.nixie || root.nineties
         y: Math.floor((root.height - 7) / 2)
         height: 7
         opacity: root.dim ? 0.45 : 1
@@ -60,13 +63,13 @@ Item {
             width: implicitWidth
             height: 7
             text: root.text.slice(0, root.cut + 1).toUpperCase()
-            color: root.nixie ? Nx.Ink.brass : root.flap ? Fl.Ink.label : root.vapor ? Vw.Ink.label : Tokyo.Ink.violet
+            color: root.nineties ? Ni.Ink.blue : root.nixie ? Nx.Ink.brass : root.flap ? Fl.Ink.label : root.vapor ? Vw.Ink.label : Tokyo.Ink.violet
         }
         MatrixText {
             width: implicitWidth
             height: 7
             text: root.text.slice(root.cut + 1).toUpperCase()
-            color: root.nixie ? (root.cut > 0 && !root.dim ? Nx.Ink.digit : Nx.Ink.brass) : root.flap ? (root.cut > 0 && !root.dim ? Fl.Ink.white : Fl.Ink.label) : root.vapor ? (root.cut > 0 && !root.dim ? Vw.Ink.ink : Vw.Ink.label) : root.cut > 0 && !root.dim ? Tokyo.Ink.cyan : Tokyo.Ink.violet
+            color: root.nineties ? (root.cut > 0 && !root.dim ? Ni.Ink.yellow : Ni.Ink.blue) : root.nixie ? (root.cut > 0 && !root.dim ? Nx.Ink.digit : Nx.Ink.brass) : root.flap ? (root.cut > 0 && !root.dim ? Fl.Ink.white : Fl.Ink.label) : root.vapor ? (root.cut > 0 && !root.dim ? Vw.Ink.ink : Vw.Ink.label) : root.cut > 0 && !root.dim ? Tokyo.Ink.cyan : Tokyo.Ink.violet
         }
     }
 

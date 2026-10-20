@@ -49,6 +49,15 @@ const looks = {
         keyFill: "#d9a95a", keyRim: "#8a5a1e", keyInk: "#3a1d0e",
         head: "#ffc285", sub: "#ff7a1a", marble: false
     },
+    // 90s Nights: deep violet-ruled cards on the dot glass, the live one
+    // ruled hot pink; electric blue app names, yellow words, pink bodies,
+    // yellow keys with dark words.
+    nineties: {
+        fill: "transparent", rim: "#3b0d5c", live: "#ff2e97", radius: 0,
+        app: "#1fa8ff", text: "#ffe600", body: "#ff2e97", time: "#1fa8ff", crit: "#ff3355",
+        keyFill: "#ffe600", keyRim: "#ffe600", keyInk: "#0a0514",
+        head: "#ffe600", sub: "#ff2e97", marble: false
+    },
     // Violet-ruled cards on the dot glass, the live one in a cyan tube;
     // cyan app names, pink words, cyan key outlines.
     tokyo: {

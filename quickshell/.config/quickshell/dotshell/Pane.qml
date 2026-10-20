@@ -8,6 +8,7 @@ import qs.blueprint as Bp
 import qs.vapor as Vw
 import qs.flap as Fl
 import qs.nixie as Nx
+import qs.nineties as Ni
 import "Hardware.js" as Hardware
 
 // A floating LED pane: one layer-shell window holding one DotSurface.
@@ -58,7 +59,7 @@ PanelWindow {
     property bool eraFrame: false
     // "aero", "tokyo", "vfd", "blueprint" or "" (plain). Blueprint: the
     // drafting paper (blueprint/Paper.qml) with only the lit dots on it.
-    readonly property string frame: hardware ? "" : (Tokens.era === "aero" || Tokens.era === "blueprint" || Tokens.era === "vapor" || Tokens.era === "flap" || Tokens.era === "nixie") && (skyGlass || eraFrame) ? Tokens.era : eraFrame && (Tokens.era === "tokyo" || Tokens.era === "vfd") ? Tokens.era : ""
+    readonly property string frame: hardware ? "" : (Tokens.era === "aero" || Tokens.era === "blueprint" || Tokens.era === "vapor" || Tokens.era === "flap" || Tokens.era === "nixie" || Tokens.era === "nineties") && (skyGlass || eraFrame) ? Tokens.era : eraFrame && (Tokens.era === "tokyo" || Tokens.era === "vfd") ? Tokens.era : ""
     // Vaporwave: the pane is a Windows 95 window (vapor/Win.qml) named
     // `title`, its dots on a dark dot screen sunk into it, or, an `eraFrame`
     // pane without `skyGlass` (the message centre, the toasts), lit dots
@@ -85,7 +86,7 @@ PanelWindow {
     property alias keys: keyRow.data
     property var from: null
     readonly property bool grows: !!from && from.width > 0
-    readonly property int bezel: hardware ? hardware.bezel.l : sky ? 16 : frame === "vapor" ? 8 : frame === "flap" || frame === "nixie" ? 12 : frame ? 14 : 0
+    readonly property int bezel: hardware ? hardware.bezel.l : sky ? 16 : frame === "vapor" ? 8 : frame === "flap" || frame === "nixie" ? 12 : frame === "nineties" ? 9 : frame ? 14 : 0
     readonly property int keysH: hardware && keyRow.children.length > 0 ? hardware.keys.h + hardware.keys.gap : 0
     // Where the window goes when it grows: from's corner, kept on screen
     // (margins under the strip, left of the side bar).
@@ -209,6 +210,17 @@ PanelWindow {
                     border.width: 1
                     border.color: Nx.Ink.brass
                 }
+            }
+        }
+        // 90s Nights: the pane is an upright neon sign (nineties/Plate.qml),
+        // its sunset rim round the dot glass, like the expanded panels.
+        Loader {
+            anchors.fill: parent
+            active: pane.frame === "nineties"
+            sourceComponent: Ni.Plate {
+                slant: false
+                radius: 4
+                dots: false
             }
         }
         Loader {

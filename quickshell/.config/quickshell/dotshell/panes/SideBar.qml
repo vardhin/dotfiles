@@ -8,6 +8,7 @@ import qs.tokyo as Tokyo
 import qs.vapor as Vw
 import qs.flap as Fl
 import qs.nixie as Nx
+import qs.nineties as Ni
 
 // The side bar: a thin LED rail on the right edge, about as wide as the top
 // strip is tall (the `side` token).
@@ -39,7 +40,9 @@ Variants {
         // Tokyo Night: a pink neon tube down the left (tokyo/Edge.qml), this
         // many px before the dots.
         readonly property bool tokyo: Tokens.era === "tokyo"
-        readonly property int edge: tokyo ? 4 : 0
+        // 90s Nights: an electric blue neon rule down the left (nineties/Edge.qml).
+        readonly property bool nineties: Tokens.era === "nineties"
+        readonly property int edge: tokyo ? 4 : nineties ? 3 : 0
         readonly property int full: cols * Tokens.pitch + pad * 2 + edge
 
         // Auto: out while the pointer is on it, and a moment after.
@@ -143,7 +146,7 @@ Variants {
             x: surface.x - bar.edge
             width: bar.edge
             height: bar.height
-            visible: bar.tokyo && surface.visible
+            visible: (bar.tokyo || bar.nineties) && surface.visible
             color: Tokens.glass
         }
 
@@ -219,6 +222,14 @@ Variants {
             width: bar.full
             height: bar.height
             visible: bar.tokyo && surface.visible
+            place: "rail"
+        }
+        // 90s Nights: the rail's blue rule, at the desktop.
+        Ni.Edge {
+            x: surface.x - bar.edge
+            width: bar.full
+            height: bar.height
+            visible: bar.nineties && surface.visible
             place: "rail"
         }
 
