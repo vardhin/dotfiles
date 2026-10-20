@@ -150,7 +150,7 @@ const alts = {
         ramp: ["#262b14", "#4f5a28", "#9a9a6a", "#e9e4d0"],
         glow: 0,
         ansi: ["#2c3314", "#8a3a1a", "#3f5a1a", "#7a6420", "#4f5a28", "#6b4e1a", "#556b3a", "#d8d2ba"],
-        map: { "#040a03": "#e9e4d0", "#0f3a0c": "#a8a27e", "#7dff6a": "#3f5a1a", "#2fae2a": "#5c6b2e", "#d6ffc9": "#262b14" }
+        map: { "#040a03": "#e9e4d0", "#0f3a0c": "#a8a27e", "#7dff6a": "#3f5a1a", "#2fae2a": "#5c6b2e", "#d6ffc9": "#262b14", "#2b8a22": "#7a7a4a" }
     },
     vapor: {
         blurb: "PASTEL DUSK",

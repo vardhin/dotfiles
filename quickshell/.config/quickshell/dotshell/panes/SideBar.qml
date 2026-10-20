@@ -9,6 +9,7 @@ import qs.vapor as Vw
 import qs.flap as Fl
 import qs.nixie as Nx
 import qs.nineties as Ni
+import qs.nightvision as Nv
 
 // The side bar: a thin LED rail on the right edge, about as wide as the top
 // strip is tall (the `side` token).
@@ -42,7 +43,9 @@ Variants {
         readonly property bool tokyo: Tokens.era === "tokyo"
         // 90s Nights: an electric blue neon rule down the left (nineties/Edge.qml).
         readonly property bool nineties: Tokens.era === "nineties"
-        readonly property int edge: tokyo ? 4 : nineties ? 3 : 0
+        // Night Vision: one px of dim green down the left (nightvision/Edge.qml).
+        readonly property bool nightvision: Tokens.era === "nightvision"
+        readonly property int edge: tokyo ? 4 : nineties ? 3 : nightvision ? 1 : 0
         readonly property int full: cols * Tokens.pitch + pad * 2 + edge
 
         // Auto: out while the pointer is on it, and a moment after.
@@ -146,7 +149,7 @@ Variants {
             x: surface.x - bar.edge
             width: bar.edge
             height: bar.height
-            visible: (bar.tokyo || bar.nineties) && surface.visible
+            visible: (bar.tokyo || bar.nineties || bar.nightvision) && surface.visible
             color: Tokens.glass
         }
 
@@ -222,6 +225,14 @@ Variants {
             width: bar.full
             height: bar.height
             visible: bar.tokyo && surface.visible
+            place: "rail"
+        }
+        // Night Vision: the rail's dim green rule, at the desktop.
+        Nv.Edge {
+            x: surface.x - bar.edge
+            width: bar.full
+            height: bar.height
+            visible: bar.nightvision && surface.visible
             place: "rail"
         }
         // 90s Nights: the rail's blue rule, at the desktop.

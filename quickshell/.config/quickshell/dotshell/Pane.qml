@@ -9,6 +9,7 @@ import qs.vapor as Vw
 import qs.flap as Fl
 import qs.nixie as Nx
 import qs.nineties as Ni
+import qs.nightvision as Nv
 import "Hardware.js" as Hardware
 
 // A floating LED pane: one layer-shell window holding one DotSurface.
@@ -59,7 +60,7 @@ PanelWindow {
     property bool eraFrame: false
     // "aero", "tokyo", "vfd", "blueprint" or "" (plain). Blueprint: the
     // drafting paper (blueprint/Paper.qml) with only the lit dots on it.
-    readonly property string frame: hardware ? "" : (Tokens.era === "aero" || Tokens.era === "blueprint" || Tokens.era === "vapor" || Tokens.era === "flap" || Tokens.era === "nixie" || Tokens.era === "nineties") && (skyGlass || eraFrame) ? Tokens.era : eraFrame && (Tokens.era === "tokyo" || Tokens.era === "vfd") ? Tokens.era : ""
+    readonly property string frame: hardware ? "" : (Tokens.era === "aero" || Tokens.era === "blueprint" || Tokens.era === "vapor" || Tokens.era === "flap" || Tokens.era === "nixie" || Tokens.era === "nineties" || Tokens.era === "nightvision") && (skyGlass || eraFrame) ? Tokens.era : eraFrame && (Tokens.era === "tokyo" || Tokens.era === "vfd") ? Tokens.era : ""
     // Vaporwave: the pane is a Windows 95 window (vapor/Win.qml) named
     // `title`, its dots on a dark dot screen sunk into it, or, an `eraFrame`
     // pane without `skyGlass` (the message centre, the toasts), lit dots
@@ -86,7 +87,7 @@ PanelWindow {
     property alias keys: keyRow.data
     property var from: null
     readonly property bool grows: !!from && from.width > 0
-    readonly property int bezel: hardware ? hardware.bezel.l : sky ? 16 : frame === "vapor" ? 8 : frame === "flap" || frame === "nixie" ? 12 : frame === "nineties" ? 9 : frame ? 14 : 0
+    readonly property int bezel: hardware ? hardware.bezel.l : sky ? 16 : frame === "vapor" ? 8 : frame === "flap" || frame === "nixie" ? 12 : frame === "nineties" ? 9 : frame === "nightvision" ? 16 : frame ? 14 : 0
     readonly property int keysH: hardware && keyRow.children.length > 0 ? hardware.keys.h + hardware.keys.gap : 0
     // Where the window goes when it grows: from's corner, kept on screen
     // (margins under the strip, left of the side bar).
@@ -94,6 +95,15 @@ PanelWindow {
     readonly property int growY: grows ? Math.max(0, Math.min(from.y - stripH, (screen?.height ?? 1080) - stripH - implicitHeight)) : 0
     // 0 = folded into `from`, 1 = open.
     property real grown: 0
+
+    // Night Vision: the dots cut to the eyepiece's curve, inside its rim
+    // (elliptic corners 64 x 24 px), in dots.
+    function nvShape(c: int, r: int): string {
+        const a = Math.min(c / 2, 64 / Tokens.pitch), b = Math.min(r / 2, 24 / Tokens.pitch);
+        const f = v => v.toFixed(2);
+        const arc = (ex, ey) => " A " + f(a) + " " + f(b) + " 0 0 1 " + f(ex) + " " + f(ey);
+        return "M " + f(a) + " 0 L " + f(c - a) + " 0" + arc(c, b) + " L " + f(c) + " " + f(r - b) + arc(c - a, r) + " L " + f(a) + " " + f(r) + arc(0, r - b) + " L 0 " + f(b) + arc(a, 0) + " Z";
+    }
 
     // Fires every time the pane appears; focus a TextInput here.
     signal opened
@@ -223,6 +233,19 @@ PanelWindow {
                 dots: false
             }
         }
+        // Night Vision: the pane is the CRT eyepiece (nightvision/Scope.qml),
+        // its corners wide enough that the dots fit inside them.
+        Loader {
+            anchors.fill: parent
+            active: pane.frame === "nightvision"
+            sourceComponent: Nv.Scope {
+                crt: true
+                dots: false
+                dark: 0.6
+                cornerX: 80
+                cornerY: 40
+            }
+        }
         Loader {
             anchors.fill: parent
             active: pane.frame === "tokyo" || pane.frame === "vfd"
@@ -254,7 +277,7 @@ PanelWindow {
                 cols: Math.min(pane.cols, pane.maxCols)
                 rows: Math.min(pane.rows, pane.maxRows)
                 // A well rounded display window cuts the dots to its corners.
-                shape: pane.hardware && typeof pane.hardware.window.radius === "number" && pane.hardware.window.radius >= 8 ? Hardware.windowPath(pane.hardware, cols, rows, Tokens.pitch) : pane.frame === "tokyo" ? Hardware.rounded(0, 0, cols, rows, 15 / Tokens.pitch) : pane.frame === "vfd" ? Hardware.rounded(0, 0, cols, rows, 4 / Tokens.pitch) : ""
+                shape: pane.hardware && typeof pane.hardware.window.radius === "number" && pane.hardware.window.radius >= 8 ? Hardware.windowPath(pane.hardware, cols, rows, Tokens.pitch) : pane.frame === "tokyo" ? Hardware.rounded(0, 0, cols, rows, 15 / Tokens.pitch) : pane.frame === "vfd" ? Hardware.rounded(0, 0, cols, rows, 4 / Tokens.pitch) : pane.frame === "nightvision" ? pane.nvShape(cols, rows) : ""
                 focus: true
                 bare: pane.sky || pane.frame === "blueprint" || pane.vaporSheet || pane.flapSheet || pane.nixieSheet
                 // Frosted: LEDs on blurred glass (Hyprland blurs dotshell-* panes).

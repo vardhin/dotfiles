@@ -10,6 +10,7 @@ import qs.vapor as Vw
 import qs.flap as Fl
 import qs.nixie as Nx
 import qs.nineties as Ni
+import qs.nightvision as Nv
 
 // Top LED strip. Since part 2 most of it is docked panels (services/Panels.qml),
 // each in its strip form, in four zones:
@@ -37,7 +38,9 @@ PanelWindow {
     readonly property bool tokyo: Tokens.era === "tokyo"
     // 90s Nights: a hot pink neon rule along the bottom (nineties/Edge.qml).
     readonly property bool nineties: Tokens.era === "nineties"
-    readonly property int edge: tokyo ? 4 : nineties ? 3 : 0
+    // Night Vision: one px of dim green along the bottom (nightvision/Edge.qml).
+    readonly property bool nightvision: Tokens.era === "nightvision"
+    readonly property int edge: tokyo ? 4 : nineties ? 3 : nightvision ? 1 : 0
     readonly property int cols: Math.floor((width - pad * 2) / Tokens.pitch)
     readonly property HyprlandMonitor monitor: Hyprland.monitorFor(screen)
     // Narrow strips (coarse pitch) drop words and keep numbers.
@@ -158,7 +161,7 @@ PanelWindow {
             readonly property int room: center.x - x - 8
             x: left.x + left.width + 8
             width: Math.max(0, room)
-            visible: !strip.vfd && !strip.tokyo && Tokens.era !== "vapor" && Tokens.era !== "flap" && Tokens.era !== "nixie" && !strip.nineties && Tokens.title && !strip.compact && !ticker.visible && room >= Tokens.charDots * 4 && text !== ""
+            visible: !strip.vfd && !strip.tokyo && Tokens.era !== "vapor" && Tokens.era !== "flap" && Tokens.era !== "nixie" && !strip.nineties && !strip.nightvision && Tokens.title && !strip.compact && !ticker.visible && room >= Tokens.charDots * 4 && text !== ""
             elide: Text.ElideRight
             text: (ToplevelManager.activeToplevel?.activated ? ToplevelManager.activeToplevel.title : "").toUpperCase()
             color: Tokens.slot1
@@ -170,9 +173,9 @@ PanelWindow {
             y: 2
             width: Math.max(0, room)
             height: 7
-            visible: (strip.vfd || strip.tokyo || Tokens.era === "vapor" || Tokens.era === "flap" || Tokens.era === "nixie" || strip.nineties) && Tokens.title && !strip.compact && !ticker.visible && room >= 6 * 4 && text !== ""
+            visible: (strip.vfd || strip.tokyo || Tokens.era === "vapor" || Tokens.era === "flap" || Tokens.era === "nixie" || strip.nineties || strip.nightvision) && Tokens.title && !strip.compact && !ticker.visible && room >= 6 * 4 && text !== ""
             text: (ToplevelManager.activeToplevel?.activated ? ToplevelManager.activeToplevel.title : "").toUpperCase()
-            color: strip.nineties ? Ni.Ink.blue : strip.tokyo ? Tokyo.Ink.violet : Tokens.era === "vapor" ? Vw.Ink.label : Tokens.era === "flap" ? Fl.Ink.label : Tokens.era === "nixie" ? Nx.Ink.brass : Vfd.Ink.teal
+            color: strip.nightvision ? Nv.Ink.dim : strip.nineties ? Ni.Ink.blue : strip.tokyo ? Tokyo.Ink.violet : Tokens.era === "vapor" ? Vw.Ink.label : Tokens.era === "flap" ? Fl.Ink.label : Tokens.era === "nixie" ? Nx.Ink.brass : Vfd.Ink.teal
             opacity: strip.tokyo ? 0.6 : 1
         }
 
@@ -301,6 +304,12 @@ PanelWindow {
     Tokyo.Edge {
         anchors.fill: parent
         visible: strip.tokyo
+        place: "strip"
+    }
+    // Night Vision: the bar's dim green rule, at the desktop.
+    Nv.Edge {
+        anchors.fill: parent
+        visible: strip.nightvision
         place: "strip"
     }
     // 90s Nights: the bar's hot pink rule, at the desktop.

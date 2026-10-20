@@ -58,6 +58,15 @@ const looks = {
         keyFill: "#ffe600", keyRim: "#ffe600", keyInk: "#0a0514",
         head: "#ffe600", sub: "#ff2e97", marble: false
     },
+    // Night Vision: green-ruled cards on the phosphor, the live one ruled
+    // lit; dim app names and times, bright words, lit bodies, bright
+    // outlined keys.
+    nightvision: {
+        fill: "transparent", rim: "#2b8a22", live: "#7dff6a", radius: 0,
+        app: "#2fae2a", text: "#d6ffc9", body: "#7dff6a", time: "#2fae2a", crit: "#d6ffc9",
+        keyFill: "transparent", keyRim: "#d6ffc9", keyInk: "#d6ffc9",
+        head: "#d6ffc9", sub: "#7dff6a", marble: false
+    },
     // Violet-ruled cards on the dot glass, the live one in a cyan tube;
     // cyan app names, pink words, cyan key outlines.
     tokyo: {

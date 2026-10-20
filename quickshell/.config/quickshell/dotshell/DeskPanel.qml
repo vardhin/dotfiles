@@ -11,6 +11,7 @@ import qs.vapor as Vw
 import qs.flap as Fl
 import qs.nixie as Nx
 import qs.nineties as Ni
+import qs.nightvision as Nv
 import "Shapes.js" as Shapes
 import "Skins.js" as Skins
 import "Templates.js" as Templates
@@ -76,9 +77,11 @@ Item {
     readonly property Component nixieFace: Tokens.era === "nixie" && !raw && rect && !panel.layout && !panel.feed ? (nixieFaces[panel.template] ?? null) : null
     // 90s Nights draws each template as a slanted neon sign or a gadget (nineties/).
     readonly property Component ninetiesFace: Tokens.era === "nineties" && !raw && rect && !panel.layout && !panel.feed ? (ninetiesFaces[panel.template] ?? null) : null
+    // Night Vision draws each template as a green dot scope (nightvision/).
+    readonly property Component nightvisionFace: Tokens.era === "nightvision" && !raw && rect && !panel.layout && !panel.feed ? (nightvisionFaces[panel.template] ?? null) : null
     // Notes: no board at all, just its words (NotesPanel.qml).
     readonly property bool notes: panel.template === "notes"
-    readonly property bool faced: mediaFaced || tokyoFace !== null || vfdFace !== null || aeroFace !== null || blueprintFace !== null || vaporFace !== null || flapFace !== null || nixieFace !== null || ninetiesFace !== null || notes
+    readonly property bool faced: mediaFaced || tokyoFace !== null || vfdFace !== null || aeroFace !== null || blueprintFace !== null || vaporFace !== null || flapFace !== null || nixieFace !== null || ninetiesFace !== null || nightvisionFace !== null || notes
     // Any other board in Tokyo Night still gets the sign's neon tube.
     readonly property bool tokyoRim: Tokens.era === "tokyo" && !faced && rect && !raw
 
@@ -480,8 +483,18 @@ Item {
             vapor: vaporDevice,
             flap: flapDevice,
             nixie: nixieDevice,
-            nineties: ninetiesDevice
+            nineties: ninetiesDevice,
+            nightvision: nightvisionDevice
         })
+    Component {
+        id: nightvisionDevice
+        Nv.Media {
+            ctx: root.ctx
+            sink: root.actions
+            panel: root.panel
+            words: root.words
+        }
+    }
     Component {
         id: ninetiesDevice
         Ni.Media {
@@ -1265,6 +1278,113 @@ Item {
     Component {
         id: niTodo
         Ni.Todo {
+            ctx: root.ctx
+            sink: root.actions
+            panel: root.panel
+            words: root.words
+            big: root.expanded
+        }
+    }
+
+    readonly property var nightvisionFaces: ({
+            system: nvSystem,
+            clock: nvClock,
+            workspaces: nvWorkspaces,
+            battery: nvBattery,
+            messages: nvMessages,
+            capture: nvCapture,
+            caffeine: nvCaffeine,
+            clipboard: nvClipboard,
+            todo: nvTodo
+        })
+    Loader {
+        anchors.fill: parent
+        active: root.nightvisionFace !== null
+        sourceComponent: root.nightvisionFace
+    }
+    Component {
+        id: nvSystem
+        Nv.System {
+            ctx: root.ctx
+            sink: root.actions
+            panel: root.panel
+            words: root.words
+            big: root.expanded
+        }
+    }
+    Component {
+        id: nvClock
+        Nv.Clock {
+            ctx: root.ctx
+            sink: root.actions
+            panel: root.panel
+            words: root.words
+            big: root.expanded
+        }
+    }
+    Component {
+        id: nvWorkspaces
+        Nv.Workspaces {
+            ctx: root.ctx
+            sink: root.actions
+            panel: root.panel
+            words: root.words
+            big: root.expanded
+        }
+    }
+    Component {
+        id: nvBattery
+        Nv.Battery {
+            ctx: root.ctx
+            sink: root.actions
+            panel: root.panel
+            words: root.words
+            big: root.expanded
+        }
+    }
+    Component {
+        id: nvMessages
+        Nv.Messages {
+            ctx: root.ctx
+            sink: root.actions
+            panel: root.panel
+            words: root.words
+            big: root.expanded
+        }
+    }
+    Component {
+        id: nvCapture
+        Nv.Capture {
+            ctx: root.ctx
+            sink: root.actions
+            panel: root.panel
+            words: root.words
+            big: root.expanded
+        }
+    }
+    Component {
+        id: nvCaffeine
+        Nv.Caffeine {
+            ctx: root.ctx
+            sink: root.actions
+            panel: root.panel
+            words: root.words
+            big: root.expanded
+        }
+    }
+    Component {
+        id: nvClipboard
+        Nv.Clipboard {
+            ctx: root.ctx
+            sink: root.actions
+            panel: root.panel
+            words: root.words
+            big: root.expanded
+        }
+    }
+    Component {
+        id: nvTodo
+        Nv.Todo {
             ctx: root.ctx
             sink: root.actions
             panel: root.panel

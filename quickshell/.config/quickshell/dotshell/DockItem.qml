@@ -8,6 +8,7 @@ import qs.vapor as Vw
 import qs.flap as Fl
 import qs.nixie as Nx
 import qs.nineties as Ni
+import qs.nightvision as Nv
 import "Skins.js" as Skins
 import "Templates.js" as Templates
 
@@ -54,9 +55,11 @@ Item {
     readonly property bool nixieForm: Tokens.era === "nixie" && !panel.layout && ["media", "clock", "workspaces", "system", "battery", "messages", "capture", "caffeine", "clipboard", "todo"].includes(template?.name ?? "")
     // 90s Nights likewise, neon dots on the bar's dot glass (nineties/Docked.qml).
     readonly property bool ninetiesForm: Tokens.era === "nineties" && !panel.layout && ["media", "clock", "workspaces", "system", "battery", "messages", "capture", "caffeine", "clipboard", "todo"].includes(template?.name ?? "")
-    readonly property Item form: vfdForm ? vfd.item : tokyoForm ? tokyo.item : vaporForm ? vapor.item : flapForm ? flap.item : nixieForm ? nixie.item : ninetiesForm ? nineties.item : node
+    // Night Vision likewise, phosphor dots on the bar's green glass (nightvision/Docked.qml).
+    readonly property bool nightvisionForm: Tokens.era === "nightvision" && !panel.layout && ["media", "clock", "workspaces", "system", "battery", "messages", "capture", "caffeine", "clipboard", "todo"].includes(template?.name ?? "")
+    readonly property Item form: vfdForm ? vfd.item : tokyoForm ? tokyo.item : vaporForm ? vapor.item : flapForm ? flap.item : nixieForm ? nixie.item : ninetiesForm ? nineties.item : nightvisionForm ? nightvision.item : node
 
-    visible: layout !== null && (vfdForm ? (vfd.item?.shown ?? false) : tokyoForm ? (tokyo.item?.shown ?? false) : vaporForm ? (vapor.item?.shown ?? false) : flapForm ? (flap.item?.shown ?? false) : nixieForm ? (nixie.item?.shown ?? false) : ninetiesForm ? (nineties.item?.shown ?? false) : node.shown)
+    visible: layout !== null && (vfdForm ? (vfd.item?.shown ?? false) : tokyoForm ? (tokyo.item?.shown ?? false) : vaporForm ? (vapor.item?.shown ?? false) : flapForm ? (flap.item?.shown ?? false) : nixieForm ? (nixie.item?.shown ?? false) : ninetiesForm ? (nineties.item?.shown ?? false) : nightvisionForm ? (nightvision.item?.shown ?? false) : node.shown)
     implicitWidth: mode === "rail" ? Tokens.railDots : (form?.implicitWidth ?? 0) + padX * 2
     implicitHeight: mode === "rail" ? (form?.implicitHeight ?? 0) + padY * 2 : 11
     width: implicitWidth
@@ -145,7 +148,7 @@ Item {
         sink: sink
         tube: root.tube
         enabled: !root.ghost
-        visible: !root.vfdForm && !root.tokyoForm && !root.vaporForm && !root.flapForm && !root.nixieForm && !root.ninetiesForm && shown
+        visible: !root.vfdForm && !root.tokyoForm && !root.vaporForm && !root.flapForm && !root.nixieForm && !root.ninetiesForm && !root.nightvisionForm && shown
     }
     Loader {
         id: tokyo
@@ -165,6 +168,19 @@ Item {
         active: root.nixieForm
         enabled: !root.ghost
         sourceComponent: Nx.Docked {
+            template: root.template?.name ?? ""
+            rail: root.mode === "rail"
+            ctx: root.ctx
+            sink: sink
+            panel: root.panel
+            words: root.ctx["~"] ?? ({})
+        }
+    }
+    Loader {
+        id: nightvision
+        active: root.nightvisionForm
+        enabled: !root.ghost
+        sourceComponent: Nv.Docked {
             template: root.template?.name ?? ""
             rail: root.mode === "rail"
             ctx: root.ctx
