@@ -74,8 +74,10 @@ SYNC_LOCK = os.path.join(STATE, "ytmusic-sync.lock")
 FILE_RE = re.compile(r"^(.+)-(\d{3,4})\.mp4$")
 SONG_RE = re.compile(r"^([A-Za-z0-9_-]{11})\.mp3$")
 ID_RE = re.compile(r"^[A-Za-z0-9_-]{11}$")
-# Progressive or merged mp4 up to 480p, as the Media Center kept them.
-FORMAT = "bv*[height<=480][ext=mp4]+ba[ext=m4a]/b[height<=480][ext=mp4]/bv*[height<=480]+ba/b[height<=480]/b"
+# Progressive or merged mp4 up to 480p, as the Media Center kept them. H.264
+# first: the shell draws these with Qt Multimedia, whose ffmpeg picks the
+# hardware-only AV1 decoder and shows nothing for AV1 (mpv plays it fine).
+FORMAT = "bv*[height<=480][vcodec^=avc1]+ba[ext=m4a]/b[height<=480][vcodec^=avc1]/bv*[height<=480][ext=mp4]+ba[ext=m4a]/b[height<=480][ext=mp4]/bv*[height<=480]+ba/b[height<=480]/b"
 
 
 def die(msg, code=1):

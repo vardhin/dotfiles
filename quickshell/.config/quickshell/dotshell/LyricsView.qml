@@ -80,13 +80,16 @@ Item {
                 required property int index
                 readonly property int away: index - root.current
                 readonly property bool now: Lyrics.synced && away === 0
-                // Only the rows in view are drawn.
-                visible: !Lyrics.synced || Math.abs(away - root.manual) <= root.shownLines
+                // Only the rows in view are drawn. The row itself stays
+                // visible: a Column drops hidden children from its layout,
+                // which would pull the sheet up past the sung line.
+                readonly property bool shown: !Lyrics.synced || Math.abs(away - root.manual) <= root.shownLines
                 width: sheet.width
                 height: root.perLine
 
                 DotText {
                     id: line
+                    visible: row.shown
                     width: parent.width
                     elide: Text.ElideRight
                     text: row.modelData.text.toUpperCase()
@@ -96,7 +99,7 @@ Item {
                 // The wipe: the same line in the tube, cut at how far it
                 // has been sung.
                 Item {
-                    visible: row.now
+                    visible: row.now && row.shown
                     width: Math.round(Math.min(parent.width, line.implicitWidth) * Lyrics.lineProgress)
                     height: parent.height
                     clip: true

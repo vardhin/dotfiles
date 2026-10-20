@@ -10,19 +10,23 @@ import qs.services
 // seek whenever the two drift apart by more than a third of a second.
 //
 // Lives in a Pane's overlay (screen px). A track that is still streaming, not
-// saved yet, shows its art (plain, not dots) until the file lands.
+// saved yet, shows its art (plain, not dots) until the file lands. A song
+// (YouTube Music, or any local file) plays its music video instead, streamed
+// muted from YouTube once services/VideoMatch.qml has found and resolved it.
 Item {
     id: root
 
     // Set false while hidden: decoding stops.
     property bool active: visible
     readonly property string path: Media.isVideo ? (Tv.byId[Media.tvId]?.path ?? "") : ""
-    readonly property bool hasVideo: path !== "" && player.hasVideo
+    readonly property string matched: !Media.isVideo && VideoMatch.urlFor === VideoMatch.id ? VideoMatch.url : ""
+    readonly property string source: path ? "file://" + path : matched
+    readonly property bool hasVideo: source !== "" && player.hasVideo
     readonly property real dpr: QsWindow.window?.devicePixelRatio ?? 1
 
     MediaPlayer {
         id: player
-        source: root.active && root.path ? "file://" + root.path : ""
+        source: root.active ? root.source : ""
         videoOutput: video
         // No audioOutput: mpv plays the sound.
         onMediaStatusChanged: {
@@ -32,7 +36,7 @@ Item {
     }
 
     function sync(force: bool): void {
-        if (!active || !path)
+        if (!active || !source)
             return;
         const want = Media.position * 1000;
         if (force || Math.abs(player.position - want) > 350)
@@ -50,7 +54,7 @@ Item {
         }
     }
     Timer {
-        running: root.active && root.path !== ""
+        running: root.active && root.source !== ""
         interval: 1000
         repeat: true
         onTriggered: root.sync(false)

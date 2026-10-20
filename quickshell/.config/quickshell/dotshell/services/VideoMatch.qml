@@ -6,7 +6,9 @@ import Quickshell.Io
 import qs
 
 // A music video for the track Media follows, for expanded Now playing.
-//   Dot TV songs (ytmusic cache) already carry their YouTube id.
+//   Dot TV songs (ytmusic cache) carry their YouTube id: that one, unless it
+//   is an art track (a "<artist> - Topic" channel, one still picture); then
+//   a search like any other local file, skipping it.
 //   Other local files: yt-dlp "ytsearch5:<artist> <title> official video",
 //   keeping the first result whose duration is within 3 s of the track.
 // Matches live in ~/.cache/dot/videos.json ({ key: { id, bad: [ids] } }); a
@@ -35,12 +37,15 @@ Singleton {
     readonly property bool local: Media.url.startsWith("file://") && /\.(mp3|flac|ogg|opus|m4a|wav)$/i.test(Media.url)
     readonly property string key: local && Media.title ? (Media.artist + " - " + Media.title).toLowerCase().replace(/\s+/g, " ").trim() : ""
     readonly property var entry: key ? (store.matches[key] ?? null) : null
-    readonly property string id: Media.isAudio ? Media.tvId : (entry?.id ?? "")
+    readonly property string id: entry?.id ?? ""
     property string url: ""
     property string urlFor: ""
     property bool searching: false
 
-    onIdChanged: url = ""
+    onIdChanged: {
+        url = "";
+        refresh();
+    }
     onWantedChanged: refresh()
     onKeyChanged: refresh()
 
@@ -51,8 +56,48 @@ Singleton {
             resolve();
             return;
         }
-        if (key && !entry && !search.running)
+        if (!key || entry || search.running || probe.running)
+            return;
+        if (Media.isAudio)
+            own(Media.tvId);
+        else
             find([]);
+    }
+
+    // A song's own id: its video, unless the channel is an art track's.
+    function own(vid: string): void {
+        searching = true;
+        probe.forKey = key;
+        probe.vid = vid;
+        probe.command = ["yt-dlp", "--skip-download", "--no-warnings", "--print", "%(channel)s", "https://www.youtube.com/watch?v=" + vid];
+        probe.running = true;
+    }
+
+    Process {
+        id: probe
+        property string forKey: ""
+        property string vid: ""
+        stdout: StdioCollector {
+            onStreamFinished: {
+                const channel = text.trim();
+                root.searching = false;
+                // Offline or gone: try again with the next track.
+                if (!channel)
+                    return;
+                // The track moved on meanwhile: look up the new one.
+                if (probe.forKey !== root.key) {
+                    root.refresh();
+                    return;
+                }
+                if (/ - Topic$/.test(channel)) {
+                    root.find([probe.vid]);
+                    return;
+                }
+                const m = Object.assign({}, store.matches);
+                m[probe.forKey] = { id: probe.vid, bad: [], at: Date.now() };
+                store.matches = m;
+            }
+        }
     }
 
     function find(bad: var): void {
@@ -87,6 +132,7 @@ Singleton {
                 const m = Object.assign({}, store.matches);
                 m[search.forKey] = { id: pick, bad: search.bad, at: Date.now() };
                 store.matches = m;
+                root.refresh();
             }
         }
     }
@@ -113,7 +159,7 @@ Singleton {
             return;
         }
         resolver.forId = id;
-        resolver.command = ["yt-dlp", "-g", "--no-warnings", "-f", "bv*[height<=360][vcodec^=avc1]/bv*[height<=480]/b[height<=480]", "https://www.youtube.com/watch?v=" + id];
+        resolver.command = ["yt-dlp", "-g", "--no-warnings", "-f", "bv*[height<=360][vcodec^=avc1]/bv*[height<=480][vcodec^=avc1]/bv*[height<=480][vcodec!^=av01]/b[height<=480]", "https://www.youtube.com/watch?v=" + id];
         resolver.running = true;
     }
 
@@ -131,6 +177,9 @@ Singleton {
                 if (resolver.forId === root.id) {
                     root.url = u;
                     root.urlFor = resolver.forId;
+                } else {
+                    // The track moved on meanwhile.
+                    root.refresh();
                 }
             }
         }

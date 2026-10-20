@@ -11,7 +11,8 @@ import "../Hardware.js" as Hardware
 // artist, a seek bar, transport and a spectrum. Space plays or pauses,
 // Left/Right seek 5 s, N/P next and previous, S switches player. With Dot TV
 // playing, the video plays right here (TvScreen) over the art, with what is up
-// next and M for Endless Mix.
+// next and M for Endless Mix. A song (YouTube Music, or any local file) gets
+// its music video there too, once services/VideoMatch.qml finds one.
 // TV: the Dot TV library (services/Tv.qml, the `dottv` CLI), most played
 // first, with the YouTube Music songs (♪) among the videos. Type to filter;
 // Ctrl S searches YouTube for the text instead.
@@ -92,7 +93,14 @@ Pane {
     }
     readonly property int screenH: Math.max(0, Math.min(Math.round(inner * 9 / 16), avail - reserve))
     readonly property int screenW: Math.min(inner, Math.round(screenH * 16 / 9))
-    readonly property bool tvShown: (page === "screen" || Media.isVideo && (page === "now" || page === "tv")) && screenH >= 18
+    // A song's music video, found and ready to stream.
+    readonly property bool matched: !Media.isVideo && VideoMatch.id !== "" && VideoMatch.urlFor === VideoMatch.id && VideoMatch.url !== ""
+    readonly property bool picture: Media.isVideo || matched
+    readonly property bool tvShown: (page === "screen" || picture && (page === "now" || page === "tv")) && screenH >= 18
+    // Look the video up only while a page that would show it is open.
+    readonly property bool wantsVideo: shown && (page === "now" || page === "tv")
+    onWantsVideoChanged: VideoMatch.want("mediapane", wantsVideo)
+    Component.onDestruction: VideoMatch.want("mediapane", false)
     readonly property int slots: Math.max(3, Math.min(10, Math.floor((avail - 5 * Tokens.lineDots - 30 - (tvShown ? screenH + 3 : 0)) / Tokens.lineDots)))
     property int screenRow: 0
     // Rows the NOW page has under the tabs and the video, above the rule
@@ -540,9 +548,9 @@ Pane {
 
                     Item {
                         id: now
-                        readonly property int art: Media.isVideo ? 0 : Tokens.lineDots * 4
+                        readonly property int art: pane.picture ? 0 : Tokens.lineDots * 4
                         width: pane.inner
-                        height: Media.isVideo ? Tokens.lineDots * 4 : art
+                        height: pane.picture ? Tokens.lineDots * 4 : art
 
                         // Unlit until the art loads; a frame marks where it goes.
                         Frame {
@@ -663,7 +671,7 @@ Pane {
                     // Transport and time (with a readout: the keys are on the
                     // faceplate, the time in the readout; MIX and SCREEN stay).
                     Item {
-                        visible: !pane.hasDevice || Media.isTv || Media.isVideo
+                        visible: !pane.hasDevice || Media.isTv || pane.picture
                         width: pane.inner
                         height: Tokens.lineDots
 
@@ -700,7 +708,7 @@ Pane {
                                 onClicked: Tv.mix(!Tv.status.mix)
                             }
                             DotButton {
-                                visible: Media.isVideo
+                                visible: pane.picture
                                 text: "SCREEN"
                                 onClicked: pane.show("screen")
                             }
