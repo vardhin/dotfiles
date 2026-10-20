@@ -1,0 +1,29 @@
+# Empty metapackage that depends on everything in ../packages.txt that is
+# installed, so `pacman -Qdtq | pacman -Rns -` never sees those as orphans.
+# Dot Shell imports modules (QtMultimedia, ...) that no package depends on,
+# and an orphan sweep once took them and the shell with them.
+#
+# Rebuild after editing packages.txt:  cd meta && makepkg -fi
+# (install.sh does this after installing the packages.)
+
+pkgname=dotfiles-deps
+pkgver=1
+pkgrel=1
+pkgdesc="Keeps the dotfiles' packages (packages.txt) from being removed as orphans"
+arch=(any)
+license=(MIT)
+
+_list() {
+  grep -v '^\s*#' "$startdir/../packages.txt" | sed 's/#.*//; s/\s\+$//; /^\s*$/d'
+}
+
+# Installed ones only: a package left out on purpose (plymouth, say) is not
+# pulled in by building this.
+_missing=" $(_list | xargs pacman -T | tr '\n' ' ') "
+depends=()
+for _p in $(_list); do
+  [[ $_missing == *" $_p "* ]] || depends+=("$_p")
+done
+unset _p _missing
+
+package() { :; }

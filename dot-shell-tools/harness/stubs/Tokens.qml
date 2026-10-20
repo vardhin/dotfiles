@@ -20,4 +20,7 @@ QtObject {
     property int lineDots: 13
     property int railDots: 16
     property int home: 1
+    property bool flipped: false
+    property bool neon: true
+    function ink(c) { return c }
 }

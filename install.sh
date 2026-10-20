@@ -34,6 +34,10 @@ install_packages() {
     log "no AUR helper found; install these by hand:"
     read_list "$DOTFILES/packages-aur.txt" | sed 's/^/   /'
   fi
+
+  # Metapackage depending on the above, so orphan cleanups leave them alone.
+  log "dotfiles-deps metapackage"
+  (cd "$DOTFILES/meta" && makepkg -fi --noconfirm && rm -f ./*.pkg.tar.*)
 }
 
 clone_once() { [[ -d $2 ]] || git clone --depth 1 "$1" "$2"; }

@@ -6,6 +6,7 @@ import qs.vfd as Vfd
 import qs.tokyo as Tokyo
 import qs.vapor as Vw
 import qs.flap as Fl
+import qs.nixie as Nx
 import "Skins.js" as Skins
 import "Templates.js" as Templates
 
@@ -48,9 +49,11 @@ Item {
     readonly property bool vaporForm: Tokens.era === "vapor" && !panel.layout && ["media", "clock", "workspaces", "system", "battery", "messages", "capture", "caffeine", "clipboard", "todo"].includes(template?.name ?? "")
     // Split-Flap likewise, characters on flap tiles drawn in dots (flap/Docked.qml).
     readonly property bool flapForm: Tokens.era === "flap" && !panel.layout && ["media", "clock", "workspaces", "system", "battery", "messages", "capture", "caffeine", "clipboard", "todo"].includes(template?.name ?? "")
-    readonly property Item form: vfdForm ? vfd.item : tokyoForm ? tokyo.item : vaporForm ? vapor.item : flapForm ? flap.item : node
+    // Nixie likewise, glowing dots on the walnut bar (nixie/Docked.qml).
+    readonly property bool nixieForm: Tokens.era === "nixie" && !panel.layout && ["media", "clock", "workspaces", "system", "battery", "messages", "capture", "caffeine", "clipboard", "todo"].includes(template?.name ?? "")
+    readonly property Item form: vfdForm ? vfd.item : tokyoForm ? tokyo.item : vaporForm ? vapor.item : flapForm ? flap.item : nixieForm ? nixie.item : node
 
-    visible: layout !== null && (vfdForm ? (vfd.item?.shown ?? false) : tokyoForm ? (tokyo.item?.shown ?? false) : vaporForm ? (vapor.item?.shown ?? false) : flapForm ? (flap.item?.shown ?? false) : node.shown)
+    visible: layout !== null && (vfdForm ? (vfd.item?.shown ?? false) : tokyoForm ? (tokyo.item?.shown ?? false) : vaporForm ? (vapor.item?.shown ?? false) : flapForm ? (flap.item?.shown ?? false) : nixieForm ? (nixie.item?.shown ?? false) : node.shown)
     implicitWidth: mode === "rail" ? Tokens.railDots : (form?.implicitWidth ?? 0) + padX * 2
     implicitHeight: mode === "rail" ? (form?.implicitHeight ?? 0) + padY * 2 : 11
     width: implicitWidth
@@ -139,13 +142,26 @@ Item {
         sink: sink
         tube: root.tube
         enabled: !root.ghost
-        visible: !root.vfdForm && !root.tokyoForm && !root.vaporForm && !root.flapForm && shown
+        visible: !root.vfdForm && !root.tokyoForm && !root.vaporForm && !root.flapForm && !root.nixieForm && shown
     }
     Loader {
         id: tokyo
         active: root.tokyoForm
         enabled: !root.ghost
         sourceComponent: Tokyo.Docked {
+            template: root.template?.name ?? ""
+            rail: root.mode === "rail"
+            ctx: root.ctx
+            sink: sink
+            panel: root.panel
+            words: root.ctx["~"] ?? ({})
+        }
+    }
+    Loader {
+        id: nixie
+        active: root.nixieForm
+        enabled: !root.ghost
+        sourceComponent: Nx.Docked {
             template: root.template?.name ?? ""
             rail: root.mode === "rail"
             ctx: root.ctx

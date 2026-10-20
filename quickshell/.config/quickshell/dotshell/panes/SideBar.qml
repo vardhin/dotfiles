@@ -7,6 +7,7 @@ import qs.vfd as Vfd
 import qs.tokyo as Tokyo
 import qs.vapor as Vw
 import qs.flap as Fl
+import qs.nixie as Nx
 
 // The side bar: a thin LED rail on the right edge, about as wide as the top
 // strip is tall (the `side` token).
@@ -117,6 +118,16 @@ Variants {
             place: "rail"
         }
 
+        // Nixie: one long walnut case, brass where it meets the desktop.
+        Nx.Rack {
+            x: surface.x
+            y: 0
+            width: surface.width
+            height: bar.height
+            visible: Tokens.era === "nixie" && surface.visible
+            place: "rail"
+        }
+
         // VFD: a gunmetal head unit, the dots in one long sunken window.
         Vfd.Dash {
             x: surface.x - bar.pad
@@ -143,7 +154,7 @@ Variants {
             visible: bar.reveal > 0
             cols: bar.cols
             rows: Math.floor((bar.height - bar.pad * 2) / Tokens.pitch)
-            bare: Tokens.era === "aero" || Tokens.era === "vapor" || Tokens.era === "flap"
+            bare: Tokens.era === "aero" || Tokens.era === "vapor" || Tokens.era === "flap" || Tokens.era === "nixie"
 
             Component.onCompleted: Sys.want("side-" + bar.modelData.name, true)
             Component.onDestruction: Sys.want("side-" + bar.modelData.name, false)

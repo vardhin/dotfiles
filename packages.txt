@@ -26,6 +26,8 @@ plymouth
 # notifications and wallpaper. qt6-shadertools only to rebuild .qsb shaders;
 # libnotify for notify-send, which the shell's own toasts go through.
 quickshell
+qt6-multimedia          # QtMultimedia: video wallpapers (panes/Wallpaper.qml) and media panes
+qt6-multimedia-ffmpeg   # its decoding backend
 qt6-shadertools
 libnotify
 # matugen: picks the wallpaper's hue when the `hue` token is "wallpaper"

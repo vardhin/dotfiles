@@ -40,6 +40,15 @@ const looks = {
         keyFill: "#ffd400", keyRim: "#ffd400", keyInk: "#141414",
         head: "#ffd400", sub: "#ffd400", marble: false
     },
+    // Nixie: ivory cards on the walnut, ruled in the paper's tan, the live
+    // one in cathode orange; dark brown words, brass app names and times,
+    // polished brass keys with dark words, the heading glowing.
+    nixie: {
+        fill: "#efe2c4", rim: "#d8c49a", live: "#ff7a1a", radius: 0,
+        app: "#8a5a1e", text: "#3a1d0e", body: "#5a2e16", time: "#8a5a1e", crit: "#c2410c",
+        keyFill: "#d9a95a", keyRim: "#8a5a1e", keyInk: "#3a1d0e",
+        head: "#ffc285", sub: "#ff7a1a", marble: false
+    },
     // Violet-ruled cards on the dot glass, the live one in a cyan tube;
     // cyan app names, pink words, cyan key outlines.
     tokyo: {

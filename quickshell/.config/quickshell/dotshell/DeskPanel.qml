@@ -9,6 +9,7 @@ import qs.aero as Aero
 import qs.blueprint as Bp
 import qs.vapor as Vw
 import qs.flap as Fl
+import qs.nixie as Nx
 import "Shapes.js" as Shapes
 import "Skins.js" as Skins
 import "Templates.js" as Templates
@@ -70,9 +71,11 @@ Item {
     readonly property Component vaporFace: Tokens.era === "vapor" && !raw && rect && !panel.layout && !panel.feed ? (vaporFaces[panel.template] ?? null) : null
     // Split-Flap draws each template as a departure board (flap/).
     readonly property Component flapFace: Tokens.era === "flap" && !raw && rect && !panel.layout && !panel.feed ? (flapFaces[panel.template] ?? null) : null
+    // Nixie draws each template as valve-era kit in a walnut case (nixie/).
+    readonly property Component nixieFace: Tokens.era === "nixie" && !raw && rect && !panel.layout && !panel.feed ? (nixieFaces[panel.template] ?? null) : null
     // Notes: no board at all, just its words (NotesPanel.qml).
     readonly property bool notes: panel.template === "notes"
-    readonly property bool faced: mediaFaced || tokyoFace !== null || vfdFace !== null || aeroFace !== null || blueprintFace !== null || vaporFace !== null || flapFace !== null || notes
+    readonly property bool faced: mediaFaced || tokyoFace !== null || vfdFace !== null || aeroFace !== null || blueprintFace !== null || vaporFace !== null || flapFace !== null || nixieFace !== null || notes
     // Any other board in Tokyo Night still gets the sign's neon tube.
     readonly property bool tokyoRim: Tokens.era === "tokyo" && !faced && rect && !raw
 
@@ -472,8 +475,18 @@ Item {
             aero: aeroDevice,
             blueprint: blueprintDevice,
             vapor: vaporDevice,
-            flap: flapDevice
+            flap: flapDevice,
+            nixie: nixieDevice
         })
+    Component {
+        id: nixieDevice
+        Nx.Media {
+            ctx: root.ctx
+            sink: root.actions
+            panel: root.panel
+            words: root.words
+        }
+    }
     Component {
         id: flapDevice
         Fl.Media {
@@ -1025,6 +1038,113 @@ Item {
     Component {
         id: bpTodo
         Bp.Todo {
+            ctx: root.ctx
+            sink: root.actions
+            panel: root.panel
+            words: root.words
+            big: root.expanded
+        }
+    }
+
+    readonly property var nixieFaces: ({
+            system: nxSystem,
+            clock: nxClock,
+            workspaces: nxWorkspaces,
+            battery: nxBattery,
+            messages: nxMessages,
+            capture: nxCapture,
+            caffeine: nxCaffeine,
+            clipboard: nxClipboard,
+            todo: nxTodo
+        })
+    Loader {
+        anchors.fill: parent
+        active: root.nixieFace !== null
+        sourceComponent: root.nixieFace
+    }
+    Component {
+        id: nxSystem
+        Nx.System {
+            ctx: root.ctx
+            sink: root.actions
+            panel: root.panel
+            words: root.words
+            big: root.expanded
+        }
+    }
+    Component {
+        id: nxClock
+        Nx.Clock {
+            ctx: root.ctx
+            sink: root.actions
+            panel: root.panel
+            words: root.words
+            big: root.expanded
+        }
+    }
+    Component {
+        id: nxWorkspaces
+        Nx.Workspaces {
+            ctx: root.ctx
+            sink: root.actions
+            panel: root.panel
+            words: root.words
+            big: root.expanded
+        }
+    }
+    Component {
+        id: nxBattery
+        Nx.Battery {
+            ctx: root.ctx
+            sink: root.actions
+            panel: root.panel
+            words: root.words
+            big: root.expanded
+        }
+    }
+    Component {
+        id: nxMessages
+        Nx.Messages {
+            ctx: root.ctx
+            sink: root.actions
+            panel: root.panel
+            words: root.words
+            big: root.expanded
+        }
+    }
+    Component {
+        id: nxCapture
+        Nx.Capture {
+            ctx: root.ctx
+            sink: root.actions
+            panel: root.panel
+            words: root.words
+            big: root.expanded
+        }
+    }
+    Component {
+        id: nxCaffeine
+        Nx.Caffeine {
+            ctx: root.ctx
+            sink: root.actions
+            panel: root.panel
+            words: root.words
+            big: root.expanded
+        }
+    }
+    Component {
+        id: nxClipboard
+        Nx.Clipboard {
+            ctx: root.ctx
+            sink: root.actions
+            panel: root.panel
+            words: root.words
+            big: root.expanded
+        }
+    }
+    Component {
+        id: nxTodo
+        Nx.Todo {
             ctx: root.ctx
             sink: root.actions
             panel: root.panel
