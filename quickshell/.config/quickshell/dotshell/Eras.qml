@@ -3,9 +3,9 @@ pragma Singleton
 import QtQuick
 import Quickshell
 
-// Era presets: moods, not palette clones. The first three come from the Dot
-// Shell prototype; Phase 5 adds 90s Nights, Frutiger Aero and Game Boy; Phase 9
-// Nixie, Split-Flap, Night Vision, Vaporwave, Arcade and Blueprint. Each era
+// Era presets: moods, not palette clones. Tokyo Night and VFD come from the Dot
+// Shell prototype; Phase 5 adds 90s Nights and Frutiger Aero; Phase 9
+// Nixie, Split-Flap, Night Vision, Vaporwave and Blueprint. Each era
 // also has a scene (panes/Scenes.js), played while you are away.
 //
 //   slots   one color per panel "tube": [0] primary, [1] secondary, [2] accent
@@ -51,19 +51,6 @@ Singleton {
             mono: false,
             ansi: ["#1c0f30", "#ff3355", "#39ff6a", "#ffe600", "#1fa8ff", "#ff2e97", "#29fff1", "#ffe9f6"]
         },
-        matrix: {
-            name: "Matrix",
-            blurb: "GREEN RAIN",
-            slots: ["#00ff41", "#b4ffc8", "#00aa28"],
-            unlit: "#0a2414",
-            glass: "#020805",
-            ramp: ["#002e0c", "#006b1b", "#00b82f", "#00ff41"],
-            glow: 0.5,
-            shape: "square",
-            light: false,
-            mono: true,
-            ansi: ["#04140a", "#2fa84f", "#00ff41", "#8cff9e", "#00aa28", "#3fd468", "#6dff8f", "#b4ffc8"]
-        },
         vfd: {
             name: "VFD",
             blurb: "CAR STEREO",
@@ -89,21 +76,6 @@ Singleton {
             light: true,
             mono: false,
             ansi: ["#123a5c", "#c8323c", "#23963c", "#b48200", "#0a64c8", "#a03cb4", "#0096b4", "#d7ecf7"]
-        },
-        gameboy: {
-            name: "Game Boy",
-            blurb: "DMG-01 LCD",
-            // The BGB emulator's greens: the DMG's four shades, minty
-            // rather than pea soup.
-            slots: ["#081820", "#346856", "#081820"],
-            unlit: "#cbe8bb",
-            glass: "#e0f8d0",
-            ramp: ["#081820", "#346856", "#88c070", "#e0f8d0"],
-            glow: 0,
-            shape: "square",
-            light: true,
-            mono: true,
-            ansi: ["#081820", "#346856", "#346856", "#346856", "#081820", "#346856", "#346856", "#cbe8bb"]
         },
         nixie: {
             name: "Nixie",
@@ -156,19 +128,6 @@ Singleton {
             light: false,
             mono: false,
             ansi: ["#21123d", "#ff6b9d", "#05ffa1", "#fffb96", "#01cdfe", "#ff71ce", "#7af7ff", "#f4e9ff"]
-        },
-        arcade: {
-            name: "Arcade",
-            blurb: "RGB332 CABINET",
-            slots: ["#33ff33", "#ff3333", "#ffff33"],
-            unlit: "#181818",
-            glass: "#000000",
-            ramp: ["#202040", "#2040ff", "#ff2020", "#ffffff"],
-            glow: 0.45,
-            shape: "square",
-            light: false,
-            mono: false,
-            ansi: ["#101010", "#ff3333", "#33ff33", "#ffff33", "#3366ff", "#ff33ff", "#33ffff", "#f0f0f0"]
         },
         blueprint: {
             name: "Blueprint",

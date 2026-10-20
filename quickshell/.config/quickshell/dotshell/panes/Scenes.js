@@ -145,35 +145,6 @@ const scenes = {
         }
     },
 
-    // Matrix: green rain, glyph columns falling at their own speed.
-    matrix: {
-        make(st) {
-            st.cw = 7; st.ch = 11;
-            st.cols = [];
-            for (let i = 0; i < Math.floor(st.w / st.cw); i++)
-                st.cols.push({ y: -st.r() * st.h, v: 6 + st.r() * 14, len: 6 + Math.floor(st.r() * 18), g: [] });
-            st.glyphs = "ｱｲｳｴｵｶｷｸｹｺ01234567890ABCDEFZ:.=*+<>";
-        },
-        draw(st, ctx, dt, p) {
-            for (let i = 0; i < st.cols.length; i++) {
-                const c = st.cols[i];
-                c.y += c.v * dt * st.ch / 2;
-                const head = Math.floor(c.y / st.ch);
-                if ((head - c.len) * st.ch > st.h) {
-                    c.y = -st.r() * st.h * 0.5;
-                    c.v = 6 + st.r() * 14;
-                }
-                for (let k = 0; k < c.len; k++) {
-                    const row = head - k;
-                    if (row < 0 || row * st.ch > st.h) continue;
-                    if (!c.g[row] || st.r() < 0.02) c.g[row] = st.glyphs[Math.floor(st.r() * st.glyphs.length)];
-                    const a = k === 0 ? 1 : k < c.len / 2 ? 0.75 : 0.5;
-                    text(ctx, c.g[row], i * st.cw, row * st.ch, 11, rgba(k === 0 ? p.s1 : p.s0, a));
-                }
-            }
-        }
-    },
-
     // VFD: a car stereo, clock and spectrum.
     vfd: {
         make(st) {
@@ -220,49 +191,6 @@ const scenes = {
                 ring(ctx, b.x, b.y, b.r, rgba(i % 3 === 0 ? p.s2 : p.s0, 0.9));
                 dot(ctx, b.x - b.r * 0.45, b.y - b.r * 0.45, rgba(p.s1, 1));
             }
-        }
-    },
-
-    // Game Boy: Conway's Life on 2x2 cells, reseeded when it settles.
-    gameboy: {
-        make(st) {
-            st.cs = 2;
-            st.gw = Math.floor(st.w / st.cs);
-            st.gh = Math.floor(st.h / st.cs);
-            scenes.gameboy.seed(st);
-        },
-        seed(st) {
-            st.g = new Uint8Array(st.gw * st.gh);
-            for (let i = 0; i < st.g.length; i++) st.g[i] = st.r() < 0.28 ? 1 : 0;
-            st.acc = 0;
-            st.gen = 0;
-            st.last = -1;
-        },
-        draw(st, ctx, dt, p) {
-            st.acc += dt;
-            if (st.acc > 0.12) {
-                st.acc = 0;
-                const n = new Uint8Array(st.g.length);
-                let alive = 0;
-                for (let y = 0; y < st.gh; y++)
-                    for (let x = 0; x < st.gw; x++) {
-                        let c = 0;
-                        for (let dy = -1; dy <= 1; dy++)
-                            for (let dx = -1; dx <= 1; dx++)
-                                if (dx || dy) c += st.g[((y + dy + st.gh) % st.gh) * st.gw + (x + dx + st.gw) % st.gw];
-                        const i = y * st.gw + x;
-                        n[i] = (c === 3 || (c === 2 && st.g[i])) ? 1 : 0;
-                        alive += n[i];
-                    }
-                st.g = n;
-                st.gen++;
-                if (alive === st.last && st.gen > 40 || st.gen > 900) scenes.gameboy.seed(st);
-                st.last = alive;
-            }
-            ctx.fillStyle = rgba(p.s0, 1);
-            for (let y = 0; y < st.gh; y++)
-                for (let x = 0; x < st.gw; x++)
-                    if (st.g[y * st.gw + x]) ctx.fillRect(x * st.cs, y * st.cs, st.cs, st.cs);
         }
     },
 
@@ -379,55 +307,6 @@ const scenes = {
         }
     },
 
-    // Arcade: invaders marching down, a ship answering.
-    arcade: {
-        SPRITE: ["00100000100", "00010001000", "00111111100", "01101110110", "11111111111", "10111111101", "10100000101", "00011011000"],
-        make(st) {
-            st.ox = 4; st.dir = 1; st.oy = 4; st.acc = 0; st.frame = 0;
-            // As many invaders as the board holds (10 x 4 on a screen, fewer on a wall).
-            st.icols = Math.max(2, Math.min(10, Math.floor((st.w - 8) / 14)));
-            st.irows = Math.max(1, Math.min(4, Math.floor((st.h - 20) / 11)));
-            st.alive = [];
-            for (let i = 0; i < st.icols * st.irows; i++) st.alive.push(true);
-            st.shot = null;
-            st.ship = st.w / 2;
-        },
-        draw(st, ctx, dt, p) {
-            const S = scenes.arcade.SPRITE, cols = st.icols, rows = st.irows, gx = 14, gy = 11;
-            st.acc += dt;
-            if (st.acc > 0.35) {
-                st.acc = 0;
-                st.frame ^= 1;
-                st.ox += st.dir * 2;
-                if (st.ox < 2 || st.ox + cols * gx > st.w - 2) { st.dir = -st.dir; st.oy += 4; }
-                if (st.oy + rows * gy > st.h - 16 || st.alive.every(v => !v)) scenes.arcade.make(st);
-            }
-            for (let r = 0; r < rows; r++)
-                for (let c = 0; c < cols; c++) {
-                    if (!st.alive[r * cols + c]) continue;
-                    const x0 = st.ox + c * gx, y0 = st.oy + r * gy;
-                    ctx.fillStyle = rgba(r === 0 ? p.s2 : r < 2 ? p.s1 : p.s0, 1);
-                    for (let y = 0; y < S.length; y++)
-                        for (let x = 0; x < S[y].length; x++) {
-                            const on = S[y][x] === "1" && !(st.frame && y === 7 && (x < 3 || x > 7));
-                            if (on) ctx.fillRect(x0 + x, y0 + y, 1, 1);
-                        }
-                }
-            st.ship += Math.sin(st.t * 0.9) * dt * 30;
-            ctx.fillStyle = rgba(p.s0, 1);
-            ctx.fillRect(Math.floor(st.ship) - 5, st.h - 5, 11, 3);
-            ctx.fillRect(Math.floor(st.ship) - 1, st.h - 7, 3, 2);
-            if (!st.shot && st.r() < dt * 2) st.shot = { x: Math.floor(st.ship), y: st.h - 8 };
-            if (st.shot) {
-                st.shot.y -= dt * 90;
-                ctx.fillRect(st.shot.x, Math.floor(st.shot.y), 1, 3);
-                const c = Math.floor((st.shot.x - st.ox) / gx), r = Math.floor((st.shot.y - st.oy) / gy);
-                if (c >= 0 && c < cols && r >= 0 && r < rows && st.alive[r * cols + c]) { st.alive[r * cols + c] = false; st.shot = null; }
-                else if (st.shot.y < 0) st.shot = null;
-            }
-        }
-    },
-
     // Blueprint: a drafting pen tracing a spirograph on the grid.
     blueprint: {
         make(st) {
@@ -459,9 +338,9 @@ const scenes = {
 };
 
 const names = {
-    tokyo: "RAIN CITY", nineties: "SUNSET GRID", matrix: "DIGITAL RAIN",
-    vfd: "CAR STEREO", aero: "BUBBLES", gameboy: "LIFE", nixie: "NIXIE CLOCK", flap: "DEPARTURES",
-    nightvision: "RADAR", vapor: "VAPOR", arcade: "INVADERS", blueprint: "DRAFTING"
+    tokyo: "RAIN CITY", nineties: "SUNSET GRID", vfd: "CAR STEREO", aero: "BUBBLES",
+    nixie: "NIXIE CLOCK", flap: "DEPARTURES", nightvision: "RADAR", vapor: "VAPOR",
+    blueprint: "DRAFTING"
 };
 
 function has(id) {

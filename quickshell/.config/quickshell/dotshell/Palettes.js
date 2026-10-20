@@ -1,7 +1,7 @@
 .pragma library
 
 // Every era's other tone, designed, not derived. An era's own palette lives
-// in Eras.qml (Frutiger Aero and Game Boy are light, the rest dark); this is
+// in Eras.qml (Frutiger Aero is light, the rest dark); this is
 // its counterpart, built the way paired themes are: each role (glass, ink,
 // rules, accents, alarms) given its own value for the other glass rather than
 // a color flipped. Dark counterparts use tinted near-blacks, lift raised
@@ -11,17 +11,14 @@
 //
 //   tokyo        Tokyo Night Day (folke/tokyonight.nvim's day palette)
 //   nineties     Memphis: off-white, hot pink, blue, sun yellow
-//   matrix       green-bar printout paper
 //   vfd          a daylight LCD head unit: reflective segments, aluminium
 //   flap         an ivory Solari board, black letters on white flaps
 //   nixie        brass and ivory instrument panel
 //   nightvision  a daylight scope: sand, olive drab, coyote
 //   vapor        pastel vaporwave
-//   arcade       cabinet side art: white card, primaries
 //   blueprint    a whiteprint (diazo): cream paper, blue-violet lines
-// and the dark ones:
+// and the dark one:
 //   aero         Aero night glass: deep navy glass, sky ink, black shadows
-//   gameboy      the Kirokaze palette (lospec): violet night, lime pixels
 //
 // Per era:
 //   slots unlit glass ramp glow ansi blurb   as in Eras.qml, for this tone
@@ -59,16 +56,6 @@ const alts = {
         },
         hw: { plate: { inner: { color: "#fff6e5" } } }
     },
-    matrix: {
-        blurb: "GREEN BAR PAPER",
-        slots: ["#0b6b2a", "#3c8f52", "#14501f"],
-        unlit: "#d9ead6",
-        glass: "#eef6ec",
-        ramp: ["#0b2e14", "#1f6b35", "#7fbf8c", "#eef6ec"],
-        glow: 0,
-        ansi: ["#0f3d1c", "#2f7a3f", "#0b6b2a", "#4f8f3a", "#14501f", "#3c8f52", "#2a7f5a", "#d9ead6"],
-        map: { "#020805": "#eef6ec", "#00ff41": "#0b6b2a", "#00aa28": "#3c8f52", "#b4ffc8": "#14501f" }
-    },
     vfd: {
         blurb: "DAYLIGHT LCD",
         slots: ["#0f4f47", "#b35c00", "#2f6e3e"],
@@ -100,20 +87,6 @@ const alts = {
         },
         hw: { plate: { shadow: { color: "#a6000000", y: 6 } } },
         nl: { fill: "#132a45", rim: "#1d3550", keyFill: "#1d3a5c", keyRim: "#2b5580", text: "#dceeff", head: "#dceeff" }
-    },
-    gameboy: {
-        blurb: "KIROKAZE NIGHT",
-        slots: ["#94e344", "#e2f3e4", "#46878f"],
-        unlit: "#3b3560",
-        glass: "#332c50",
-        ramp: ["#332c50", "#46878f", "#94e344", "#e2f3e4"],
-        glow: 0.25,
-        ansi: ["#2a2442", "#46878f", "#94e344", "#94e344", "#46878f", "#94e344", "#46878f", "#e2f3e4"],
-        map: {
-            "#c9c5c0": "#4a4266", "#a19c96": "#372f52", "#346856": "#46878f", "#55565f": "#221d36",
-            "#3a3a8a": "#a9a3d6", "#2b2b30": "#1b1730", "#6a6a72": "#8a85a8"
-        },
-        hw: { keys: { style: { ink: "#e2f3e4" } }, window: { frame: { markColor: "#a9a3d6" } } }
     },
     nixie: {
         blurb: "BRASS & IVORY",
@@ -164,22 +137,6 @@ const alts = {
             "#c9b8e8": "#f3ecfb", "#ffffff": "#ffffff", "#3d1d63": "#9a86bd", "#8a6fb8": "#c8b6e6",
             "#b967ff": "#a35ee8", "#ff71ce": "#e55aae", "#01cdfe": "#1aa9d6", "#b9a8d8": "#e3d6f5",
             "#d6c8f0": "#faf6ff", "#130a24": "#2a1840", "#ff3d7f": "#d61f5f"
-        }
-    },
-    arcade: {
-        blurb: "CABINET ART",
-        slots: ["#13873a", "#d42020", "#c99400"],
-        unlit: "#e3e1d8",
-        glass: "#f5f4ef",
-        ramp: ["#14143a", "#1d3fd8", "#d42020", "#f5f4ef"],
-        glow: 0.05,
-        ansi: ["#1a1a1a", "#d42020", "#13873a", "#b88400", "#1d3fd8", "#b0209c", "#0f8a96", "#e3e1d8"],
-        // The buttons are real plastic: they keep their colors.
-        map: {
-            "#000000": "#f5f4ef", "#2040ff": "#1d3fd8", "#ff2020": "#d42020", "#a00000": "#8a0f0f",
-            "#ff8080": "#ff8080", "#800000": "#800000", "#ffff99": "#ffff99", "#808000": "#808000",
-            "#99ff99": "#99ff99", "#33ff33": "#33ff33", "#008000": "#008000", "#500000": "#500000",
-            "#505000": "#505000", "#005000": "#005000", "#ffff33": "#ffff33", "#ffffff": "#ffffff"
         }
     },
     blueprint: {
@@ -264,7 +221,7 @@ function table(era, o, kind) {
     return merge(walk(o, ""), a[kind]);
 }
 
-// The era's other tone is light: every era's own tone is dark but these two.
+// The era's other tone is light: every era's own tone is dark but aero.
 function isLight(era) {
-    return era !== "aero" && era !== "gameboy";
+    return era !== "aero";
 }

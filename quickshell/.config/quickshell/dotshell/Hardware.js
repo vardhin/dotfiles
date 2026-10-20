@@ -112,24 +112,6 @@ var eras = {
         },
         readout: { art: "square", legends: "none", bar: "chevrons", time: "bar", ink: [2, 1, 2, 2, 0], stripe: true }
     },
-    matrix: {
-        plate: {
-            color: "#020805",
-            brackets: { len: 16, width: 2, inset: 4, color: "#00ff41", glow: "#00ff41" }
-        },
-        bezel: { l: 12, t: 10, r: 12, b: 10 },
-        window: { radius: 0 },
-        keys: {
-            at: "bottom", h: 16, gap: 14, align: "start",
-            style: { shape: "none", ink: "#00ff41", glow: "#00aa28", size: 15 },
-            items: [
-                { act: "prev", label: "<<" },
-                { act: "toggle", label: [">", "||"], style: { ink: "#b4ffc8" } },
-                { act: "next", label: ">>" }
-            ]
-        },
-        readout: { art: "square", legends: "//SIGNAL.LOCKED", bar: "blocks", rain: true, time: "bar", ink: [1, 0, 0, 0, 1] }
-    },
     vfd: {
         plate: {
             radius: 10, edge: "#5a6064",
@@ -171,24 +153,6 @@ var eras = {
             ]
         },
         readout: { art: "square", legends: "none", bar: "box", time: "bar", ink: [0, 2, 2, 1, 2] }
-    },
-    gameboy: {
-        plate: { radius: [10, 10, 40, 10], color: "#c9c5c0", under: "#a19c96" },
-        bezel: { l: 26, t: 22, r: 22, b: 30 },
-        window: {
-            radius: 0, edge: "#346856", edgeW: 2,
-            frame: { pad: 12, padB: 20, color: "#55565f", radius: [8, 8, 24, 8], mark: "DOT MATRIX · STEREO", markColor: "#c9c5c0" }
-        },
-        keys: {
-            at: "right", w: 116, h: 74, gap: 0, free: true,
-            style: { shape: "round", fill: ["#8b2d5a", "#8b2d5a"], down: ["#5a1a3a", "#5a1a3a"], under: "#5a1a3a", ink: "#c9c5c0", caption: "#3a3a8a" },
-            items: [
-                { act: "dpad", x: 0, y: 12, w: 54, h: 54, style: { shape: "dpad", fill: ["#2b2b30", "#2b2b30"], ink: "#6a6a72", under: "" } },
-                { act: "pane", x: 62, y: 32, w: 24, h: 24, label: "", style: { caption: "#3a3a8a" }, caption: "B" },
-                { act: "toggle", x: 90, y: 16, w: 24, h: 24, label: "", caption: "A" }
-            ]
-        },
-        readout: { art: "square", legends: "none", bar: "box", time: "bar", ink: [0, 1, 0, 0, 0] }
     },
     nixie: {
         plate: {
@@ -269,25 +233,6 @@ var eras = {
             ]
         },
         readout: { art: "square", legends: "none", bar: "blocks", time: "bar", ink: [1, 0, 1, 2, 1], stripe: true }
-    },
-    arcade: {
-        plate: { color: "#000000", strokes: [{ inset: 1.5, width: 3, color: "#2040ff" }] },
-        head: {
-            h: 24, inset: 3, dir: "v", fill: [[0, "#ff2020"], [1, "#a00000"]],
-            left: "1UP {pos}", center: "NOW PLAYING", right: "HI {len}", color: "#ffff33", colorC: "#ffffff", size: 11
-        },
-        bezel: { l: 10, t: 6, r: 10, b: 10 },
-        window: { radius: 0, scan: true },
-        keys: {
-            at: "right", w: 104, h: 28, gap: 6, align: "center",
-            style: { shape: "round", ink: "transparent", under: "#500000" },
-            items: [
-                { act: "prev", w: 26, h: 26, style: { orb: ["#ff8080", "#ff2020", "#800000"], under: "#500000" } },
-                { act: "toggle", w: 26, h: 26, style: { orb: ["#ffff99", "#ffff33", "#808000"], under: "#505000" } },
-                { act: "next", w: 26, h: 26, style: { orb: ["#99ff99", "#33ff33", "#008000"], under: "#005000" } }
-            ]
-        },
-        readout: { art: "square", legends: "none", bar: "lives", time: "none", ink: [2, 0, 2, 1, 1] }
     },
     blueprint: {
         plate: {

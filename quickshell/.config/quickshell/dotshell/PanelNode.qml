@@ -357,7 +357,7 @@ Item {
     Component {
         id: meter
         DotBar {
-            blocks: ["vfd", "gameboy", "arcade", "nixie"].includes(root.era)
+            blocks: ["vfd", "nixie"].includes(root.era)
             implicitWidth: 40
             implicitHeight: 3
             value: Bind.num(root.ctx, root.node.value)
@@ -368,7 +368,7 @@ Item {
     Component {
         id: vmeter
         DotBar {
-            blocks: ["vfd", "gameboy", "arcade", "nixie"].includes(root.era)
+            blocks: ["vfd", "nixie"].includes(root.era)
             implicitWidth: 3
             implicitHeight: 20
             vertical: true

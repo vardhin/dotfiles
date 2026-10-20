@@ -170,8 +170,8 @@ media center), hyprlock, hypridle, polkit-gnome, awww and hyprsunset.
 | Border FX | the LED rings animate: a random one of comet, twins, flow, breathe, marquee, sparkle, scanner or wipe, new on every window or workspace switch (bright on the focused window, dim on the rest). While music plays they react to it instead (cava): spectrum around the ring, bass pulse, a rider whose speed follows the loudness, treble fizz, corner VU meters, all flashing on beats. `ledfx` token: `auto`, `random` (never music), `music`, `off` (still rings); `dotshell ipc call ledfx next` / `mode comet` |
 
 ```bash
-dotshell ipc call tokens set era tokyo     # tokyo nineties matrix vfd aero gameboy
-                                           # nixie flap nightvision vapor arcade blueprint
+dotshell ipc call tokens set era tokyo     # tokyo nineties vfd aero nixie
+                                           # flap nightvision vapor blueprint
 dotshell ipc call tokens set tone light    # dark | light: any era in either tone
 dotshell ipc call tokens set pitch 5       # 3 | 5 | 8 | 12 px per dot
 dotshell ipc call tokens set dotSize 70    # 40–100 % of pitch
@@ -237,19 +237,16 @@ empties it (`clip forget "text"` drops one entry); `dotshell ipc call capture re
 |---|---|---|
 | Tokyo Night | `tokyo` | magenta and cyan neon, violet ramp, glow |
 | 90s Nights | `nineties` | hot pink, electric blue and yellow tubes, heavy glow |
-| Matrix | `matrix` | green mono, square dots |
 | VFD | `vfd` | car-stereo cyan-green with orange |
 | Frutiger Aero | `aero` | light sky glass, glossy bubble dots, dark ink |
-| Game Boy | `gameboy` | the four DMG greens, square dots, no glow |
 | Nixie | `nixie` | cold-cathode orange, mono, heavy glow |
 | Split-Flap | `flap` | airport board: white and yellow on black flaps, square dots |
 | Night Vision | `nightvision` | Gen III P43 green, mono |
 | Vaporwave | `vapor` | pink, cyan and lavender at dusk |
-| Arcade | `arcade` | RGB332 cabinet primaries, square dots |
 | Blueprint | `blueprint` | white lines on drafting blue |
 
-Every era comes in a **dark** and a **light** tone (the `tone` token): its own palette is one of them (Frutiger Aero and Game Boy
-are light, the rest dark), the other is the same palette with its lightness turned over in OKLab (`Tone.js`), so every panel,
+Every era comes in a **dark** and a **light** tone (the `tone` token): its own palette is one of them (Frutiger Aero
+is light, the rest dark), the other is the same palette with its lightness turned over in OKLab (`Tone.js`), so every panel,
 device and notification keeps its style and only the coloring changes.
 
 `Super T` (or the brush on the side rail) shows every era as a card in its own colors. **ERAS** page: two sections, **DARK** and
@@ -296,9 +293,9 @@ The era on screen is also exported to the apps around the shell, on every change
 
 **Scenes.** After three minutes idle (before the dim at five; not while a video plays) the whole screen becomes the era's dot board
 and plays its piece (`panes/Scenes.js`, drawn at one pixel per dot): rain
-over the skyline (Tokyo), the sun setting on the neon grid (90s), glyph rain (Matrix), a car-stereo
-clock and spectrum (VFD), bubbles (Aero), Life (Game Boy), the time in tubes (Nixie), a departure
-board (Flap), a radar (Night Vision), a turning pyramid (Vapor), invaders (Arcade), a spirograph being
+over the skyline (Tokyo), the sun setting on the neon grid (90s), a car-stereo
+clock and spectrum (VFD), bubbles (Aero), the time in tubes (Nixie), a departure
+board (Flap), a radar (Night Vision), a turning pyramid (Vapor), a spirograph being
 drafted (Blueprint). Any key or a real mouse move ends it; `Super Shift S` plays it now; the `scene`
 token turns the idle trigger off.
 

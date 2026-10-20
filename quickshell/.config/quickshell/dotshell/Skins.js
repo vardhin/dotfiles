@@ -36,25 +36,6 @@ var eras = {
         screenshots: { title: "SNAPS!!" },
         dock: { title: "OPEN!!" }
     },
-    matrix: {
-        frame: "plain", header: true, round: 0, upper: false,
-        all: { del: "rm -f", head: "//{name}" },
-        media: { head: "//signal.locked", lyr: "//lyrics.stream", prev: "<<", play: ">", pause: "||", next: ">>" },
-        clock: { head: "//sys.cal" },
-        workspaces: { head: "//sys.workspaces --tree" },
-        system: { head: "//proc --top" },
-        battery: { head: "//power.cell --history" },
-        messages: { head: "//comms.inbound --log", title: "transmissions", icon: ">_" },
-        capture: { head: "//capture --interactive", headR: "ready" },
-        caffeine: { head: "//sleep.inhibit --status" },
-        tray: { head: "//tray --list", headR: "sni" },
-        downloads: { head: "//net.recv --log" },
-        files: { head: "//fs --recent", headR: "indexed", find: "> find" },
-        clipboard: { head: "//buffer --registers", icon: "r0" },
-        todo: { head: "//tasks --today", on: "[#]", off: "[ ]", add: "> task add" },
-        screenshots: { head: "//shots --ls -t" },
-        dock: { title: "> wm --list" }
-    },
     vfd: {
         frame: "bezel", header: false, round: 1, upper: true,
         all: { del: "ERASE" },
@@ -76,17 +57,6 @@ var eras = {
         todo: { title: "Today", add: "+ Add a task" },
         screenshots: { title: "Screenshots" },
         dock: { title: "Open windows" }
-    },
-    gameboy: {
-        frame: "bezel", header: false, round: 0, upper: true,
-        all: { del: "DROP" },
-        clock: { foot: "NO QUESTS TODAY" },
-        messages: { title: "MESSAGES", icon: "!" },
-        caffeine: { icon: "Z" },
-        clipboard: { icon: "BAG" },
-        todo: { title: "QUEST LOG", on: "v", off: "!", add: "START: NEW QUEST" },
-        screenshots: { title: "ALBUM" },
-        dock: { title: "PARTY" }
     },
     nixie: {
         frame: "double", header: false, round: 1, upper: false,
@@ -146,25 +116,6 @@ var eras = {
         todo: { head: "todo.txt - Notepad" },
         screenshots: { head: "shots.exe" },
         dock: { title: "Taskbar" }
-    },
-    arcade: {
-        frame: "plain", header: true, round: 0, upper: true,
-        all: { del: "K.O.", head: "{name}", headR: "P1" },
-        media: { head: "NOW PLAYING", headR: "CREDIT 01" },
-        clock: { head: "STAGE", headR: "CREDIT 01", foot: "INSERT COIN" },
-        workspaces: { head: "WORLD MAP" },
-        system: { head: "HIGH SCORES · CPU", headR: "ROUND 1" },
-        battery: { head: "ENERGY LOG" },
-        messages: { head: "MESSAGE LOG", title: "INCOMING", icon: "!" },
-        capture: { head: "OPTIONS" },
-        caffeine: { head: "DIP SWITCHES", headR: "SERVICE", icon: "C" },
-        tray: { head: "POWER-UPS" },
-        downloads: { head: "INVENTORY" },
-        files: { head: "LEVEL SELECT", find: "ENTER NAME" },
-        clipboard: { head: "SAVE SLOTS", icon: "SLOT" },
-        todo: { head: "STAGE OBJECTIVES", headR: "★★☆☆☆", on: "*", off: "-", add: "PRESS START TO ADD" },
-        screenshots: { head: "REPLAY GALLERY" },
-        dock: { title: "SELECT PLAYER" }
     },
     blueprint: {
         frame: "plain", header: true, round: 0, upper: true,
