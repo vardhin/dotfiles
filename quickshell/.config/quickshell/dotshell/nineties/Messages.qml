@@ -167,7 +167,7 @@ T.Face {
                 Pen {
                     anchors.horizontalCenter: parent.horizontalCenter
                     height: 14
-                    text: root.dnd ? "HOLD" : "BEEP!"
+                    text: root.dnd ? "HOLD" : "BEEP"
                     size: 10
                     slanted: true
                     color: Ink.yellow

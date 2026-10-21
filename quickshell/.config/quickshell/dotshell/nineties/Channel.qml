@@ -33,7 +33,7 @@ Item {
         layer.effect: MultiEffect {
             shadowEnabled: true
             shadowColor: Ink.pink
-            shadowBlur: 0.55
+            shadowBlur: 0.3
             blurMax: 14
             shadowHorizontalOffset: 0
             shadowVerticalOffset: 0
@@ -44,7 +44,7 @@ Item {
             gradient: Gradient {
                 GradientStop {
                     position: 0
-                    color: ch.on ? Ink.c("#ffffff", "#ffffff") : Ink.tileHi
+                    color: ch.on ? Ink.white : Ink.tileHi
                 }
                 GradientStop {
                     position: 1

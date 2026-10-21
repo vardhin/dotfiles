@@ -53,10 +53,10 @@ const looks = {
     // ruled hot pink; electric blue app names, yellow words, pink bodies,
     // yellow keys with dark words.
     nineties: {
-        fill: "transparent", rim: "#3b0d5c", live: "#ff2e97", radius: 0,
-        app: "#1fa8ff", text: "#ffe600", body: "#ff2e97", time: "#1fa8ff", crit: "#ff3355",
-        keyFill: "#ffe600", keyRim: "#ffe600", keyInk: "#0a0514",
-        head: "#ffe600", sub: "#ff2e97", marble: false
+        fill: "transparent", rim: "#3a2a42", live: "#c776c4", radius: 0,
+        app: "#c776c4", text: "#f6ead8", body: "#e57ba9", time: "#c776c4", crit: "#ff7a6b",
+        keyFill: "transparent", keyRim: "#c776c4", keyInk: "#c776c4",
+        head: "#dff57e", sub: "#e57ba9", marble: false
     },
     // Night Vision: green-ruled cards on the phosphor, the live one ruled
     // lit; dim app names and times, bright words, lit bodies, bright
@@ -70,10 +70,10 @@ const looks = {
     // Violet-ruled cards on the dot glass, the live one in a cyan tube;
     // cyan app names, pink words, cyan key outlines.
     tokyo: {
-        fill: "transparent", rim: "#3c146e", live: "#2de2e6", radius: 3,
-        app: "#2de2e6", text: "#ff3cac", body: "#b388ff", time: "#b388ff", crit: "#ff2a4a",
-        keyFill: "transparent", keyRim: "#2de2e6", keyInk: "#2de2e6",
-        head: "#b388ff", sub: "#2de2e6", marble: false
+        fill: "transparent", rim: "#3b4261", live: "#7dcfff", radius: 3,
+        app: "#7dcfff", text: "#c0caf5", body: "#a9b1d6", time: "#565f89", crit: "#f7768e",
+        keyFill: "transparent", keyRim: "#7aa2f7", keyInk: "#7aa2f7",
+        head: "#bb9af7", sub: "#7dcfff", marble: false
     },
     // Teal-ruled cards on the smoked glass, the live one in amber; amber
     // app names, cyan words, gunmetal keys.

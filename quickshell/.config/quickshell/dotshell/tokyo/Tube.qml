@@ -22,7 +22,7 @@ Rectangle {
     layer.effect: MultiEffect {
         shadowEnabled: Ink.neon
         shadowColor: tube.tint
-        shadowBlur: 0.55 * tube.glow
+        shadowBlur: 0.4 * tube.glow
         blurMax: 20
         shadowScale: 1
         shadowHorizontalOffset: 0

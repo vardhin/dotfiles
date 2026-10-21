@@ -11,6 +11,8 @@ Item {
 
     property string text: ""
     property color color: Ink.pink
+    // The Japanese word in front: the lantern orange.
+    property color leadColor: Ink.orange
     property int room: 9999
     property bool small: false
     // left | center | right, within `width`.
@@ -45,7 +47,7 @@ Item {
         height: 8
         verticalAlignment: Text.AlignVCenter
         text: words.cjk
-        color: words.color
+        color: words.leadColor
         font.family: Ink.family
         font.pixelSize: 8
     }

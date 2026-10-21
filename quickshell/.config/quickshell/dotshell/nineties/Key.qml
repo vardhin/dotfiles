@@ -44,7 +44,7 @@ Item {
         layer.effect: MultiEffect {
             shadowEnabled: true
             shadowColor: Ink.pink
-            shadowBlur: 0.5
+            shadowBlur: 0.25
             blurMax: 12
             shadowHorizontalOffset: 0
             shadowVerticalOffset: 0
@@ -61,7 +61,7 @@ Item {
             id: chromeG
             GradientStop {
                 position: 0
-                color: Ink.c("#ffffff", "#ffffff")
+                color: Ink.white
             }
             GradientStop {
                 position: 1

@@ -25,7 +25,7 @@ T.Face {
     TextMetrics {
         id: tm
         font.family: Ink.family
-        font.italic: true
+        font.italic: false
         font.pixelSize: 100
         text: root.hm
     }

@@ -58,7 +58,7 @@ Item {
         layer.effect: MultiEffect {
             shadowEnabled: true
             shadowColor: Qt.rgba(dots.halo.r, dots.halo.g, dots.halo.b, dots.soft ? 0.35 : 0.85)
-            shadowBlur: dots.soft ? 0.2 : 0.35
+            shadowBlur: dots.soft ? 0.12 : 0.2
             blurMax: 10
             shadowHorizontalOffset: 0
             shadowVerticalOffset: 0

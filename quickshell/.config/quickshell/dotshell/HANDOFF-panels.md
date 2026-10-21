@@ -319,3 +319,13 @@ Done on request (out of order). In the NIGHT VISION boards every panel is **one 
 - No backend, dropped: capture PAUSE/MARK/DELAY/AFTER, clipboard PIN, todo steps, calendar events.
 - Gotchas: an `id: state` broke (Item's own property) — use other names. 3x5 `#` exists but reads like H. Expanded panels are small (caffeine 384x240), so the CRT radii scale with size (`min(w*.17,100)` / `min(h*.14,50)`).
 - Offscreen: `dot-shell-tools/harness/mkg.sh i<face>.qml` (90s pages → `g<face>.qml`, nightvision Tokens), renders to the scratchpad path in the script.
+
+## Tokyo Night / 90s Nights split (2026-10-21)
+
+The user found the two eras too alike (both hot pink/cyan neon on purple-black) and wants a **peaceful** workspace: no confetti, nothing loud. Recoloured both; layouts untouched. Ink role names were kept (so `pink`/`blue`/`yellow` no longer describe the colour), see the header comments in `tokyo/Ink.qml` and `nineties/Ink.qml`.
+
+- **Tokyo Night = RAIN CITY**: folke/tokyonight.nvim *night* (glass `#16161e`, unlit `#292e42`, tube blue `#7aa2f7`, readings cyan `#7dcfff`, small print `#bb9af7`, rules `#3b4261`, alarm `#f7768e`, new `Ink.orange` `#ff9e64` for the leading kanji word in `Words` and the clock's weekday kanji). Glow 0.35; Sign is one 2 px tube, the inner rule is a dim unlit 1 px line; Neon/Chip/Tube/Edge halos softened. ANSI is Tokyo Night's own. Light tone is Tokyo Night Day.
+- **90s Nights = QUIET STORM**: a 1997 bedroom after midnight. Glass `#120d17` (aubergine), unlit `#2a1f30`, Jazz-cup teal `#36c9b8` (rim, small print), plum `#c776c4` (marks), glow-star `#dff57e` (readings), cream `#f6ead8`, coral alarm `#ff7a6b`. Plate rim is a solid 2 px teal (no sunset), Audiowide upright (no italic), glows roughly halved, no "!!" in words. Light tone is "Jazz cup paper" (off-white, muted teal/plum/olive).
+- Scenes: tokyo rain is slower and sparser, with a street and puddle reflections; nineties is a new GLOW STARS scene (fading ceiling stars, crescent moon, slow lava lamp); the sunset grid became `sunsetGrid()`, used only by vapor.
+- Offscreen check: harness pages `x<face>.qml` (copies of `i*`/`tdock` with the new tokens).
+- Same day, after the user's look on the home workspace: 90s was too washed out, then "purple, not teal (Tokyo has teal)". Now: glass `#120d17`, unlit `#2a1f30`, **orchid `#c776c4` is the core** (`Ink.blue`: rim, strip + rail edge, small print, big words with pale orchid `#e8b4e4`), rose `#e57ba9` marks (`Ink.pink`), glow-star `#dff57e` readings, cream `#f6ead8`, glow 0.35. The notebook and slips are dark paper (`#1f1727` / `#2a1f33`) with cream ink. The clock's sun is a dim glow-star crescent moon (`Sun.qml`, a Canvas). Teal survives only as ANSI cyan and the pager LCD. Light tone "LILAC PAPER".

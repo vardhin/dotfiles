@@ -31,7 +31,7 @@ Item {
             layer.effect: MultiEffect {
                 shadowEnabled: true
                 shadowColor: Ink.pink
-                shadowBlur: 0.5
+                shadowBlur: 0.25
                 blurMax: 12
                 shadowHorizontalOffset: 0
                 shadowVerticalOffset: 0

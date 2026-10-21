@@ -18,8 +18,8 @@ Item {
     property real radius: height / 2
     signal tap
 
-    readonly property color hi: tone === "read" ? Ink.c("#ffe600", "#ffe600") : tone === "clear" ? Ink.c("#8ad8ff", "#8ad8ff") : Ink.c("#ffe600", "#ffd400")
-    readonly property color foot: tone === "read" ? Ink.orange : tone === "clear" ? Ink.blue : Ink.c("#ffe600", "#ffd400")
+    readonly property color hi: tone === "read" ? Ink.yellow : tone === "clear" ? Ink.sky : Ink.yellow
+    readonly property color foot: tone === "read" ? Ink.orange : tone === "clear" ? Ink.blue : Ink.yellow
 
     implicitWidth: word.implicitWidth + 12
     implicitHeight: Math.round(textPx * 1.9)

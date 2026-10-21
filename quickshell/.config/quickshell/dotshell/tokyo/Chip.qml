@@ -33,7 +33,7 @@ Rectangle {
     layer.effect: MultiEffect {
         shadowEnabled: Ink.neon
         shadowColor: chip.tint
-        shadowBlur: 0.4
+        shadowBlur: 0.25
         blurMax: 12
         shadowHorizontalOffset: 0
         shadowVerticalOffset: 0

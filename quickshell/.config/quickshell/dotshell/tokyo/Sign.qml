@@ -1,10 +1,10 @@
 import QtQuick
 
-// The sign's tubes, over its glass: a pink tube round the edge and, on the
-// big (expanded) boards, a cyan one inside it.
+// The sign's tubes, over its glass: one thin blue tube round the edge and,
+// on the big (expanded) boards, a dim unlit rule inside it (no glow).
 //   tone   pink    lit
 //          red     alarm (battery low)
-//          dim     switched off (caffeine asleep, DND): a violet tube, dim
+//          dim     switched off (caffeine asleep, DND): a dim tube
 Item {
     id: sign
 
@@ -22,18 +22,17 @@ Item {
         anchors.fill: parent
         anchors.margins: 1.5
         radius: sign.radius
-        line: 3
+        line: 2
         tint: sign.tint
-        glow: sign.tone === "dim" ? 0.4 : 1
+        glow: sign.tone === "dim" ? 0.3 : 0.7
     }
     Tube {
         visible: sign.inner
         anchors.fill: parent
         anchors.margins: sign.innerInset
         radius: Math.max(4, sign.radius - sign.innerInset)
-        line: 2
-        tint: Ink.cyan
-        opacity: 0.75
-        glow: 0.6
+        line: 1
+        tint: Ink.deep
+        glow: 0
     }
 }

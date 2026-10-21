@@ -25,10 +25,10 @@ Text {
     layer.effect: MultiEffect {
         shadowEnabled: Ink.neon
         shadowColor: neon.color
-        shadowBlur: 0.7
+        shadowBlur: 0.45
         blurMax: 6
         shadowScale: 1.04
-        shadowOpacity: 0.85
+        shadowOpacity: 0.5
         shadowHorizontalOffset: 0
         shadowVerticalOffset: 0
     }

@@ -152,7 +152,7 @@ T.Face {
                     height: parent.height
                     dots: 7
                     fontAt: 99
-                    text: root.words.title || "TO DO!!"
+                    text: root.words.title || "TO DO"
                     stops: [[0, Ink.pink], [1, Ink.blue]]
                 }
                 Word {

@@ -3,8 +3,8 @@ import QtQuick.Effects
 import QtQuick.Shapes
 import qs
 
-// A 90s Nights sign, crisp round dot glass: the 3 px rim in the sunset
-// (yellow → pink → blue, 135°) and inside it the dark dot glass (the
+// A 90s Nights sign, crisp round dot glass: the 2 px rim in orchid
+// and inside it the dark dot glass (the
 // design's `.pn`, a DotSurface). `slant` leans it 10° like the compact
 // boards (top edge pushed right by `lean` px, the bottom edge left); off,
 // it is the expanded boards' upright rectangle. Children are authored in
@@ -16,7 +16,7 @@ Item {
     id: plate
 
     property bool slant: true
-    property int rim: 3
+    property int rim: 2
     property real radius: 0
     // `paper`: cream instead of dot glass (the todo and its strip form).
     property bool paper: false
@@ -60,11 +60,11 @@ Item {
             orientation: plate.across ? Gradient.Horizontal : Gradient.Vertical
             GradientStop {
                 position: 0
-                color: Ink.yellow
+                color: Ink.blue
             }
             GradientStop {
                 position: 0.45
-                color: Ink.pink
+                color: Ink.blue
             }
             GradientStop {
                 position: 1
@@ -80,11 +80,11 @@ Item {
                 orientation: plate.across ? Gradient.Vertical : Gradient.Horizontal
                 GradientStop {
                     position: 0
-                    color: Ink.yellow
+                    color: Ink.blue
                 }
                 GradientStop {
                     position: 0.45
-                    color: Ink.pink
+                    color: Ink.blue
                 }
                 GradientStop {
                     position: 1
@@ -182,11 +182,11 @@ Item {
                 y2: plate.across ? 0 : plate.height
                 GradientStop {
                     position: 0
-                    color: Ink.yellow
+                    color: Ink.blue
                 }
                 GradientStop {
                     position: 0.4
-                    color: Ink.pink
+                    color: Ink.blue
                 }
                 GradientStop {
                     position: 1

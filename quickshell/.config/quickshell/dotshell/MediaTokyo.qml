@@ -89,7 +89,7 @@ Item {
                         c.reset();
                         const r = width / 2;
                         for (let k = Math.floor(r); k > 0; k--) {
-                            c.fillStyle = String(Tokens.ink(k % 2 ? "#3c146e" : "#211c46"));
+                            c.fillStyle = String(Tokens.ink(k % 2 ? "#3b4261" : "#292e42"));
                             c.beginPath();
                             c.arc(r, r, k, 0, Math.PI * 2);
                             c.fill();
@@ -107,9 +107,9 @@ Item {
                     height: width
                     round: true
                     src: root.active ? (root.ctx.art ?? "") : ""
-                    stripe: Tokens.ink("#3c146e")
+                    stripe: Tokens.ink("#3b4261")
                     sun: Tokens.slot1
-                    ground: Tokens.ink("#08071a")
+                    ground: Tokens.ink("#16161e")
                 }
 
                 // The matched video, in the record's place, cut round.

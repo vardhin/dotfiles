@@ -67,81 +67,132 @@ function pad(n) {
     return (n < 10 ? "0" : "") + n;
 }
 
+// The sun sets over a neon grid that never ends (Vaporwave's ground).
+function sunsetGrid(st, ctx, dt, p) {
+    const hz = Math.floor(st.h * 0.58), cx = st.w / 2, r = Math.floor(st.h * 0.3);
+    for (let y = hz - r; y < hz; y++) {
+        const band = (hz - y) / r;
+        const gap = (y + Math.floor(st.t * 6)) % 7 < 7 * (1 - band) * 0.5;
+        if (gap) continue;
+        const half = Math.sqrt(Math.max(0, r * r - (y - hz) * (y - hz)));
+        ctx.fillStyle = rgba(band > 0.5 ? p.s2 : p.s0, 1);
+        ctx.fillRect(Math.floor(cx - half), y, Math.ceil(half * 2), 1);
+    }
+    const c = rgba(p.s1, 1), dim = rgba(p.s1, 0.5);
+    line(ctx, 0, hz, st.w, hz, c);
+    const off = (st.t * 0.6) % 1;
+    for (let i = 0; i < 12; i++) {
+        const z = i + 1 - off;
+        const y = hz + (st.h - hz) / (z * 0.55);
+        if (y < st.h) line(ctx, 0, Math.floor(y), st.w, Math.floor(y), i < 3 ? c : dim);
+    }
+    for (let i = -12; i <= 12; i++)
+        line(ctx, cx + i * 4, hz, cx + i * st.w / 6, st.h, dim);
+}
+
 // ── Scenes ──────────────────────────────────────────────────────────
 const scenes = {
-    // Tokyo Night: a skyline in the rain under a flickering neon sign.
+    // Tokyo Night: a quiet skyline in light rain, mirrored in the wet street.
     tokyo: {
         make(st) {
+            st.street = Math.floor(st.h * 0.8);
             st.buildings = [];
             let x = 0;
             while (x < st.w) {
                 const bw = 8 + Math.floor(st.r() * 22);
-                const bh = Math.floor(st.h * (0.18 + st.r() * 0.45));
+                const bh = Math.floor(st.street * (0.2 + st.r() * 0.5));
                 const win = [];
-                for (let yy = st.h - bh + 3; yy < st.h - 2; yy += 3)
+                for (let yy = st.street - bh + 3; yy < st.street - 2; yy += 3)
                     for (let xx = x + 2; xx < x + bw - 2; xx += 3)
-                        if (st.r() < 0.35) win.push([xx, yy, st.r()]);
+                        if (st.r() < 0.3) win.push([xx, yy, st.r()]);
                 st.buildings.push({ x: x, w: bw, h: bh, win: win });
                 x += bw + 1;
             }
             st.drops = [];
-            for (let i = 0; i < st.w * st.h / 90; i++)
-                st.drops.push([st.r() * st.w, st.r() * st.h, 0.6 + st.r() * 0.8]);
+            for (let i = 0; i < st.w * st.h / 220; i++)
+                st.drops.push([st.r() * st.w, st.r() * st.h, 0.5 + st.r() * 0.5]);
         },
         draw(st, ctx, dt, p) {
+            const sy = st.street;
+            // A window and its reflection: below the street, flipped, dimmer,
+            // and broken up by the ripples.
+            const lit = (x, y, c, a) => {
+                dot(ctx, x, y, rgba(c, a));
+                const ry = 2 * sy - y;
+                if (ry < st.h && Math.sin(st.t * 1.2 + x * 0.7 + ry * 0.3) > -0.2)
+                    dot(ctx, x + Math.round(Math.sin(st.t * 0.8 + ry * 0.5)), ry, rgba(c, a * 0.5));
+            };
             for (const b of st.buildings) {
                 // Roof and walls in the dim tube; a spire on the tall ones.
-                ctx.fillStyle = rgba(p.s2, 0.5);
-                ctx.fillRect(b.x, st.h - b.h, b.w, 1);
-                ctx.fillRect(b.x, st.h - b.h, 1, b.h);
-                ctx.fillRect(b.x + b.w - 1, st.h - b.h, 1, b.h);
-                if (b.h > st.h * 0.5)
-                    ctx.fillRect(b.x + Math.floor(b.w / 2), st.h - b.h - 6, 1, 6);
+                ctx.fillStyle = rgba(p.s2, 0.4);
+                ctx.fillRect(b.x, sy - b.h, b.w, 1);
+                ctx.fillRect(b.x, sy - b.h, 1, b.h);
+                ctx.fillRect(b.x + b.w - 1, sy - b.h, 1, b.h);
+                if (b.h > sy * 0.5)
+                    ctx.fillRect(b.x + Math.floor(b.w / 2), sy - b.h - 6, 1, 6);
                 for (const w of b.win)
-                    if (Math.sin(st.t * 0.3 + w[2] * 40) > -0.6)
-                        dot(ctx, w[0], w[1], rgba(w[2] < 0.5 ? p.s1 : p.s2, w[2] < 0.15 ? 1 : 0.5));
+                    if (Math.sin(st.t * 0.15 + w[2] * 40) > -0.6)
+                        lit(w[0], w[1], w[2] < 0.5 ? p.s1 : p.s0, w[2] < 0.12 ? 0.9 : 0.5);
             }
-            const fall = 60 * dt;
+            line(ctx, 0, sy, st.w, sy, rgba(p.s2, 0.4));
+            // Light rain, slow and sparse.
+            const fall = 34 * dt;
             for (const d of st.drops) {
                 d[1] += fall * d[2];
-                d[0] -= fall * d[2] * 0.3;
-                if (d[1] > st.h) { d[1] -= st.h; d[0] = st.r() * st.w * 1.2; }
+                d[0] -= fall * d[2] * 0.15;
+                if (d[1] > st.h) { d[1] -= st.h; d[0] = st.r() * st.w * 1.1; }
                 if (d[0] < 0) d[0] += st.w;
-                dot(ctx, d[0], d[1], rgba(p.s1, 0.5));
-                dot(ctx, d[0] + 0.3, d[1] - 1, rgba(p.s1, 0.4));
+                dot(ctx, d[0], d[1], rgba(p.s1, 0.4));
             }
-            const flick = st.r() < 0.04 ? 0.4 : 1;
             const k = Math.max(1, Math.floor(st.w / 90));
-            bigText(ctx, "RAIN CITY", st.w / 2, Math.floor(st.h * 0.12), k, rgba(p.s0, flick));
-            bigText(ctx, "24H  NOODLE  BAR", st.w / 2, Math.floor(st.h * 0.12) + 13 * k + 2, Math.max(1, k - 1), rgba(p.s1, 0.6));
+            bigText(ctx, "RAIN CITY", st.w / 2, Math.floor(st.h * 0.1), k, rgba(p.s0, 0.9));
+            bigText(ctx, "24H  NOODLE  BAR", st.w / 2, Math.floor(st.h * 0.1) + 13 * k + 2, Math.max(1, k - 1), rgba(p.s2, 0.6));
         }
     },
 
-    // 90s Nights: the sun sets over a neon grid that never ends.
+    // 90s Nights: glow-in-the-dark stars on a bedroom ceiling, slowly
+    // brightening and fading, a crescent moon sticker, and a lava lamp's
+    // blob rising and sinking at the edge.
     nineties: {
-        make(st) {},
+        make(st) {
+            st.stars = [];
+            const n = Math.max(12, Math.floor(st.w * st.h / 900));
+            for (let i = 0; i < n; i++)
+                st.stars.push({ x: st.r() * st.w, y: st.r() * st.h * 0.85, big: st.r() < 0.25, ph: st.r() * 6.3, sp: 0.15 + st.r() * 0.25 });
+            st.moon = { x: st.w * (0.15 + st.r() * 0.2), y: st.h * (0.15 + st.r() * 0.15), r: Math.max(4, Math.floor(st.h * 0.07)) };
+        },
         draw(st, ctx, dt, p) {
-            const hz = Math.floor(st.h * 0.58), cx = st.w / 2, r = Math.floor(st.h * 0.3);
-            for (let y = hz - r; y < hz; y++) {
-                const band = (hz - y) / r;
-                const gap = (y + Math.floor(st.t * 6)) % 7 < 7 * (1 - band) * 0.5;
-                if (gap) continue;
-                const half = Math.sqrt(Math.max(0, r * r - (y - hz) * (y - hz)));
-                ctx.fillStyle = rgba(band > 0.5 ? p.s2 : p.s0, 1);
-                ctx.fillRect(Math.floor(cx - half), y, Math.ceil(half * 2), 1);
+            for (const s of st.stars) {
+                const a = 0.3 + 0.35 * (0.5 + 0.5 * Math.sin(st.t * s.sp + s.ph));
+                const c = rgba(p.s2, a);
+                dot(ctx, s.x, s.y, c);
+                if (s.big) {
+                    const d = rgba(p.s2, a * 0.6);
+                    dot(ctx, s.x - 1, s.y, d); dot(ctx, s.x + 1, s.y, d);
+                    dot(ctx, s.x, s.y - 1, d); dot(ctx, s.x, s.y + 1, d);
+                }
             }
-            const c = rgba(p.s1, 1), dim = rgba(p.s1, 0.5);
-            line(ctx, 0, hz, st.w, hz, c);
-            const off = (st.t * 0.6) % 1;
-            for (let i = 0; i < 12; i++) {
-                const z = i + 1 - off;
-                const y = hz + (st.h - hz) / (z * 0.55);
-                if (y < st.h) line(ctx, 0, Math.floor(y), st.w, Math.floor(y), i < 3 ? c : dim);
-            }
-            for (let i = -12; i <= 12; i++)
-                line(ctx, cx + i * 4, hz, cx + i * st.w / 6, st.h, dim);
-            if (Math.floor(st.t * 1.3) % 6 !== 0)
-                text(ctx, "OPEN 24 HRS", st.w - 4, 4, 11, rgba(p.s0, 1), "right");
+            // The moon: a disc with a disc taken out of it.
+            const m = st.moon;
+            for (let y = -m.r; y <= m.r; y++)
+                for (let x = -m.r; x <= m.r; x++)
+                    if (x * x + y * y <= m.r * m.r && (x - m.r * 0.5) * (x - m.r * 0.5) + (y + m.r * 0.2) * (y + m.r * 0.2) > m.r * m.r * 0.7)
+                        dot(ctx, m.x + x, m.y + y, rgba(p.s2, 0.6));
+            // The lava lamp: a glass outline at the right, one blob inside.
+            const lw = Math.max(6, Math.floor(st.w * 0.03)), lh = Math.floor(st.h * 0.45);
+            const lx = st.w - lw - Math.floor(st.w * 0.06), ly = st.h - lh - 2;
+            const glass = rgba(p.s0, 0.4);
+            line(ctx, lx, ly, lx - 2, ly + lh, glass);
+            line(ctx, lx + lw, ly, lx + lw + 2, ly + lh, glass);
+            line(ctx, lx, ly, lx + lw, ly, glass);
+            ctx.fillStyle = rgba(p.s0, 0.5);
+            ctx.fillRect(lx - 3, ly + lh, lw + 7, 2);
+            const by = ly + lh * (0.55 + 0.35 * Math.sin(st.t * 0.12)), br = lw * 0.35 * (1 + 0.15 * Math.sin(st.t * 0.4));
+            for (let y = -br * 1.4; y <= br * 1.4; y++)
+                for (let x = -br; x <= br; x++)
+                    if (x * x / (br * br) + y * y / (br * br * 1.96) <= 1)
+                        dot(ctx, lx + lw / 2 + x, by + y, rgba(p.s1, 0.8));
+            text(ctx, "LATE NIGHT FM 97.1", 4, st.h - 14, 11, rgba(p.s0, 0.6));
         }
     },
 
@@ -295,7 +346,7 @@ const scenes = {
     vapor: {
         make(st) {},
         draw(st, ctx, dt, p) {
-            scenes.nineties.draw(st, ctx, dt * 0.4, p);
+            sunsetGrid(st, ctx, dt, p);
             const cx = st.w / 2, cy = st.h * 0.36, s = st.h * 0.16, a = st.t * 0.5;
             const pts = [[0, -1.2, 0], [-1, 0.6, -1], [1, 0.6, -1], [1, 0.6, 1], [-1, 0.6, 1]].map(v => {
                 const x = v[0] * Math.cos(a) - v[2] * Math.sin(a), z = v[0] * Math.sin(a) + v[2] * Math.cos(a);
@@ -338,7 +389,7 @@ const scenes = {
 };
 
 const names = {
-    tokyo: "RAIN CITY", nineties: "SUNSET GRID", vfd: "CAR STEREO", aero: "BUBBLES",
+    tokyo: "RAIN CITY", nineties: "GLOW STARS", vfd: "CAR STEREO", aero: "BUBBLES",
     nixie: "NIXIE CLOCK", flap: "DEPARTURES", nightvision: "RADAR", vapor: "VAPOR",
     blueprint: "DRAFTING"
 };

@@ -74,20 +74,20 @@
 var eras = {
     tokyo: {
         plate: {
-            shape: "pill", color: "#08071a",
+            shape: "pill", color: "#16161e",
             strokes: [
-                { inset: 1, width: 3, color: "#ff3cac", glow: "#ff3cac" },
-                { inset: 9, width: 2, color: "#2de2e6", glow: "#2de2e6", opacity: 0.8 }
+                { inset: 1, width: 2, color: "#7aa2f7", glow: "#7aa2f7" },
+                { inset: 9, width: 1, color: "#3b4261" }
             ]
         },
         bezel: { l: 16, t: 14, r: 16, b: 12 },
         window: { radius: "pill" },
         keys: {
             at: "bottom", h: 32, gap: 10, align: "center",
-            style: { shape: "round", border: { w: 2, color: "#ff3cac" }, glow: "#ff3cac", ink: "#ff3cac" },
+            style: { shape: "round", border: { w: 2, color: "#7aa2f7" }, glow: "#7aa2f7", ink: "#7aa2f7" },
             items: [
                 { act: "prev", w: 28, h: 28 },
-                { act: "toggle", w: 32, h: 32, style: { border: { w: 2, color: "#2de2e6" }, glow: "#2de2e6", ink: "#2de2e6" } },
+                { act: "toggle", w: 32, h: 32, style: { border: { w: 2, color: "#7dcfff" }, glow: "#7dcfff", ink: "#7dcfff" } },
                 { act: "next", w: 28, h: 28 }
             ]
         },
@@ -96,17 +96,17 @@ var eras = {
     nineties: {
         plate: {
             shape: "skew", slant: 0.176,
-            fill: { dir: "d", stops: [[0, "#ffe600"], [0.4, "#ff2e97"], [1, "#1fa8ff"]] },
-            inner: { inset: 3, color: "#0a0514" }
+            fill: { dir: "d", stops: [[0, "#c776c4"], [1, "#c776c4"]] },
+            inner: { inset: 2, color: "#120d17" }
         },
         bezel: { l: 16, t: 12, r: 18, b: 10 },
         window: { radius: 0 },
         keys: {
             at: "bottom", h: 22, gap: 6, align: "start",
-            style: { shape: "skew", slant: 0.176, fill: ["#ffffff", "#a3157f"], down: ["#a3157f", "#ffffff"], ink: "#0a0514" },
+            style: { shape: "skew", slant: 0.176, fill: ["#3a2a42", "#2a1f30"], down: ["#c776c4", "#c776c4"], ink: "#f6ead8" },
             items: [
                 { act: "prev", w: 34 },
-                { act: "toggle", w: 46, style: { fill: ["#ffffff", "#ff2e97"], down: ["#ff2e97", "#ffffff"] } },
+                { act: "toggle", w: 46, style: { fill: ["#8a4a8a", "#3a2a42"], down: ["#e57ba9", "#e57ba9"] } },
                 { act: "next", w: 34 }
             ]
         },

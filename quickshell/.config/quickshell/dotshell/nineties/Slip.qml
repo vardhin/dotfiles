@@ -23,7 +23,7 @@ Item {
     }
     Rectangle {
         anchors.fill: parent
-        color: slip.lit ? Ink.c("#ffe600", "#ffe14a") : Ink.slip
+        color: slip.lit ? Ink.c("#3a2a46", "#eef2d2") : Ink.slip
         antialiasing: true
     }
 }

@@ -15,7 +15,7 @@ Item {
     property real textPx: 15
     signal tap
 
-    readonly property color ink: tone === "red" ? Ink.red : tone === "yellow" ? Ink.c("#ffe600", "#ffe600") : Ink.c("#ffffff", "#ffffff")
+    readonly property color ink: tone === "red" ? Ink.red : tone === "yellow" ? Ink.yellow : Ink.c("#f6ead8", "#f6ead8")
 
     implicitWidth: word.implicitWidth + 12
     implicitHeight: Math.round(textPx * 1.3)
@@ -24,7 +24,7 @@ Item {
     Rectangle {
         anchors.fill: parent
         anchors.topMargin: hit.pressed ? 1 : 0
-        color: key.on ? Ink.c("#ffe600", "#ffe600") : hit.containsMouse ? Qt.rgba(1, 1, 1, 0.1) : "transparent"
+        color: key.on ? Ink.yellow : hit.containsMouse ? Qt.rgba(1, 1, 1, 0.1) : "transparent"
         border.width: key.on ? 0 : 1
         border.color: key.tone ? key.ink : Qt.rgba(1, 1, 1, 0.5)
         Mono {

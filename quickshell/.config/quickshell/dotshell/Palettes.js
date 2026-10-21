@@ -10,7 +10,7 @@
 // light tone has a real-world identity of its own:
 //
 //   tokyo        Tokyo Night Day (folke/tokyonight.nvim's day palette)
-//   nineties     Memphis: off-white, hot pink, blue, sun yellow
+//   nineties     lilac paper: off-white, deep orchid, rose, olive
 //   vfd          a daylight LCD head unit: reflective segments, aluminium
 //   flap         an ivory Solari board, black letters on white flaps
 //   nixie        brass and ivory instrument panel
@@ -30,31 +30,33 @@
 
 const alts = {
     tokyo: {
-        blurb: "NEON BY DAY",
-        slots: ["#c92c7f", "#007197", "#7847bd"],
+        blurb: "OVERCAST",
+        slots: ["#2e7de9", "#007197", "#7847bd"],
         unlit: "#d0d3e0",
         glass: "#e1e2e7",
-        ramp: ["#2b3368", "#7847bd", "#c92c7f", "#d5d8ea"],
-        glow: 0.12,
-        ansi: ["#343b6a", "#e0285c", "#587539", "#8c6c3e", "#2e7de9", "#9854f1", "#007197", "#c4c8da"],
+        ramp: ["#2b3368", "#3760bf", "#2e7de9", "#d5d8ea"],
+        glow: 0.08,
+        ansi: ["#343b6a", "#f52a65", "#587539", "#8c6c3e", "#2e7de9", "#9854f1", "#007197", "#c4c8da"],
         map: {
-            "#08071a": "#e1e2e7", "#ff3cac": "#c92c7f", "#2de2e6": "#007197", "#b388ff": "#7847bd",
-            "#3c146e": "#c4c8da", "#211c46": "#d0d3e0", "#ff2a4a": "#e0285c"
+            "#16161e": "#e1e2e7", "#7aa2f7": "#2e7de9", "#7dcfff": "#007197", "#bb9af7": "#7847bd",
+            "#3b4261": "#c4c8da", "#292e42": "#d0d3e0", "#f7768e": "#f52a65", "#ff9e64": "#b15c00",
+            "#c0caf5": "#3760bf", "#a9b1d6": "#6172b0", "#565f89": "#848cb5"
         }
     },
     nineties: {
-        blurb: "MEMPHIS DAYTIME",
-        slots: ["#e6177d", "#0a84d6", "#d99a00"],
-        unlit: "#efe6d6",
-        glass: "#fff6e5",
-        ramp: ["#2b1b4a", "#a3157f", "#ff6fb0", "#fff6e5"],
-        glow: 0.08,
-        ansi: ["#2b1b4a", "#d9234a", "#1f9a5a", "#c48a00", "#0a84d6", "#e6177d", "#00a3a3", "#f1e6d2"],
+        blurb: "LILAC PAPER",
+        slots: ["#8a3f88", "#b8466f", "#5f6e2a"],
+        unlit: "#e6ddd2",
+        glass: "#f4ede4",
+        ramp: ["#2a1f30", "#b8466f", "#8a3f88", "#f4ede4"],
+        glow: 0.06,
+        ansi: ["#2a1f30", "#b5523f", "#4f7a3a", "#8a6a2a", "#3f6a9a", "#8a5a8c", "#2f7f76", "#e6ddd2"],
         map: {
-            "#ffe600": "#f5c400", "#ff2e97": "#e6177d", "#1fa8ff": "#0a84d6", "#0a0514": "#2b1b4a",
-            "#ffffff": "#ffffff", "#a3157f": "#f7b6d6"
+            "#c776c4": "#8a3f88", "#e57ba9": "#b8466f", "#dff57e": "#5f6e2a", "#120d17": "#f4ede4",
+            "#f6ead8": "#2a1f30", "#3a2a42": "#d9cfd6", "#2a1f30": "#e6ddd2", "#ff7a6b": "#b5523f",
+            "#e8b4e4": "#a0609e", "#8a4a8a": "#e3cfe0"
         },
-        hw: { plate: { inner: { color: "#fff6e5" } } }
+        hw: { plate: { inner: { color: "#f4ede4" } } }
     },
     vfd: {
         blurb: "DAYLIGHT LCD",

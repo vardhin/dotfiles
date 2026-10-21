@@ -11,7 +11,7 @@ Text {
 
     color: Ink.yellow
     font.family: Ink.family
-    font.italic: slanted
+    font.italic: false
     font.pixelSize: Math.max(4, size)
     font.letterSpacing: spacing
     textFormat: Text.PlainText

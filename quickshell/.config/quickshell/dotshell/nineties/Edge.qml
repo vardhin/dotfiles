@@ -2,9 +2,9 @@ import QtQuick
 import QtQuick.Effects
 import qs
 
-// The top strip's or side rail's edge in 90s Nights: a 3 px neon rule where
-// the bar meets the desktop, hot pink along the strip's bottom, electric
-// blue down the rail's left (the Drag & dock board's bar), glowing faintly
+// The top strip's or side rail's edge in 90s Nights: a 3 px orchid rule
+// where the bar meets the desktop (the strip's bottom, the rail's left),
+// glowing faintly
 // back over the dot glass. The only casing the bar has; docked items sit
 // bare on the glass. Fill it over the whole bar window.
 //   Edge { anchors.fill: parent; place: "strip" }
@@ -13,7 +13,7 @@ Item {
 
     property string place: "strip"
     readonly property bool vertical: place === "rail"
-    readonly property color tint: vertical ? Ink.blue : Ink.pink
+    readonly property color tint: Ink.blue
 
     // The spill, faint, a dozen px into the bar.
     Rectangle {
@@ -25,11 +25,11 @@ Item {
             orientation: edge.vertical ? Gradient.Horizontal : Gradient.Vertical
             GradientStop {
                 position: 0
-                color: edge.vertical ? Qt.rgba(edge.tint.r, edge.tint.g, edge.tint.b, 0.25) : "transparent"
+                color: edge.vertical ? Qt.rgba(edge.tint.r, edge.tint.g, edge.tint.b, 0.15) : "transparent"
             }
             GradientStop {
                 position: 1
-                color: edge.vertical ? "transparent" : Qt.rgba(edge.tint.r, edge.tint.g, edge.tint.b, 0.25)
+                color: edge.vertical ? "transparent" : Qt.rgba(edge.tint.r, edge.tint.g, edge.tint.b, 0.15)
             }
         }
     }

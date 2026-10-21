@@ -96,13 +96,13 @@ T.Face {
                         text: root.recording ? "● REC" : "STBY"
                         size: c.big
                         shade: true
-                        color: root.recording ? Ink.red : Ink.c("#ffffff", "#ffffff")
+                        color: root.recording ? Ink.red : Ink.c("#f6ead8", "#f6ead8")
                     }
                     Mono {
                         text: "SP"
                         size: c.big
                         shade: true
-                        color: Ink.c("#ffffff", "#ffffff")
+                        color: Ink.c("#f6ead8", "#f6ead8")
                     }
                 }
                 // The battery's four bars.
@@ -117,9 +117,9 @@ T.Face {
                             required property int index
                             width: Math.round(c.big * 0.32)
                             height: Math.round(c.big * 0.8)
-                            color: index < root.bars ? Ink.c("#ffffff", "#ffffff") : "transparent"
+                            color: index < root.bars ? Ink.c("#f6ead8", "#f6ead8") : "transparent"
                             border.width: 1
-                            border.color: Ink.c("#ffffff", "#ffffff")
+                            border.color: Ink.c("#f6ead8", "#f6ead8")
                         }
                     }
                 }
@@ -139,7 +139,7 @@ T.Face {
                     text: root.counter
                     size: c.big
                     shade: true
-                    color: Ink.c("#ffffff", "#ffffff")
+                    color: Ink.c("#f6ead8", "#f6ead8")
                 }
                 // The date, and the keys.
                 Mono {
@@ -150,7 +150,7 @@ T.Face {
                     text: root.stamp
                     size: Math.round(c.big * 0.8)
                     shade: true
-                    color: Ink.c("#ffe600", "#ffe600")
+                    color: Ink.yellow
                 }
                 Row {
                     id: keys
@@ -253,7 +253,7 @@ T.Face {
                             y: Math.round((b.rowY + index * (b.rowH + 9) + b.rowH / 2) / b.p) - 3
                             height: 7
                             text: modelData.name
-                            color: Ink.c("#ffffff", "#ffffff")
+                            color: Ink.c("#f6ead8", "#f6ead8")
                         }
                     }
                     MatrixText {
@@ -261,7 +261,7 @@ T.Face {
                         y: Math.round(b.recentY / b.p) + 1
                         height: 7
                         text: "RECENT"
-                        color: Ink.c("#ffffff", "#ffffff")
+                        color: Ink.c("#f6ead8", "#f6ead8")
                     }
                     Repeater {
                         model: (root.ctx.recent ?? []).slice(0, 4)
@@ -275,7 +275,7 @@ T.Face {
                             font: "3x5"
                             align: "center"
                             text: String(modelData.name).replace(/\.[a-z0-9]+$/i, "").slice(-12)
-                            color: Ink.c("#ffe600", "#ffe600")
+                            color: Ink.yellow
                         }
                     }
                     MatrixText {
@@ -295,7 +295,7 @@ T.Face {
                         font: "3x5"
                         scroll: true
                         text: Qt.formatDate(root.now, "MMM.dd yyyy").toUpperCase() + " · SHOTS GO TO ~/PICTURES · TAPES TO ~/VIDEOS"
-                        color: Ink.c("#ffe600", "#ffe600")
+                        color: Ink.yellow
                     }
                 }
                 Repeater {
@@ -336,7 +336,7 @@ T.Face {
                             height: b.thumbH
                             Rectangle {
                                 anchors.fill: parent
-                                color: Ink.c("#ffffff", "#ffffff")
+                                color: Ink.c("#f6ead8", "#f6ead8")
                             }
                             T.DotPic {
                                 anchors.fill: parent

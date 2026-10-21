@@ -122,7 +122,7 @@ Face {
                                 anchors.right: parent.right
                                 height: Tokens.lineDots
                                 text: root.kanji[root.now.getDay()] + "曜日"
-                                color: Ink.pink
+                                color: Ink.orange
                             }
                             DotText {
                                 anchors.right: parent.right

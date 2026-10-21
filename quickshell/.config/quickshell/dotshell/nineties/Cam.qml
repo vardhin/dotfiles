@@ -70,7 +70,7 @@ Item {
                 }
                 GradientStop {
                     position: 0.5
-                    color: Ink.c("#3b0d5c", "#3b0d5c")
+                    color: Ink.c("#3a2a42", "#3a2a42")
                 }
                 GradientStop {
                     position: 1

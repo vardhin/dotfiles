@@ -27,29 +27,29 @@ Singleton {
     readonly property var all: ({
         tokyo: {
             name: "Tokyo Night",
-            blurb: "NEON ALLEY",
-            slots: ["#ff3cac", "#2de2e6", "#b388ff"],
-            unlit: "#211c46",
-            glass: "#08071a",
-            ramp: ["#3c146e", "#b428aa", "#ff3cac", "#2de2e6"],
-            glow: 0.8,
+            blurb: "RAIN CITY",
+            slots: ["#7aa2f7", "#7dcfff", "#bb9af7"],
+            unlit: "#292e42",
+            glass: "#16161e",
+            ramp: ["#24283b", "#3d59a1", "#7aa2f7", "#c0caf5"],
+            glow: 0.35,
             shape: "round",
             light: false,
             mono: false,
-            ansi: ["#1a1638", "#ff3c6e", "#3cffa0", "#ffe14d", "#6e7bff", "#ff3cac", "#2de2e6", "#e6e1ff"]
+            ansi: ["#15161e", "#f7768e", "#9ece6a", "#e0af68", "#7aa2f7", "#bb9af7", "#7dcfff", "#a9b1d6"]
         },
         nineties: {
             name: "90s Nights",
-            blurb: "STRIP MALL TUBES",
-            slots: ["#ff2e97", "#1fa8ff", "#ffe600"],
-            unlit: "#22123a",
-            glass: "#0a0514",
-            ramp: ["#3b0d5c", "#a3157f", "#ff2e97", "#ffe600"],
-            glow: 0.9,
+            blurb: "QUIET STORM",
+            slots: ["#c776c4", "#e57ba9", "#dff57e"],
+            unlit: "#2a1f30",
+            glass: "#120d17",
+            ramp: ["#2a1f30", "#6a3f72", "#c776c4", "#dff57e"],
+            glow: 0.35,
             shape: "round",
             light: false,
             mono: false,
-            ansi: ["#1c0f30", "#ff3355", "#39ff6a", "#ffe600", "#1fa8ff", "#ff2e97", "#29fff1", "#ffe9f6"]
+            ansi: ["#1a1220", "#ff7a6b", "#a6e07a", "#f2c86a", "#6fa0ff", "#c776c4", "#36c9b8", "#f6ead8"]
         },
         vfd: {
             name: "VFD",

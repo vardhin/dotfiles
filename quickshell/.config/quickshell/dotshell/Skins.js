@@ -30,11 +30,11 @@ var eras = {
     },
     nineties: {
         frame: "ring", header: false, round: 2, upper: true,
-        all: { del: "TRASH IT" },
-        todo: { title: "TO DO!!", add: "+ NEW THING TO DO" },
+        all: { del: "TRASH" },
+        todo: { title: "TO DO", add: "+ NEW THING TO DO" },
         messages: { title: "PAGES", icon: "@" },
-        screenshots: { title: "SNAPS!!" },
-        dock: { title: "OPEN!!" }
+        screenshots: { title: "SNAPS" },
+        dock: { title: "OPEN" }
     },
     vfd: {
         frame: "bezel", header: false, round: 1, upper: true,

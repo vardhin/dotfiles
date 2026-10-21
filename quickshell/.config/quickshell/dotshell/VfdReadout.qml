@@ -55,23 +55,6 @@ Item {
     readonly property int lyricY: titleY + 9
     readonly property int spectrumY: (lyricRow ? lyricY + 9 : titleY + (roomy ? 16 : 9))
 
-    // The lyric breathes while it is sung (MeowMuzic's active line).
-    property real breath: 0
-    SequentialAnimation on breath {
-        running: root.lyricRow && root.playing && Lyrics.synced
-        loops: Animation.Infinite
-        NumberAnimation {
-            to: 1
-            duration: 900
-            easing.type: Easing.InOutSine
-        }
-        NumberAnimation {
-            to: 0
-            duration: 900
-            easing.type: Easing.InOutSine
-        }
-    }
-
     // Annunciators: fixed legends, lit when they apply.
     Row {
         visible: root.legends
@@ -273,58 +256,15 @@ Item {
     }
 
     // ── The line being sung, karaoke, rolling up ────────────────────
-    Item {
-        id: lyr
+    LyricLine {
         visible: root.lyricRow
         x: root.padX
         y: root.lyricY
         width: root.leftW
-        height: 7
-        clip: true
-
-        // Before the first sung line (an intro): how long until it.
-        readonly property string now: Lyrics.has ? (Lyrics.synced ? (Lyrics.index < 0 ? "♪ IN " + Media.clock(Math.max(0, (Lyrics.lines[0]?.t ?? 0) - Lyrics.clock)) : Lyrics.line) : Lyrics.lines[0]?.text ?? "") : Lyrics.status === "looking" ? "LOOKING UP LYRICS" : "NO LYRICS"
-        // The line rolling out, and how far the roll is (0 .. 1).
-        property string was: ""
-        property real roll: 1
-        onNowChanged: {
-            roll = 0;
-            rollIn.restart();
-        }
-        NumberAnimation {
-            id: rollIn
-            target: lyr
-            property: "roll"
-            to: 1
-            duration: 220
-            easing.type: Easing.OutCubic
-            onFinished: lyr.was = lyr.now
-        }
-
-        MatrixText {
-            y: -Math.round(lyr.roll * 9)
-            visible: lyr.roll < 1
-            width: lyr.width
-            height: implicitHeight
-            text: lyr.was
-            color: Tokens.slot0
-        }
-        MatrixText {
-            id: sung
-            y: Math.round((1 - lyr.roll) * 9)
-            width: lyr.width
-            height: implicitHeight
-            text: lyr.now
-            ghost: root.ghost
-            cells: true
-            // Brighter on the in-breath.
-            color: Qt.rgba(Tokens.slot0.r + (1 - Tokens.slot0.r) * 0.3 * root.breath, Tokens.slot0.g + (1 - Tokens.slot0.g) * 0.3 * root.breath, Tokens.slot0.b + (1 - Tokens.slot0.b) * 0.3 * root.breath, 1)
-            rest: Tokens.slot2
-            // Lit as far as it has been sung; long lines keep the singing
-            // part in view, three fifths across.
-            litChars: Lyrics.synced && Lyrics.has ? Math.round(Lyrics.lineProgress * shown.length) : -1
-            follow: shown.length > capacity && litChars >= 0 ? Math.max(0, Math.min(shown.length - capacity, litChars - Math.floor(capacity * 0.6))) : -1
-            scroll: !(Lyrics.synced && Lyrics.has)
-        }
+        color: Tokens.slot0
+        rest: Tokens.slot2
+        ghost: root.ghost
+        cells: true
+        playing: root.playing
     }
 }

@@ -10,7 +10,7 @@ Text {
 
     color: Ink.blue
     font.family: Ink.family
-    font.italic: slanted
+    font.italic: false
     font.pixelSize: size
     font.letterSpacing: spacing
     textFormat: Text.PlainText

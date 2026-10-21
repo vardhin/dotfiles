@@ -70,7 +70,7 @@ Item {
                     orientation: cell.low ? Gradient.Vertical : Gradient.Horizontal
                     GradientStop {
                         position: 0
-                        color: cell.low ? Ink.c("#ff9a9a", "#ff9a9a") : Ink.blue
+                        color: cell.low ? Ink.c("#e8a49a", "#e8a49a") : Ink.blue
                     }
                     GradientStop {
                         position: cell.low ? 1 : 0.6
