@@ -128,8 +128,8 @@ Pane {
             width: pane.inner
             spacing: 3
             Repeater {
-                // The home set's missing ones; desktop-only kinds, any number.
-                model: Templates.homeSet.filter(t => !Panels.panels.some(p => p.template === t)).concat(Templates.deskOnly)
+                // The missing ones: one panel of each kind.
+                model: Templates.homeSet.concat(Templates.deskOnly).filter(t => !Panels.panels.some(p => p.template === t))
                 DotButton {
                     required property string modelData
                     text: (Templates.get(modelData)?.title ?? modelData).toUpperCase()

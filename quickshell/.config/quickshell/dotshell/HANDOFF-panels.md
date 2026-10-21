@@ -58,6 +58,7 @@ Written 2026-10-18, rewritten 2026-10-19 for the next Claude Code chat. When the
 ### Gotchas met so far
 
 - QML: `top`, `left` and other anchor names are FINAL on Item; `state` is Item's own property; don't name properties that. Don't give an inline component or delegate a property that shadows an id in scope (`ink`, `s`, `words`).
+- `sink: sink` (or any `x: x`) inside an object that has its own `sink` property binds it to ITSELF (undefined), not to the outer id. Every docked button was dead from this. Expose the id as a property (`readonly property QtObject actions: sink`) and pass `sink: root.actions`.
 - `MultiEffect` has `saturation`, not `saturationEnabled`.
 - `DotText` fills its parent's height and centres; give it an explicit `height: Tokens.fontPx` when placing it by y.
 - Big era-font text at dot scale: antialiased edges fade; aero's `bubble.frag` snaps alpha past ~0.55 to whole dots. Don't outline to thicken (fills counters).
@@ -329,3 +330,9 @@ The user found the two eras too alike (both hot pink/cyan neon on purple-black) 
 - Scenes: tokyo rain is slower and sparser, with a street and puddle reflections; nineties is a new GLOW STARS scene (fading ceiling stars, crescent moon, slow lava lamp); the sunset grid became `sunsetGrid()`, used only by vapor.
 - Offscreen check: harness pages `x<face>.qml` (copies of `i*`/`tdock` with the new tokens).
 - Same day, after the user's look on the home workspace: 90s was too washed out, then "purple, not teal (Tokyo has teal)". Now: glass `#120d17`, unlit `#2a1f30`, **orchid `#c776c4` is the core** (`Ink.blue`: rim, strip + rail edge, small print, big words with pale orchid `#e8b4e4`), rose `#e57ba9` marks (`Ink.pink`), glow-star `#dff57e` readings, cream `#f6ead8`, glow 0.35. The notebook and slips are dark paper (`#1f1727` / `#2a1f33`) with cream ink. The clock's sun is a dim glow-star crescent moon (`Sun.qml`, a Canvas). Teal survives only as ANSI cyan and the pager LCD. Light tone "LILAC PAPER".
+
+## 2026-10-21: notes, docked workspaces
+
+- Notes are one-per-kind now (`Panels.spawn` and PanelsPane treat `deskOnly` like the home set). NotesPanel: empty, it sits in the era's casing (tokyo Sign+Glass, vfd Unit, aero Sky, blueprint Paper, vapor Win "Notepad", flap Housing, nixie Wood, nineties Plate, nightvision Scope); with text, only the words. The "notes" grip label is gone; the margins still drag.
+- Docked workspaces in every era are `DockWs.qml` (DockItem `wsForm`, ahead of the era Docked forms, which still hold unused stripWs/railWs). Wall-to-wall cells, the current one marked per era (neon tube, VFD invert, aero bubble, blueprint/NV corner brackets, vapor push keys, flap tiles, nixie tube envelopes, 90s slant chip), a dot per window, + for an empty one. No peek on workspaces. DockItem hold-to-lift is 350 ms (was 200, ate slow clicks).
+- House glyph `⌂` redrawn in Matrix.js (roof, eaves, walls, door).

@@ -468,7 +468,7 @@ Item {
             height: root.rows - y - root.edge - root.inset - 1
             node: root.layout ?? ({})
             ctx: root.ctx
-            sink: sink
+            sink: root.actions
             tube: root.tube
             clip: true
         }

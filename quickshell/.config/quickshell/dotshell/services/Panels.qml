@@ -283,8 +283,8 @@ Singleton {
     function spawn(template: string, opts: var): var {
         if (!Templates.get(template))
             return { error: "unknown template; one of: " + kinds.join(", ") };
-        // One of each: the home set never has duplicates.
-        const have = Templates.homeSet.includes(template) ? store.panels.find(p => p.template === template) : null;
+        // One of each: the home set and the desktop-only kinds never have duplicates.
+        const have = Templates.homeSet.includes(template) || Templates.deskOnly.includes(template) ? store.panels.find(p => p.template === template) : null;
         if (have)
             return { error: "a " + template + " panel exists: " + have.id };
         opts = opts ?? {};

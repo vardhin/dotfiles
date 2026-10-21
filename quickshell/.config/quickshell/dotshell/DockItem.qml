@@ -43,23 +43,25 @@ Item {
     readonly property int padX: 0
     readonly property int padY: 0
 
+    // Workspaces, every era: one cell per workspace, wall to wall (DockWs.qml).
+    readonly property bool wsForm: !panel.layout && template?.name === "workspaces"
     // VFD draws its own strip and rail forms (vfd/Docked.qml) for these.
-    readonly property bool vfdForm: Tokens.era === "vfd" && !panel.layout && ["media", "clock", "workspaces", "system", "battery", "messages", "capture", "caffeine", "clipboard", "todo"].includes(template?.name ?? "")
+    readonly property bool vfdForm: Tokens.era === "vfd" && !panel.layout && ["media", "clock", "workspaces", "system", "battery", "messages", "capture", "caffeine", "clipboard", "todo"].includes(template?.name ?? "") && !wsForm
     // Tokyo Night likewise (tokyo/Docked.qml).
-    readonly property bool tokyoForm: Tokens.era === "tokyo" && !panel.layout && ["media", "clock", "workspaces", "system", "battery", "messages", "capture", "caffeine", "clipboard", "todo"].includes(template?.name ?? "")
+    readonly property bool tokyoForm: Tokens.era === "tokyo" && !panel.layout && ["media", "clock", "workspaces", "system", "battery", "messages", "capture", "caffeine", "clipboard", "todo"].includes(template?.name ?? "") && !wsForm
     // Vaporwave likewise, dark dots on the lilac taskbar (vapor/Docked.qml).
-    readonly property bool vaporForm: Tokens.era === "vapor" && !panel.layout && ["media", "clock", "workspaces", "system", "battery", "messages", "capture", "caffeine", "clipboard", "todo"].includes(template?.name ?? "")
+    readonly property bool vaporForm: Tokens.era === "vapor" && !panel.layout && ["media", "clock", "workspaces", "system", "battery", "messages", "capture", "caffeine", "clipboard", "todo"].includes(template?.name ?? "") && !wsForm
     // Split-Flap likewise, characters on flap tiles drawn in dots (flap/Docked.qml).
-    readonly property bool flapForm: Tokens.era === "flap" && !panel.layout && ["media", "clock", "workspaces", "system", "battery", "messages", "capture", "caffeine", "clipboard", "todo"].includes(template?.name ?? "")
+    readonly property bool flapForm: Tokens.era === "flap" && !panel.layout && ["media", "clock", "workspaces", "system", "battery", "messages", "capture", "caffeine", "clipboard", "todo"].includes(template?.name ?? "") && !wsForm
     // Nixie likewise, glowing dots on the walnut bar (nixie/Docked.qml).
-    readonly property bool nixieForm: Tokens.era === "nixie" && !panel.layout && ["media", "clock", "workspaces", "system", "battery", "messages", "capture", "caffeine", "clipboard", "todo"].includes(template?.name ?? "")
+    readonly property bool nixieForm: Tokens.era === "nixie" && !panel.layout && ["media", "clock", "workspaces", "system", "battery", "messages", "capture", "caffeine", "clipboard", "todo"].includes(template?.name ?? "") && !wsForm
     // 90s Nights likewise, neon dots on the bar's dot glass (nineties/Docked.qml).
-    readonly property bool ninetiesForm: Tokens.era === "nineties" && !panel.layout && ["media", "clock", "workspaces", "system", "battery", "messages", "capture", "caffeine", "clipboard", "todo"].includes(template?.name ?? "")
+    readonly property bool ninetiesForm: Tokens.era === "nineties" && !panel.layout && ["media", "clock", "workspaces", "system", "battery", "messages", "capture", "caffeine", "clipboard", "todo"].includes(template?.name ?? "") && !wsForm
     // Night Vision likewise, phosphor dots on the bar's green glass (nightvision/Docked.qml).
-    readonly property bool nightvisionForm: Tokens.era === "nightvision" && !panel.layout && ["media", "clock", "workspaces", "system", "battery", "messages", "capture", "caffeine", "clipboard", "todo"].includes(template?.name ?? "")
-    readonly property Item form: vfdForm ? vfd.item : tokyoForm ? tokyo.item : vaporForm ? vapor.item : flapForm ? flap.item : nixieForm ? nixie.item : ninetiesForm ? nineties.item : nightvisionForm ? nightvision.item : node
+    readonly property bool nightvisionForm: Tokens.era === "nightvision" && !panel.layout && ["media", "clock", "workspaces", "system", "battery", "messages", "capture", "caffeine", "clipboard", "todo"].includes(template?.name ?? "") && !wsForm
+    readonly property Item form: wsForm ? wsLoader.item : vfdForm ? vfd.item : tokyoForm ? tokyo.item : vaporForm ? vapor.item : flapForm ? flap.item : nixieForm ? nixie.item : ninetiesForm ? nineties.item : nightvisionForm ? nightvision.item : node
 
-    visible: layout !== null && (vfdForm ? (vfd.item?.shown ?? false) : tokyoForm ? (tokyo.item?.shown ?? false) : vaporForm ? (vapor.item?.shown ?? false) : flapForm ? (flap.item?.shown ?? false) : nixieForm ? (nixie.item?.shown ?? false) : ninetiesForm ? (nineties.item?.shown ?? false) : nightvisionForm ? (nightvision.item?.shown ?? false) : node.shown)
+    visible: layout !== null && (wsForm ? true : vfdForm ? (vfd.item?.shown ?? false) : tokyoForm ? (tokyo.item?.shown ?? false) : vaporForm ? (vapor.item?.shown ?? false) : flapForm ? (flap.item?.shown ?? false) : nixieForm ? (nixie.item?.shown ?? false) : ninetiesForm ? (nineties.item?.shown ?? false) : nightvisionForm ? (nightvision.item?.shown ?? false) : node.shown)
     implicitWidth: mode === "rail" ? Tokens.railDots : (form?.implicitWidth ?? 0) + padX * 2
     implicitHeight: mode === "rail" ? (form?.implicitHeight ?? 0) + padY * 2 : 11
     width: implicitWidth
@@ -104,6 +106,9 @@ Item {
         Panels.slots = s;
     }
 
+    // The forms' action sink. Passed as `sink: root.actions`: a bare
+    // `sink: sink` inside a form binds the form's own `sink` to itself.
+    readonly property QtObject actions: sink
     QtObject {
         id: sink
         // A docked item has no room to expand: "panel expand" opens the
@@ -145,10 +150,20 @@ Item {
         height: root.height - root.padY * 2
         node: root.layout ?? ({})
         ctx: root.ctx
-        sink: sink
+        sink: root.actions
         tube: root.tube
         enabled: !root.ghost
-        visible: !root.vfdForm && !root.tokyoForm && !root.vaporForm && !root.flapForm && !root.nixieForm && !root.ninetiesForm && !root.nightvisionForm && shown
+        visible: !root.wsForm && !root.vfdForm && !root.tokyoForm && !root.vaporForm && !root.flapForm && !root.nixieForm && !root.ninetiesForm && !root.nightvisionForm && shown
+    }
+    Loader {
+        id: wsLoader
+        active: root.wsForm
+        enabled: !root.ghost
+        sourceComponent: DockWs {
+            rail: root.mode === "rail"
+            ctx: root.ctx
+            sink: root.actions
+        }
     }
     Loader {
         id: tokyo
@@ -158,7 +173,7 @@ Item {
             template: root.template?.name ?? ""
             rail: root.mode === "rail"
             ctx: root.ctx
-            sink: sink
+            sink: root.actions
             panel: root.panel
             words: root.ctx["~"] ?? ({})
         }
@@ -171,7 +186,7 @@ Item {
             template: root.template?.name ?? ""
             rail: root.mode === "rail"
             ctx: root.ctx
-            sink: sink
+            sink: root.actions
             panel: root.panel
             words: root.ctx["~"] ?? ({})
         }
@@ -184,7 +199,7 @@ Item {
             template: root.template?.name ?? ""
             rail: root.mode === "rail"
             ctx: root.ctx
-            sink: sink
+            sink: root.actions
             panel: root.panel
             words: root.ctx["~"] ?? ({})
         }
@@ -197,7 +212,7 @@ Item {
             template: root.template?.name ?? ""
             rail: root.mode === "rail"
             ctx: root.ctx
-            sink: sink
+            sink: root.actions
             panel: root.panel
             words: root.ctx["~"] ?? ({})
         }
@@ -210,7 +225,7 @@ Item {
             template: root.template?.name ?? ""
             rail: root.mode === "rail"
             ctx: root.ctx
-            sink: sink
+            sink: root.actions
             panel: root.panel
             words: root.ctx["~"] ?? ({})
         }
@@ -223,7 +238,7 @@ Item {
             template: root.template?.name ?? ""
             rail: root.mode === "rail"
             ctx: root.ctx
-            sink: sink
+            sink: root.actions
             panel: root.panel
             words: root.ctx["~"] ?? ({})
         }
@@ -236,7 +251,7 @@ Item {
             template: root.template?.name ?? ""
             rail: root.mode === "rail"
             ctx: root.ctx
-            sink: sink
+            sink: root.actions
             panel: root.panel
             words: root.ctx["~"] ?? ({})
         }
@@ -250,7 +265,7 @@ Item {
     property point start
     Timer {
         id: hold
-        interval: 200
+        interval: 350
         onTriggered: root.lift()
     }
     function lift(): void {
@@ -372,7 +387,8 @@ Item {
         onPressed: mouse => root.press(screenPos(mouse))
         onPositionChanged: mouse => root.move(screenPos(mouse))
         onReleased: {
-            if (!root.release())
+            // Workspaces has no peek: its cells are the keys.
+            if (!root.release() && !root.wsForm)
                 root.peek();
         }
         onCanceled: root.cancel()

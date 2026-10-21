@@ -63,6 +63,7 @@ Pane {
     property string wantedT: ""
     onFeedIdChanged: if (shown) want(true)
 
+    readonly property QtObject actions: sink
     QtObject {
         id: sink
         function run(a: string): void {
@@ -107,7 +108,7 @@ Pane {
         height: pane.bodyRows
         node: pane.layout ?? ({})
         ctx: pane.ctx
-        sink: sink
+        sink: pane.actions
         tube: pane.tube
         clip: true
     }
