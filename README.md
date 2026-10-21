@@ -2,8 +2,10 @@
 
 Arch Linux rice: Hyprland + the Quickshell "Dot Shell" (a dot-matrix LED shell, greeter and boot splash), Ghostty, Nautilus, mpv + Dot TV, mpd, zsh. Managed with GNU Stow, one module per top-level folder; `system/` holds the few files outside `~`.
 
-> Mid re-rice. The plan (Hyprland + Quickshell + the dot-matrix "Dot Shell") lives in the
-> *Arch Rice* doc, tab **Re-rice plan**. This README describes what is in the repo today.
+Dot Shell has nine **eras**, nine complete looks. Each era changes more than colors: every desktop panel,
+the strip and rail, the MEDIA pane, the message centre and the toasts are drawn as that era's own
+piece of hardware. Examples are a car-stereo head unit (VFD), a Windows 95 window (Vaporwave), a walnut valve
+case (Nixie) and a departure board (Split-Flap). Every era has a dark tone and a light tone. See [Eras](#eras).
 
 ## Install
 
@@ -51,13 +53,28 @@ dotfiles/
 ├── quickshell/.config/quickshell/dotshell/   → ~/.config/quickshell/dotshell
 │   ├── shell.qml               entry point; IPC targets pane, strip, night, shell (tokens, screen, export, …)
 │   ├── greeter.qml             the login screen (greetd), a second entry point; see Login and boot
-│   ├── Tokens.qml / Eras.qml   the thirteen eras, the era cascade and every display token (pitch,
+│   ├── Tokens.qml / Eras.qml   the nine eras, the era cascade and every display token (pitch,
 │   │                           dot size, depth, wall, wallpaper, hue, cascade, night, screen,
 │   │                           winfx, winshade, scene, sounds, frosted); persisted
 │   │                           in ~/.local/state/dotshell/tokens.json (IPC target: tokens)
 │   ├── Ui.qml                  which pane is open, on which screen
 │   ├── DotSurface.qml          low-res QML canvas → LED dots (shaders/dot.frag); optional shape cut
-│   ├── DeskPanel.qml, Shapes.js  one desktop panel (clock sign note image media pixels) and its outlines
+│   ├── Palettes.js             each era's other tone (dark ↔ light), designed per role
+│   ├── DeskPanel.qml, Shapes.js  one desktop panel (clock sign note image media pixels) and its outlines;
+│   │                           picks the era's face for each template
+│   ├── DockItem.qml, DockWs.qml  docked strip/rail items (the era's Docked forms; workspaces per era)
+│   ├── Hardware.js, Faceplate.qml, WindowGlass.qml, DeviceKey(s).qml, MediaDevice.qml,
+│   │   MediaTokyo.qml, MediaReadout.qml, NixieTubes.qml   the media player as each era's device
+│   ├── NotifLook.js, PaneFrame.qml   notification cards and pane frames per era
+│   ├── NotesPanel.qml          the Notes panel (in the era's casing while empty)
+│   ├── MatrixText.qml, Matrix.js   5x7 and 3x5 dot fonts
+│   ├── tokyo/ nineties/ vfd/ aero/ nixie/ flap/ nightvision/ vapor/ blueprint/
+│   │                           one QML module per era (qs.<era>): Ink (palette + font), the era's
+│   │                           materials, one face per panel (compact + expanded), Docked (strip
+│   │                           and rail forms), the bar's material
+│   ├── fonts/                  the eras' fonts (Tilt Neon, Varela Round, Share Tech Mono, VT323,
+│   │                           Silkscreen, Nixie One, Audiowide; all OFL)
+│   ├── HANDOFF-panels.md       how the era panels are built (notes for the next session)
 │   ├── Pane.qml                a floating LED pane (layer-shell window + DotSurface)
 │   ├── PlainArt.qml, Spectrum.qml   cover art and thumbnails drawn sharp above the dots; cava VU bars
 │   ├── LedRing.qml             animated one-dot LED border for a DotSurface (driven by LedFx)
@@ -78,7 +95,8 @@ dotfiles/
 │                           LedFx (animated LED borders, the `ledfx` token), WsFx (dissolving
 │                           workspace switches, the `wsfx` token), Anime (AniList + ani-cli
 │                           through `dotanime`)
-│   ├── panes/                  Launcher, Messages, ToastStack, Osd, Session, Cheatsheet,
+│   ├── panes/                  Launcher, Messages, ToastStack, Osd, Session, Cheatsheet, Panels
+│   │                           (the panel manager),
 │   │                           Calendar, Audio, Brightness, Wifi, Bluetooth, Battery, Eras,
 │   │                           Packages, Media (NOW / TV / LISTS / SCREEN), Capture, Clip
 │   │                           (CLIP / SYMBOLS), SideBar,
@@ -90,7 +108,8 @@ dotfiles/
 │                           workspace switch), Anime* (the MEDIA pane's ANIME page: shelves,
 │                           episodes, switches)
 │   ├── pam/dotshell            PAM stack for the lock screen (pam_unix only)
-│   ├── shaders/                dot.frag(.qsb) for DotSurface, winfx.frag(.qsb) for WindowFx,
+│   ├── shaders/                dot.frag(.qsb) for DotSurface, bubble.frag / flap.frag (lit-only
+│   │                           round / square dots for eras with no unlit grid), winfx.frag(.qsb) for WindowFx,
 │   │                           wall.frag(.qsb) the screen look on the wallpaper, ledring.frag
 │   │                           for LedRing, wsfx.frag for WorkspaceFx, tvled.frag for TvScreen;
 │   │                           screen.glsl, night warmth for Hyprland's screen shader (GLSL ES 3.00);
@@ -120,6 +139,9 @@ dotfiles/
 │   ├── .config/dotd/           → ~/.config/dotd  rules.toml, sort.toml, index.toml (stowed; reloaded
 │   │                           on save), extractors/ (one manifest + one script each)
 │   └── .config/systemd/user/dotd.service
+├── dot-shell-panels.html       the panel design canvas (every board, one column per era), exported
+├── dot-shell-tools/            extract.py (cuts one era's column out of the canvas) and harness/
+│                               (renders a face offscreen with qml6 and stub services)
 ├── p10/                        the P10 wall's receiver, for the Raspberry Pi (not stowed):
 │                               dotwall-pi.py, dotwall.service
 ├── system/                     outside ~, installed by `sudo system/install.sh`
@@ -196,7 +218,7 @@ dotshell ipc call strip toggle
 Binds: `Super D` toggles the strip, `Super Shift D` cycles eras, `Super T` opens the era switcher,
 `Super Shift T` toggles full LED,
 `Super W` the wallpapers, `Super F` files, `Super I` the package manager (pacman + yay), `Super Tab`
-the switchboard, `Super Shift S` the era's scene, `Super Shift W` cycles window shading, `Super Ctrl D`
+the switchboard, `` Super ` `` home, `Super O` the panel manager, `Super Shift S` the era's scene, `Super Shift W` cycles window shading, `Super Ctrl D`
 restarts the shell.
 
 ### Hyprland in Lua
@@ -233,21 +255,39 @@ empties it (`clip forget "text"` drops one entry); `dotshell ipc call capture re
 
 ### Eras
 
-| Era | Id | Look |
-|---|---|---|
-| Tokyo Night | `tokyo` | magenta and cyan neon, violet ramp, glow |
-| 90s Nights | `nineties` | hot pink, electric blue and yellow tubes, heavy glow |
-| VFD | `vfd` | car-stereo cyan-green with orange |
-| Frutiger Aero | `aero` | light sky glass, glossy bubble dots, dark ink |
-| Nixie | `nixie` | cold-cathode orange, mono, heavy glow |
-| Split-Flap | `flap` | airport board: white and yellow on black flaps, square dots |
-| Night Vision | `nightvision` | Gen III P43 green, mono |
-| Vaporwave | `vapor` | pink, cyan and lavender at dusk |
-| Blueprint | `blueprint` | white lines on drafting blue |
+The eras are meant to be calm: low glow, muted colors, nothing loud.
 
-Every era comes in a **dark** and a **light** tone (the `tone` token): its own palette is one of them (Frutiger Aero
-is light, the rest dark), the other is the same palette with its lightness turned over in OKLab (`Tone.js`), so every panel,
-device and notification keeps its style and only the coloring changes.
+| Era | Id | Look | Panels are drawn as | Light tone |
+|---|---|---|---|---|
+| Tokyo Night | `tokyo` | **Rain City**: tokyonight.nvim *night*, blue tube, cyan readings, violet small print, an orange kanji word | thin blue neon signs over dot glass | Tokyo Night Day |
+| 90s Nights | `nineties` | **Quiet Storm**: a 1997 bedroom after midnight. Aubergine glass, orchid, rose marks, glow-star readings | slanted plates with an orchid rim, Audiowide words | lilac paper |
+| VFD | `vfd` | car-stereo cyan-green with amber | a gunmetal head unit: sunken dot window, hard keys, digits over unlit 88:88 | daylight LCD, aluminium |
+| Frutiger Aero | `aero` | sky glass, glossy bubble dots, dark ink | glossy white sky plates, cards, orbs and gauges; lit dots only | (its own tone) |
+| Nixie | `nixie` | cold-cathode orange | a walnut case with brass rules: glass tubes, brass keys and knobs, ivory paper, a moving-coil meter | brass and ivory panel |
+| Split-Flap | `flap` | airport board, white and yellow | a departure board: housing, header, rows of flap tiles in square dots | ivory Solari board |
+| Night Vision | `nightvision` | Gen III P43 green | one phosphor eyepiece: elliptic pill (compact), CRT squircle (expanded), vignette, reticles | daylight scope: sand, olive drab |
+| Vaporwave | `vapor` | pink, cyan and lavender at dusk | Windows 95 windows: lilac bevels, gradient title bar `name.exe`, push buttons, dark dot screens | pastel |
+| Blueprint | `blueprint` | white lines on drafting blue | drafting sheets: figures, title blocks and tables on gridded paper | whiteprint (diazo) |
+
+Every era comes in a **dark** and a **light** tone (the `tone` token). The era's own palette is one of them
+(Frutiger Aero is light, the rest are dark). The other tone is designed separately, not computed: `Palettes.js` gives each role
+(glass, ink, rules, accents, alarms) its own value, and the era panels write their colors as hand-made
+pairs (`Ink.c(own, other)`). Switching tone changes only the colors; every panel, device and notification keeps its shape.
+
+**Era hardware.** Each era is a QML module (`tokyo/`, `vfd/`, …, imported as `qs.<era>`) with its
+palette and font (`Ink`), a kit of its materials, and one **face** per panel, compact and expanded:
+Clock, Workspaces, System, Battery, Messages, Capture, Caffeine, Clipboard, Todo and Media. The dots
+are LED displays; plates, bezels, keys, tubes and title bars are crisp hardware drawn around them.
+`DeskPanel.qml` picks the face for the era on screen. Every feature of the generic board still works
+in a face (clicks, actions, typing). The design for each face comes from that era's column in `dot-shell-panels.html`.
+The rest follows the era too:
+
+- **MEDIA pane** (`Super M`): the media player as the era's device (`Hardware.js`: faceplate, window, keys; `MediaDevice.qml`), with every page and feature.
+- **Message centre and toasts**: era cards, rules and keys (`NotifLook.js`) inside the era's frame (`Pane.frame`: sky glass, paper, Win95 window, housing, walnut, eyepiece, …).
+- **Strip and rail**: one material for the whole bar (VFD's head-unit plate, Aero's sky glass, the Win95 taskbar, a flap rack, a neon edge, …). Docked items stay plain dots on it, with no casing per item, in the era's own small forms (`<era>/Docked.qml`). Docked workspaces mark the current one in the era's way (`DockWs.qml`).
+- **Notes**: an empty note sits in the era's casing; once it has text, only the words show.
+
+Panels without a face (Tray, Downloads, Files, Screenshots, Dock) keep the generic board in the era's skin (`Skins.js`).
 
 `Super T` (or the brush on the side rail) shows every era as a card in its own colors. **ERAS** page: two sections, **DARK** and
 **LIGHT** (Left/Right or h/l switch them); Up/Down or j/k move, Enter applies the era in that tone, 1–9 pick directly. Tab goes to **DISPLAY**: pitch, dot size, depth, wall, hue, cascade, screen, windows, win shade,
@@ -292,10 +332,11 @@ The era on screen is also exported to the apps around the shell, on every change
 ### Scenes, sounds and the switchboard
 
 **Scenes.** After three minutes idle (before the dim at five; not while a video plays) the whole screen becomes the era's dot board
-and plays its piece (`panes/Scenes.js`, drawn at one pixel per dot): rain
-over the skyline (Tokyo), the sun setting on the neon grid (90s), a car-stereo
-clock and spectrum (VFD), bubbles (Aero), the time in tubes (Nixie), a departure
-board (Flap), a radar (Night Vision), a turning pyramid (Vapor), a spirograph being
+and plays its piece (`panes/Scenes.js`, drawn at one pixel per dot): light
+rain over the skyline, mirrored in the wet street (Tokyo, RAIN CITY), glow-in-the-dark stars, a
+crescent moon and a lava lamp on a bedroom ceiling (90s, GLOW STARS), a car-stereo clock and
+spectrum (VFD), bubbles (Aero), the time in tubes (Nixie), a departure board (Flap), a radar
+(Night Vision), a wireframe pyramid turning over the sunset grid (Vapor), a spirograph being
 drafted (Blueprint). Any key or a real mouse move ends it; `Super Shift S` plays it now; the `scene`
 token turns the idle trigger off.
 
@@ -351,16 +392,20 @@ A panel is a **template** (its layout, `Templates.js`) bound to a **feed** (live
 
 | Place | What it looks like |
 |---|---|
-| **home** | the home workspace (`home` token, workspace 1): compact boards at grid positions; click one to expand it. No windows live there: Hyprland moves any window opened on home to the first empty workspace (`lua/dotshell.lua`), and home skips wallpaper parallax (`homeWall` can be a looping video) |
+| **home** | the home workspace (`home` token, by default its own workspace 11, `` Super ` ``): compact boards at grid positions; click one to expand it. No windows live there: Hyprland moves any window opened on home to the first empty workspace (`lua/dotshell.lua`), and home skips wallpaper parallax (`homeWall` can be a looping video) |
 | **strip** | docked in the top strip, in a zone: `l` left, `c` center, `r` before the settings words, `e` after them |
 | **rail** | docked in the side rail, between the launcher and the session buttons |
 
 Hold a panel for 200 ms (or just drag it, from anywhere on it) to lift it, then drop it on the strip
 or the rail (the slots light up as you pass) or back on home. Strip and rail items pull out the same
-way; dropped below the strip they land on home, even from another workspace. A dock or undock can be
+way (hold 350 ms there, so slow clicks still click); dropped below the strip they land on home, even from another workspace. A dock or undock can be
 undone for 3 s (`Ctrl Z`, or `dot undo`).
 The set: media clock workspaces system battery messages capture caffeine tray downloads files
-clipboard todo screenshots dock, plus the popped `vis` and `lyrics` boards. **Media** is one panel for
+clipboard todo screenshots dock notes, plus the popped `vis` and `lyrics` boards. Each one is drawn
+as the era's hardware (see [Eras](#eras)). Notes lives on home only, one of it.
+
+**Panel manager** (`Super O`): every panel, open or put away. Right-click a panel to close it to
+the shelf; open it again from here, on home, the strip or the rail. **Media** is one panel for
 music, videos and Dot TV: in the strip a glyph that opens MEDIA (play / pause and the title join it
 while something plays); on home the track, transport, TV ANIME LISTS (MEDIA on that page), MIX, and
 the Dot TV library when nothing plays (click plays, QUE queues). Expanded Media has up next and the
@@ -375,7 +420,7 @@ Panels persist in `~/.local/state/dotshell/panels.json`. Scripts and agents driv
 `$XDG_RUNTIME_DIR/dotshell.sock` (one JSON object per line), or the `dot` CLI:
 
 ```bash
-dot templates;  dot home;  dot home --reset      # list templates / home's panels; lay out the 16 again
+dot templates;  dot home;  dot home --reset      # list templates / home's panels; lay out the home set again
 dot dock todo strip --zone r;  dot dock system rail;  dot dock todo home --at 52,18;  dot undo
 dot feed ci '{"state":"green","jobs":3}'         # push a feed (--merge, --drop); dot feeds lists them
 dot spawn board --id ci --feed ci --layout '{"col":[{"field":"big","text":"{state|upper}"}]}'
